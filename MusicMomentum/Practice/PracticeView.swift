@@ -133,7 +133,7 @@ struct PracticeView: View {
             )
             .padding(.horizontal, 32)
 
-            if let saved = savedSong, !saved.markers.isEmpty {
+            if let saved = savedSong, !saved.sortedMarkers.isEmpty {
                 MarkerPills(
                     markers: saved.sortedMarkers,
                     isLooping: { controller.isLooping($0) },
@@ -263,7 +263,7 @@ struct PracticeView: View {
     }
 
     private func marker(for id: AnyHashable) -> SongMarker? {
-        savedSong?.markers.first { $0.persistentModelID == id as? PersistentIdentifier }
+        savedSong?.markers?.first { $0.persistentModelID == id as? PersistentIdentifier }
     }
 
     private var scrubberMarkers: [PlaybackScrubber.Marker] {

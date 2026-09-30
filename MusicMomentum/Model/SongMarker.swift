@@ -78,7 +78,7 @@ extension SongMarker {
 
     private var defaultName: String {
         let kind = isClip ? "Clip" : "Marker"
-        let siblings = song?.markers.filter { $0 !== self && $0.isClip == isClip }.count ?? 0
+        let siblings = song?.markers?.filter { $0 !== self && $0.isClip == isClip }.count ?? 0
         return "\(kind) \(siblings + 1)"
     }
 }

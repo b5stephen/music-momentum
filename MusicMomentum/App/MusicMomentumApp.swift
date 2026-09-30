@@ -14,6 +14,6 @@ struct MusicMomentumApp: App {
         WindowGroup {
             RootTabView()
         }
-        .modelContainer(for: AppSchema.models)
+        .modelContainer(try! AppSchema.appContainer())
     }
 }

@@ -138,6 +138,51 @@ struct SavedSongTests {
         #expect(songs[0].songID == "i.2")
     }
 
+    /// Inserted directly: `save` upserts, and duplicates only arrive by sync.
+    @discardableResult
+    private func insertDuplicate(
+        _ songID: String,
+        catalogID: String? = nil,
+        speed: Double,
+        lastPracticed: Date
+    ) -> SavedSong {
+        let song = SavedSong(songID: songID, catalogID: catalogID, speed: speed, lastPracticed: lastPracticed)
+        context.insert(song)
+        return song
+    }
+
+    @Test("Merging keeps the most recently practised copy and every marker")
+    func mergeKeepsNewestAndAllMarkers() throws {
+        let older = insertDuplicate("i.1", catalogID: "1440857781", speed: 0.5, lastPracticed: .now.addingTimeInterval(-60))
+        let newer = insertDuplicate("i.1", speed: 0.8, lastPracticed: .now)
+        insertDuplicate("i.2", speed: 1.0, lastPracticed: .now)
+        SongMarker.add(to: older, name: "Solo", startTime: 60, endTime: 90, in: context)
+        SongMarker.add(to: newer, name: "Intro", startTime: 0, endTime: nil, in: context)
+
+        SavedSong.mergeDuplicates(in: context)
+
+        let songs = try allSongs()
+        #expect(songs.count == 2)
+        let merged = try #require(songs.first { $0.songID == "i.1" })
+        #expect(merged.speed == 0.8)
+        #expect(merged.catalogID == "1440857781")
+        #expect(merged.sortedMarkers.map(\.name) == ["Intro", "Solo"])
+        #expect(try context.fetch(FetchDescriptor<SongMarker>()).count == 2)
+    }
+
+    @Test("Merging picks the same survivor whatever order the rows come in")
+    func mergeTieBreaksOnSyncedFields() throws {
+        let when = Date.now
+        insertDuplicate("i.1", speed: 0.6, lastPracticed: when)
+        insertDuplicate("i.1", speed: 0.7, lastPracticed: when)
+
+        SavedSong.mergeDuplicates(in: context)
+
+        let songs = try allSongs()
+        #expect(songs.count == 1)
+        #expect(songs[0].speed == 0.7)
+    }
+
     @Test("Percent rounds the stored speed for display")
     func percentRounds() {
         #expect(save("i.1", speed: 0.755).percent == 76)

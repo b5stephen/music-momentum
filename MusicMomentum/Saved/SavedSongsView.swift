@@ -253,7 +253,7 @@ struct SavedSongsView: View {
     }
 
     private func delete(_ song: SavedSong) {
-        for marker in song.markers { controller.markerDeleted(marker) }
+        for marker in song.markers ?? [] { controller.markerDeleted(marker) }
         modelContext.delete(song)
         try? modelContext.save()
     }

@@ -3,6 +3,7 @@
 //  MusicMomentum
 //
 
+import CoreData
 import SwiftData
 import SwiftUI
 
@@ -28,6 +29,13 @@ struct RootTabView: View {
             }
         }
         .task { controller.configure(modelContext: modelContext) }
+        // Duplicates only ever arrive by sync, so merging on each import is enough.
+        .task {
+            SavedSong.mergeDuplicates(in: modelContext)
+            for await _ in NotificationCenter.default.notifications(named: .NSPersistentStoreRemoteChange) {
+                SavedSong.mergeDuplicates(in: modelContext)
+            }
+        }
         // Hands are on the guitar, not the screen. iOS ignores this while
         // the app is in the background, so it needs no scene-phase check.
         .onChange(of: controller.isPlaying, initial: true) { _, playing in
