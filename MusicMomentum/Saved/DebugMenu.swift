@@ -1,14 +1,16 @@
 //
-//  CloudKitSchemaMenu.swift
+//  DebugMenu.swift
 //  MusicMomentum
 //
 
 #if DEBUG
+import SwiftData
 import SwiftUI
 
-/// Debug-build toolbar menu for checking and uploading the CloudKit schema.
-/// The steps it belongs to are in CLAUDE.md under "iCloud sync".
-struct CloudKitSchemaMenu: View {
+/// Debug-build toolbar menu. The CloudKit schema steps it belongs to are in
+/// CLAUDE.md under "iCloud sync".
+struct DebugMenu: View {
+    @Environment(\.modelContext) private var modelContext
     @State private var running = false
     @State private var outcome: Outcome?
 
@@ -22,6 +24,7 @@ struct CloudKitSchemaMenu: View {
         Menu {
             Button("Validate CloudKit Schema", systemImage: "checkmark.icloud") { run(dryRun: true) }
             Button("Push CloudKit Schema (Dev)", systemImage: "icloud.and.arrow.up") { run(dryRun: false) }
+            Button("Repair Artwork", systemImage: "photo.badge.checkmark") { repairArtwork() }
         } label: {
             if running {
                 ProgressView()
@@ -44,6 +47,15 @@ struct CloudKitSchemaMenu: View {
             } catch {
                 outcome = Outcome(title: "Schema failed", message: String(describing: error))
             }
+            running = false
+        }
+    }
+
+    private func repairArtwork() {
+        running = true
+        Task {
+            let report = await ArtworkRepair.run(in: modelContext)
+            outcome = Outcome(title: "Artwork", message: report.joined(separator: "\n\n"))
             running = false
         }
     }
