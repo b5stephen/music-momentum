@@ -110,6 +110,11 @@ struct SavedSongsView: View {
                     }
                     .disabled(!controller.canUseMusic)
                 }
+                #if DEBUG
+                ToolbarItem(placement: .topBarLeading) {
+                    CloudKitSchemaMenu()
+                }
+                #endif
             }
             .sheet(isPresented: $showPicker) {
                 SongPickerView(onSelect: add)

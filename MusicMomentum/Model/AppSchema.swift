@@ -7,7 +7,7 @@ import SwiftData
 
 /// The one list of stored models; the app, previews and tests all build
 /// their containers from it.
-enum AppSchema {
+nonisolated enum AppSchema {
     static let models: [any PersistentModel.Type] = [SavedSong.self, SongMarker.self]
     static let cloudKitContainer = "iCloud.dev.etched.music-momentum"
 
