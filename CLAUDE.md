@@ -23,6 +23,13 @@ The simulator must run iOS ≥ 26.4 or the build is rejected with "doesn't match
 - All model mutation goes through `SongMarker.add/set/clearEnd/delete` and `SavedSong.save/touch`, which enforce the invariants and save. New models go in `AppSchema.models`; the app, previews and tests all build from it.
 - Storage APIs take plain values, with a `Song` overload on top, because `Song`/`Artwork` have no public initialisers and tests can't construct them.
 
+## iCloud sync
+
+- SwiftData mirrors the store into the private database of `iCloud.dev.etched.music-momentum`, named in both `MusicMomentum.entitlements` and `AppSchema.cloudKitContainer`. CloudKit forbids `#Unique` and needs every relationship optional and every attribute optional or defaulted; `SavedSong.mergeDuplicates` stands in for the missing uniqueness on `songID`.
+- The schema is additive-only once it's in Production: add models and properties, never rename, delete or retype one, or builds already installed stop syncing. Change a shape by adding a new property beside the old one.
+- **Remind the user to deploy the CloudKit schema** whenever a change adds or alters a model property or `AppSchema.models`: say so when committing it, and again before any TestFlight/App Store build that follows it. Production never creates record types or fields itself, and Development only learns a field once a record carrying a non-nil value for it has been exported, so a property left nil throughout testing is missing from both and Development-vs-Production shows no diff. Steps: run a debug build on a device signed into iCloud, save something that sets every new property to a non-nil value, then CloudKit Console → Schema → **Deploy Schema Changes**. Skipping it shows up on the client as a bare `CKErrorDomain error 2` (`partialFailure`).
+- The simulator gets no CloudKit pushes; remote changes only arrive on real devices.
+
 ## Conventions
 
 - One non-private type per file, named after it. `private` helper views stay with the screen that owns them; if a second file needs one, drop `private` and move it to its own file.
