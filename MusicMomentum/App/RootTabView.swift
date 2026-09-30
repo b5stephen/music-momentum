@@ -29,11 +29,14 @@ struct RootTabView: View {
             }
         }
         .task { controller.configure(modelContext: modelContext) }
-        // Duplicates only ever arrive by sync, so merging on each import is enough.
+        // Duplicates and another device's library artwork only ever arrive by
+        // sync, so tidying on each import is enough.
         .task {
             SavedSong.mergeDuplicates(in: modelContext)
+            await ArtworkRepair.run(in: modelContext)
             for await _ in NotificationCenter.default.notifications(named: .NSPersistentStoreRemoteChange) {
                 SavedSong.mergeDuplicates(in: modelContext)
+                await ArtworkRepair.run(in: modelContext)
             }
         }
         // Hands are on the guitar, not the screen. iOS ignores this while

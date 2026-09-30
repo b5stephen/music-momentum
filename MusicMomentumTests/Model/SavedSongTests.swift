@@ -101,6 +101,20 @@ struct SavedSongTests {
         #expect(songs[0].speed == 0.6)
     }
 
+    /// Artwork is repaired on every device a sync reaches; bumping the date
+    /// would reshuffle each of their lists.
+    @Test("Replacing artwork keeps the last-practised date")
+    func settingArtworkKeepsLastPracticed() throws {
+        let song = save("i.1", artworkData: Data("local".utf8))
+        let when = Date.now.addingTimeInterval(-300)
+        song.lastPracticed = when
+
+        SavedSong.setArtwork(Data("catalog".utf8), for: song, in: context)
+
+        #expect(song.artworkData == Data("catalog".utf8))
+        #expect(song.lastPracticed == when)
+    }
+
     @Test("Finding a song by ID")
     func findsByID() {
         save("i.1")

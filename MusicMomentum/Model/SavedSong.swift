@@ -59,6 +59,14 @@ final class SavedSong {
         guard let artworkData else { return nil }
         return try? JSONDecoder().decode(Artwork.self, from: artworkData)
     }
+
+    /// A library song's artwork points at the saving device's own library
+    /// (`musicKit://…`), which `ArtworkImage` on any other device silently
+    /// fails to draw; only catalog artwork is served over the web.
+    var hasPortableArtwork: Bool {
+        guard let scheme = artwork?.url(width: 48, height: 48)?.scheme else { return false }
+        return scheme == "https" || scheme == "http"
+    }
 }
 
 // MARK: - Storage
@@ -123,6 +131,13 @@ extension SavedSong {
 
     static func touch(_ song: SavedSong, in context: ModelContext) {
         song.lastPracticed = .now
+        try? context.save()
+    }
+
+    /// Leaves `lastPracticed` alone: a repair isn't practice, and bumping it
+    /// would reshuffle the list on every device.
+    static func setArtwork(_ artworkData: Data, for song: SavedSong, in context: ModelContext) {
+        song.artworkData = artworkData
         try? context.save()
     }
 
