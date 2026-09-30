@@ -56,6 +56,7 @@ extension SongMarker {
     /// Clamps the start at zero, drops an end that doesn't leave room for a clip,
     /// and gives a blank name a default.
     func set(name: String, start: TimeInterval, end: TimeInterval?) {
+        song?.lastPracticed = .now
         startTime = max(0, start)
         if let end, end - startTime >= Self.minimumClipLength {
             endTime = end
@@ -68,10 +69,12 @@ extension SongMarker {
 
     func clearEnd(in context: ModelContext) {
         endTime = nil
+        song?.lastPracticed = .now
         try? context.save()
     }
 
     static func delete(_ marker: SongMarker, in context: ModelContext) {
+        marker.song?.lastPracticed = .now
         context.delete(marker)
         try? context.save()
     }

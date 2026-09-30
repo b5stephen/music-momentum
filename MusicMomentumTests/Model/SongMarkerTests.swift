@@ -110,4 +110,25 @@ struct SongMarkerTests {
         #expect(MarkerRangeEditor.tickInterval(for: 30) == 5)
         #expect(MarkerRangeEditor.tickInterval(for: 245) == 60)
     }
+
+    @Test("Every marker change counts as an edit to its song")
+    func markerChangesTouchSong() {
+        let when = Date.now.addingTimeInterval(-300)
+
+        song.lastPracticed = when
+        let marker = SongMarker.add(to: song, name: "Solo", startTime: 60, endTime: 90, in: context)
+        #expect(song.lastPracticed > when)
+
+        song.lastPracticed = when
+        marker.set(name: "Solo", start: 62, end: 90)
+        #expect(song.lastPracticed > when)
+
+        song.lastPracticed = when
+        marker.clearEnd(in: context)
+        #expect(song.lastPracticed > when)
+
+        song.lastPracticed = when
+        SongMarker.delete(marker, in: context)
+        #expect(song.lastPracticed > when)
+    }
 }

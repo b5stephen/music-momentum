@@ -20,7 +20,7 @@ The simulator must run iOS ≥ 26.4 or the build is rejected with "doesn't match
 - Choosing something (a song, a marker) never starts playback. The one exception is "Play on Loop", and the comment there explains why.
 - Only the loop button turns looping on or off; pills reshape scope, and running out of clips widens to whole-song rather than stopping.
 - Speeds are persisted only on explicit save, never from `playbackRate`'s `didSet`.
-- All model mutation goes through `SongMarker.add/set/clearEnd/delete` and `SavedSong.save/touch`, which enforce the invariants and save. New models go in `AppSchema.models`; the app, previews and tests all build from it.
+- All model mutation goes through `SongMarker.add/set/clearEnd/delete` and `SavedSong.save/touch/markPracticed/setArtwork`, which enforce the invariants and save. New models go in `AppSchema.models`; the app, previews and tests all build from it.
 - Storage APIs take plain values, with a `Song` overload on top, because `Song`/`Artwork` have no public initialisers and tests can't construct them.
 
 ## iCloud sync

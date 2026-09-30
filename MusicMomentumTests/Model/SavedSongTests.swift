@@ -101,17 +101,54 @@ struct SavedSongTests {
         #expect(songs[0].speed == 0.6)
     }
 
-    /// Artwork is repaired on every device a sync reaches; bumping the date
+    /// Artwork is repaired on every device a sync reaches; bumping a date
     /// would reshuffle each of their lists.
-    @Test("Replacing artwork keeps the last-practised date")
-    func settingArtworkKeepsLastPracticed() throws {
+    @Test("Replacing artwork keeps both dates")
+    func settingArtworkKeepsDates() throws {
         let song = save("i.1", artworkData: Data("local".utf8))
         let when = Date.now.addingTimeInterval(-300)
         song.lastPracticed = when
+        song.practicedAt = when
 
         SavedSong.setArtwork(Data("catalog".utf8), for: song, in: context)
 
         #expect(song.artworkData == Data("catalog".utf8))
+        #expect(song.lastPracticed == when)
+        #expect(song.practicedAt == when)
+    }
+
+    @Test("A newly saved song has never been practised")
+    func newSongNeverPractised() {
+        #expect(save("i.1").practicedAt == nil)
+    }
+
+    /// A "last practised" label would lie if editing moved it.
+    @Test("Saving and touching change the edit date, not the practice date")
+    func editsLeavePracticeDate() throws {
+        let song = save("i.1", speed: 1.0)
+        let when = Date.now.addingTimeInterval(-300)
+        song.lastPracticed = when
+        song.practicedAt = when
+
+        save("i.1", speed: 0.8)
+        #expect(song.lastPracticed > when)
+        #expect(song.practicedAt == when)
+
+        song.lastPracticed = when
+        SavedSong.touch(song, in: context)
+        #expect(song.lastPracticed > when)
+        #expect(song.practicedAt == when)
+    }
+
+    @Test("Practising changes the practice date, not the edit date")
+    func practiceLeavesEditDate() throws {
+        let song = save("i.1")
+        let when = Date.now.addingTimeInterval(-300)
+        song.lastPracticed = when
+
+        SavedSong.markPracticed(song, in: context)
+
+        #expect(try #require(song.practicedAt) > when)
         #expect(song.lastPracticed == when)
     }
 
@@ -122,21 +159,22 @@ struct SavedSongTests {
         #expect(SavedSong.find(songID: "i.2", in: context) == nil)
     }
 
-    @Test("The list sorts most recently practised first")
-    func sortsByLastPracticed() throws {
-        // Explicit dates: the clock may not tick between three saves in a row.
-        save("i.1", title: "First").lastPracticed = .now.addingTimeInterval(-300)
-        save("i.2", title: "Second").lastPracticed = .now.addingTimeInterval(-200)
-        save("i.3", title: "Third").lastPracticed = .now.addingTimeInterval(-100)
+    /// The sort behind "Practising lately", which relies on the store putting
+    /// a `nil` practice date last when descending.
+    @Test("Practised songs come first, then the rest by last change")
+    func sortsByPractice() throws {
+        // Explicit dates: the clock may not tick between saves in a row.
+        save("i.1").lastPracticed = .now.addingTimeInterval(-400)
+        save("i.2").lastPracticed = .now.addingTimeInterval(-100)
+        save("i.3").practicedAt = .now.addingTimeInterval(-300)
+        save("i.4").practicedAt = .now.addingTimeInterval(-200)
 
-        let first = try #require(SavedSong.find(songID: "i.1", in: context))
-        SavedSong.touch(first, in: context)
-
-        let descriptor = FetchDescriptor<SavedSong>(
-            sortBy: [SortDescriptor(\.lastPracticed, order: .reverse)]
-        )
+        let descriptor = FetchDescriptor<SavedSong>(sortBy: [
+            SortDescriptor(\.practicedAt, order: .reverse),
+            SortDescriptor(\.lastPracticed, order: .reverse),
+        ])
         let ordered = try context.fetch(descriptor)
-        #expect(ordered.map(\.songID) == ["i.1", "i.3", "i.2"])
+        #expect(ordered.map(\.songID) == ["i.4", "i.3", "i.2", "i.1"])
     }
 
     @Test("Deleting removes only the song asked for")
@@ -158,14 +196,18 @@ struct SavedSongTests {
         _ songID: String,
         catalogID: String? = nil,
         speed: Double,
-        lastPracticed: Date
+        lastPracticed: Date,
+        practicedAt: Date? = nil
     ) -> SavedSong {
-        let song = SavedSong(songID: songID, catalogID: catalogID, speed: speed, lastPracticed: lastPracticed)
+        let song = SavedSong(
+            songID: songID, catalogID: catalogID, speed: speed,
+            lastPracticed: lastPracticed, practicedAt: practicedAt
+        )
         context.insert(song)
         return song
     }
 
-    @Test("Merging keeps the most recently practised copy and every marker")
+    @Test("Merging keeps the most recently changed copy and every marker")
     func mergeKeepsNewestAndAllMarkers() throws {
         let older = insertDuplicate("i.1", catalogID: "1440857781", speed: 0.5, lastPracticed: .now.addingTimeInterval(-60))
         let newer = insertDuplicate("i.1", speed: 0.8, lastPracticed: .now)
@@ -182,6 +224,33 @@ struct SavedSongTests {
         #expect(merged.catalogID == "1440857781")
         #expect(merged.sortedMarkers.map(\.name) == ["Intro", "Solo"])
         #expect(try context.fetch(FetchDescriptor<SongMarker>()).count == 2)
+    }
+
+    @Test("Merging keeps the latest practice from either copy")
+    func mergeKeepsLatestPractice() throws {
+        let practised = Date.now
+        insertDuplicate("i.1", speed: 0.5, lastPracticed: .now.addingTimeInterval(-60), practicedAt: practised)
+        insertDuplicate("i.1", speed: 0.8, lastPracticed: .now)
+
+        SavedSong.mergeDuplicates(in: context)
+
+        let songs = try allSongs()
+        #expect(songs.count == 1)
+        #expect(songs[0].speed == 0.8)
+        #expect(songs[0].practicedAt == practised)
+    }
+
+    @Test("Copies changed at the same moment fall back to the latest practice")
+    func mergeTieBreaksOnPractice() throws {
+        let when = Date.now
+        insertDuplicate("i.1", speed: 0.6, lastPracticed: when, practicedAt: when)
+        insertDuplicate("i.1", speed: 0.7, lastPracticed: when)
+
+        SavedSong.mergeDuplicates(in: context)
+
+        let songs = try allSongs()
+        #expect(songs.count == 1)
+        #expect(songs[0].speed == 0.6)
     }
 
     @Test("Merging picks the same survivor whatever order the rows come in")

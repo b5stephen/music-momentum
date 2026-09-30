@@ -14,11 +14,11 @@ struct SavedSongsView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \SavedSong.lastPracticed, order: .reverse)
-    private var recentFirst: [SavedSong]
+    private var recentlyChanged: [SavedSong]
     /// Per device rather than synced: it's how this screen is read, not data.
-    @AppStorage("savedSongOrder") private var order: SongOrder = .lastPracticed
+    @AppStorage("savedSongOrder") private var order: SongOrder = .changed
 
-    private var songs: [SavedSong] { order.sorted(recentFirst) }
+    private var songs: [SavedSong] { order.sorted(recentlyChanged) }
 
     @State private var showPicker = false
     @State private var editing: SavedSong?
@@ -219,7 +219,6 @@ struct SavedSongsView: View {
             }
             loadingID = nil
             if let marker { controller.jump(to: marker) }
-            SavedSong.touch(song, in: modelContext)
             onPractice()
         }
     }
@@ -294,28 +293,31 @@ struct SavedSongsView: View {
 // MARK: - Order
 
 private enum SongOrder: String, CaseIterable, Identifiable {
-    case lastPracticed, title, artist
+    case changed, practiced, title, artist
 
     var id: Self { self }
 
     var title: String {
         switch self {
-        case .lastPracticed: "Last Practiced"
+        case .changed: "Last Changed"
+        case .practiced: "Last Practiced"
         case .title: "Title"
         case .artist: "Artist"
         }
     }
 
-    /// Takes the list most recent first, which a stable sort keeps as the
-    /// tiebreak between equal titles or artists.
-    func sorted(_ recentFirst: [SavedSong]) -> [SavedSong] {
+    /// Takes the list most recently changed first, which a stable sort keeps
+    /// as the tiebreak, including among songs never practised.
+    func sorted(_ recentlyChanged: [SavedSong]) -> [SavedSong] {
         switch self {
-        case .lastPracticed:
-            recentFirst
+        case .changed:
+            recentlyChanged
+        case .practiced:
+            recentlyChanged.sorted { ($0.practicedAt ?? .distantPast) > ($1.practicedAt ?? .distantPast) }
         case .title:
-            recentFirst.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+            recentlyChanged.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
         case .artist:
-            recentFirst.sorted {
+            recentlyChanged.sorted {
                 switch $0.artistName.localizedStandardCompare($1.artistName) {
                 case .orderedSame: $0.title.localizedStandardCompare($1.title) == .orderedAscending
                 case let result: result == .orderedAscending

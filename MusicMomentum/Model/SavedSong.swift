@@ -29,8 +29,13 @@ final class SavedSong {
     var title: String = ""
     var artistName: String = ""
     var artworkData: Data?
-    /// Bumped on save, speed change and load; the saved list sorts on it.
+    /// Despite the name, when the user last changed the song or its markers;
+    /// practice is `practicedAt`. It meant roughly this before practice got a
+    /// field of its own, and renaming it would rename the CloudKit field that
+    /// installed builds still sync.
     var lastPracticed: Date = Date.now
+    /// When playback last started. `nil` until the song is first played.
+    var practicedAt: Date?
     /// Optional because CloudKit requires every relationship to be.
     @Relationship(deleteRule: .cascade, inverse: \SongMarker.song)
     var markers: [SongMarker]? = []
@@ -42,7 +47,8 @@ final class SavedSong {
         title: String = "",
         artistName: String = "",
         artworkData: Data? = nil,
-        lastPracticed: Date = .now
+        lastPracticed: Date = .now,
+        practicedAt: Date? = nil
     ) {
         self.songID = songID
         self.catalogID = catalogID
@@ -51,6 +57,7 @@ final class SavedSong {
         self.artistName = artistName
         self.artworkData = artworkData
         self.lastPracticed = lastPracticed
+        self.practicedAt = practicedAt
     }
 
     var percent: Int { Int((speed * 100).rounded()) }
@@ -134,15 +141,21 @@ extension SavedSong {
         try? context.save()
     }
 
-    /// Leaves `lastPracticed` alone: a repair isn't practice, and bumping it
-    /// would reshuffle the list on every device.
+    static func markPracticed(_ song: SavedSong, in context: ModelContext) {
+        song.practicedAt = .now
+        try? context.save()
+    }
+
+    /// Leaves both dates alone: a repair isn't the user's doing, and every
+    /// device a sync reaches runs one, which would reshuffle all their lists.
     static func setArtwork(_ artworkData: Data, for song: SavedSong, in context: ModelContext) {
         song.artworkData = artworkData
         try? context.save()
     }
 
-    /// Folds rows sharing a `songID` into the most recently practised one,
-    /// keeping every marker. The survivor has to be chosen from synced
+    /// Folds rows sharing a `songID` into the most recently edited one, whose
+    /// speed is the one the user chose last, keeping every marker and the
+    /// latest practice. The survivor has to be chosen from synced
     /// fields alone: two devices merging at once must pick the same row, or
     /// each deletes the one the other kept.
     static func mergeDuplicates(in context: ModelContext) {
@@ -151,10 +164,14 @@ extension SavedSong {
         guard !groups.isEmpty else { return }
         for group in groups {
             let ordered = group.sorted {
-                ($0.lastPracticed, $0.speed) > ($1.lastPracticed, $1.speed)
+                ($0.lastPracticed, $0.practicedAt ?? .distantPast, $0.speed)
+                    > ($1.lastPracticed, $1.practicedAt ?? .distantPast, $1.speed)
             }
             let keeper = ordered[0]
             for duplicate in ordered.dropFirst() {
+                if let practiced = duplicate.practicedAt, practiced > keeper.practicedAt ?? .distantPast {
+                    keeper.practicedAt = practiced
+                }
                 if keeper.catalogID == nil { keeper.catalogID = duplicate.catalogID }
                 if keeper.artworkData == nil { keeper.artworkData = duplicate.artworkData }
                 for marker in duplicate.markers ?? [] { marker.song = keeper }

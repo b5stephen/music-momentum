@@ -13,7 +13,11 @@ import SwiftUI
 struct LibraryBrowseView: View {
     let onSelect: (Song) -> Void
 
-    @Query(sort: \SavedSong.lastPracticed, order: .reverse)
+    /// Songs never played still fill the shelf, most recently changed first.
+    @Query(sort: [
+        SortDescriptor(\SavedSong.practicedAt, order: .reverse),
+        SortDescriptor(\SavedSong.lastPracticed, order: .reverse),
+    ])
     private var saved: [SavedSong]
 
     @State private var openingID: String?

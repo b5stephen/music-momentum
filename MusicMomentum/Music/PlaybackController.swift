@@ -278,6 +278,7 @@ final class PlaybackController {
                 try await playerBox.play()
                 errorMessage = nil
                 hasPlayed = true
+                markPracticed()
                 await applyPendingStart()
                 try? await Task.sleep(for: .milliseconds(300))
                 applyRateIfPossible()
@@ -434,6 +435,15 @@ final class PlaybackController {
             return
         }
         playbackRate = SavedSong.find(songID: song.id.rawValue, in: modelContext)?.speed ?? 1.0
+    }
+
+    /// Only saved songs keep a practice date; playing an unsaved one leaves
+    /// nothing behind.
+    private func markPracticed() {
+        guard let modelContext, let song = selectedSong,
+              let saved = SavedSong.find(songID: song.id.rawValue, in: modelContext)
+        else { return }
+        SavedSong.markPracticed(saved, in: modelContext)
     }
 
     /// Deliberately not called from `playbackRate`'s `didSet`: speeds persist
