@@ -14,7 +14,11 @@ struct SavedSongsView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \SavedSong.lastPracticed, order: .reverse)
-    private var songs: [SavedSong]
+    private var recentFirst: [SavedSong]
+    /// Per device rather than synced: it's how this screen is read, not data.
+    @AppStorage("savedSongOrder") private var order: SongOrder = .lastPracticed
+
+    private var songs: [SavedSong] { order.sorted(recentFirst) }
 
     @State private var showPicker = false
     @State private var editing: SavedSong?
@@ -102,6 +106,18 @@ struct SavedSongsView: View {
             }
             .navigationTitle("Saved")
             .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Picker("Sort By", selection: $order) {
+                            ForEach(SongOrder.allCases) { order in
+                                Text(order.title).tag(order)
+                            }
+                        }
+                    } label: {
+                        Label("Sort", systemImage: "arrow.up.arrow.down")
+                    }
+                    .disabled(songs.isEmpty)
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         chooseSong()
@@ -272,6 +288,40 @@ struct SavedSongsView: View {
     private func delete(_ marker: SongMarker) {
         controller.markerDeleted(marker)
         SongMarker.delete(marker, in: modelContext)
+    }
+}
+
+// MARK: - Order
+
+private enum SongOrder: String, CaseIterable, Identifiable {
+    case lastPracticed, title, artist
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .lastPracticed: "Last Practiced"
+        case .title: "Title"
+        case .artist: "Artist"
+        }
+    }
+
+    /// Takes the list most recent first, which a stable sort keeps as the
+    /// tiebreak between equal titles or artists.
+    func sorted(_ recentFirst: [SavedSong]) -> [SavedSong] {
+        switch self {
+        case .lastPracticed:
+            recentFirst
+        case .title:
+            recentFirst.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        case .artist:
+            recentFirst.sorted {
+                switch $0.artistName.localizedStandardCompare($1.artistName) {
+                case .orderedSame: $0.title.localizedStandardCompare($1.title) == .orderedAscending
+                case let result: result == .orderedAscending
+                }
+            }
+        }
     }
 }
 
