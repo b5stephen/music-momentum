@@ -445,10 +445,16 @@ private struct SpeedEditorSheet: View {
                     Button(role: .close) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(role: .confirm) {
+                    // Plain rather than `.confirm`, which fills solid coral; see
+                    // MarkerEditorView.
+                    Button {
                         onSave(speed)
                         dismiss()
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .foregroundStyle(Color.accentText)
                     }
+                    .accessibilityLabel("Save")
                 }
             }
         }

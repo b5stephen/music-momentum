@@ -156,16 +156,18 @@ struct MarkerEditorView: View {
                     Button(role: .close) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(role: .confirm) {
+                    // No `.confirm` role: it fills solid coral, and in this app only
+                    // looping fills solid. An explicit `.glass` style nests a second
+                    // capsule inside the toolbar's own glass, so it's left to the
+                    // toolbar to draw it like Close.
+                    Button {
                         onSave(name, start, end)
                         dismiss()
                     } label: {
                         Image(systemName: "checkmark")
                             .foregroundStyle(Color.accentText)
                     }
-                    // Glass like Close rather than the system's solid coral: in
-                    // this app only looping fills solid.
-                    .buttonStyle(.glass)
+                    .accessibilityLabel("Save")
                 }
             }
             .confirmationDialog(
