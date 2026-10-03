@@ -232,12 +232,11 @@ private struct ShelfRow: View {
     var body: some View {
         HStack(spacing: 12) {
             RoundedRectangle(cornerRadius: 7)
-                .fill(.tint.opacity(0.15))
+                .fill(.quaternary)
                 .frame(width: 30, height: 30)
                 .overlay {
                     Image(systemName: systemImage)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.tint)
                 }
             Text(title)
             Spacer(minLength: 8)
@@ -258,16 +257,23 @@ private struct RecentRow: View {
                 Text(song.title)
                     .font(.body)
                     .lineLimit(1)
-                Text(isMissing ? "Not in your library any more" : song.artistName)
-                    .font(.caption)
-                    .foregroundStyle(isMissing ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
-                    .lineLimit(1)
+                // Yellow on the icon only: red text reads as the coral tint.
+                HStack(spacing: 4) {
+                    if isMissing {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.yellow)
+                    }
+                    Text(isMissing ? "Not in your library any more" : song.artistName)
+                        .foregroundStyle(.secondary)
+                }
+                .font(.caption)
+                .lineLimit(1)
             }
             Spacer(minLength: 8)
             Text("\(song.percent)%")
                 .font(.subheadline.weight(.semibold))
                 .monospacedDigit()
-                .foregroundStyle(.tint)
+                .foregroundStyle(Color.accentText)
         }
         .contentShape(Rectangle())
     }

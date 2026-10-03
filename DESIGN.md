@@ -8,6 +8,7 @@ The palette and visual language for the app and its website. The app's colours c
 |---|---|---|
 | Coral | `#FF6640` | The accent. `AccentColor` in the asset catalog, Display P3 `1.00 0.33 0.16` light and `1.00 0.40 0.24` dark (lighter so it doesn't go muddy on black). `#FF6640` is the sRGB stand-in the website uses. |
 | On-accent | `#1A0A05` | Text and glyphs on a solid coral fill. `OnAccent` in the asset catalog; the website's text on coral buttons. |
+| Accent text | `#C43A12` light, coral dark | Coral used as text on a plain background. `AccentText` in the asset catalog: coral itself is under 3:1 on white, so light mode darkens it. |
 | Amber | `#FFB23E` | Taken from the app icon's orange. Website only so far. |
 | Rose | `#FF4F8B` | Website only so far. |
 | Violet | `#9C8CFF` | Website only so far; the website uses it for iCloud sync. |
@@ -20,14 +21,21 @@ On the website, each feature gets its own accent: coral for speed, amber for mar
 
 ## How the app uses colour
 
-- **One tint.** Coral is the only accent in the app, applied through `.tint`. Amber, rose and violet belong to the website and marketing. Before bringing one into the app, give it a job the tint can't do, and record that job here.
-- **Coral means "on" or "act on this".** It marks the loop when it's running, a looping clip, the chip that prompts you to save, and play/pause. Don't use it for decoration, or it stops meaning anything.
+- **One tint.** Coral is the only accent in the app, applied through `.tint`. Amber, rose and violet belong to the website and marketing. Amber was tried for markers and read as out of place beside coral; before bringing one in, give it a job the tint can't do, and record that job here.
+- **Coral means "on" or "act on this".** It marks the loop when it's running, a looping clip, the chip that prompts you to save, the speed you saved a song at, and the selected handle in the marker editor. Don't use it for decoration (icon tiles, nudge and cue buttons, a Mark button on every row), or it stops meaning anything. Play/pause is the primary colour, not coral.
 - **Fill carries state; glyph carries kind.** A marker pill is idle in `.quaternary`, cued at `.tint` 12%, and looping in solid `.tint` with `OnAccent` text. A dot marks a point and `SpanGlyph` marks a clip, so the fill never has to explain what a marker is.
 - **Only one state shouts.** Looping is the one solid-tint state. Cued keeps the primary text colour and only hints through its fill and glyph.
-- **Chips:** a chip that prompts you to act is `.tint` at 14% with tinted text; a settled chip is `.quaternary` with secondary text.
+- **Chips and buttons:** a chip or button that prompts you to act is `.tint` at 14% with `AccentText` text (`.bordered` tinted `.accentText` for buttons); a settled one is `.quaternary` with secondary text. There's no solid coral button: beside the tinted chips a solid fill reads as a different, brighter coral. Solid coral is kept for state (looping, the loop button, the selected Point/Clip switch) and for the marker editor's Now and Save.
+- **Marker editor:** the clip and its handles are coral; the selected time sits in a `.tint` 16% panel with primary text rather than turning coral itself, so the big numerals stay legible in light mode. Nudge, cue and play buttons are neutral (`.bordered` tinted `.primary`).
+- **Saved list:** markers are plain `.quaternary` pills and the Mark button is a grey circle with `MarkGlyph`, the practice screen's mark button in miniature. The speed pill is the only coral on a row.
 - **Round controls** (loop, mark) are 46pt circles: `.tint` fill with an `OnAccent` glyph when on, and `.quaternary` with a secondary glyph when off.
 - **Scrubber:** the played part is `.tint` at 45%, clips are `.primary` at 25%, and a looping clip is solid `.tint`, ringed in the background colour so the played fill can't swallow it.
-- **Banners stay away from coral's hue.** Warnings are yellow. Errors sit on neutral grey with a coral icon. Banner text is always the primary label colour, so only the icon and background carry colour. Don't use orange or red near the accent; they read as the same colour.
+- **Speed wheel:** a flat `.quaternary` rim, no bevel or gradient, so it takes whatever foreground it sits on.
+- **Banners stay away from coral's hue.** Warnings are yellow. Errors sit on neutral grey with a coral icon. Banner text is always the primary label colour, so only the icon and background carry colour. Don't use orange or red near the accent; they read as the same colour. The same goes for inline warnings: a song gone from the library gets a yellow triangle and secondary text, not red text.
+
+## Artwork colour on Practice
+
+With a song loaded, the practice screen is painted in the cover's own colours: `ArtworkPalette` reads `Artwork.backgroundColor` and `primaryTextColor`, which Apple Music picks to read on each other. The background is the cover colour under a blurred copy of the cover; the foreground, `.tint` and every hierarchical style become the cover's text colour; "on" (loop button, looping pill, speed arc) is a solid fill of that text colour with the background colour on top, the way Apple Music's Play button works. Coral steps aside here because it would vanish on a red or orange cover. It follows the cover, not the system appearance, so a light cover gives a light screen in dark mode. Covers without colours, and the screen with nothing loaded, keep the system background and the coral tint. This is the one place the app uses a gradient: the fade from the blurred cover into its background.
 
 ## Type
 
@@ -37,7 +45,8 @@ On the website, each feature gets its own accent: coral for speed, amber for mar
 ## Contrast
 
 - Coral on black is about 7:1, so tinted text and icons on the dark background are fine.
-- White on coral is only about 2.9:1, under the 4.5:1 that small text needs. Text on a solid coral fill uses `OnAccent` (about 6.5:1 on the dark-mode coral), as the looping pill, the loop button when it's on, the marker editor's selected Point/Clip switch and the website's buttons do. Don't put white on coral.
+- Coral on white is also only about 2.9:1, so coral *text* on a plain background uses `AccentText`, which darkens to about 5.3:1 in light mode. Fills keep the bright coral in both modes.
+- White on coral is only about 2.9:1, under the 4.5:1 that small text needs. Text on a solid coral fill uses `OnAccent` (about 6.5:1 on the dark-mode coral), as the looping pill, the loop button when it's on, the marker editor's selected Point/Clip switch, its Now chip and Save button, and the website's buttons do. On an artwork-coloured practice screen the same job falls to the cover's background colour. Don't put white on coral.
 - Touch targets are at least 44pt.
 
 ## Website

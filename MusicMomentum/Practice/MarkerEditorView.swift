@@ -154,6 +154,10 @@ struct MarkerEditorView: View {
                     Button(role: .confirm) {
                         onSave(name, start, end)
                         dismiss()
+                    } label: {
+                        // The system draws white, which is under 3:1 on coral.
+                        Image(systemName: "checkmark")
+                            .foregroundStyle(Color.onAccent)
                     }
                 }
             }
@@ -242,17 +246,23 @@ struct MarkerEditorView: View {
                 Text(title.uppercased())
                     .font(.caption2.weight(.semibold))
                     .tracking(0.4)
-                    .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    .foregroundStyle(isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
                 Spacer(minLength: 4)
                 if isSelected {
                     nowChip(for: title)
                 }
             }
             PreciseTimeField(time: time, range: range) { selected = handle }
-                .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 4)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        // A tinted panel rather than tinted text: the big time stays legible in
+        // light mode, and the coral is left to the clip and the handles.
+        .background(
+            isSelected ? AnyShapeStyle(.tint.opacity(0.16)) : AnyShapeStyle(.clear),
+            in: .rect(cornerRadius: 16, style: .continuous)
+        )
         .contentShape(.rect)
         .onTapGesture { selected = handle }
         .accessibilityElement(children: .contain)
@@ -268,8 +278,8 @@ struct MarkerEditorView: View {
                 .font(.caption2.weight(.semibold))
                 .padding(.horizontal, 9)
                 .padding(.vertical, 3)
-                .background(.tint.opacity(0.14), in: Capsule())
-                .foregroundStyle(.tint)
+                .background(.tint, in: Capsule())
+                .foregroundStyle(Color.onAccent)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Set \(title.lowercased()) to the current position")
@@ -283,6 +293,7 @@ struct MarkerEditorView: View {
             nudge(1)
         }
         .controlSize(.small)
+        .tint(.primary)
         .padding(.vertical, 4)
     }
 
@@ -324,6 +335,7 @@ struct MarkerEditorView: View {
             }
         }
         .buttonStyle(.bordered)
+        .tint(.primary)
     }
 
     private var playPauseButton: some View {
@@ -346,6 +358,8 @@ struct MarkerEditorView: View {
         Button(action: action) {
             Label(title, systemImage: "arrow.turn.down.right")
                 .font(.footnote.weight(.medium))
+                // A bordered label's icon keeps the app tint whatever `.tint` says.
+                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, minHeight: 28)
         }

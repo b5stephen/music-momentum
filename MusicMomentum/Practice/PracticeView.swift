@@ -12,6 +12,9 @@ import UIKit
 
 struct PracticeView: View {
     @Bindable var controller: PlaybackController
+    /// Stands in for `controller.selectedSong` in previews, since `Song` has
+    /// no public initialiser.
+    var previewTrack: Track?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.modelContext) private var modelContext
     @Query private var savedSongs: [SavedSong]
@@ -32,14 +35,37 @@ struct PracticeView: View {
         }
     }
 
+    /// What the loaded screen shows of the song.
+    struct Track {
+        var id: String
+        var title: String
+        var artistName: String
+        var palette: ArtworkPalette?
+    }
+
+    private var track: Track? {
+        guard let song = controller.selectedSong else { return previewTrack }
+        return Track(
+            id: song.id.rawValue,
+            title: song.title,
+            artistName: song.artistName,
+            palette: ArtworkPalette(song.artwork)
+        )
+    }
+
+    /// Tinted text: the cover's text colour, or the coral that stays legible on white.
+    private var textTint: Color { track?.palette?.foreground ?? .accentText }
+
+    private var onAccent: Color { track?.palette?.background ?? .onAccent }
+
     var body: some View {
         // The gaps either side of the wheel absorb spare height; the screen only
         // scrolls once they've given it all back.
         GeometryReader { proxy in
             ScrollView {
                 VStack(spacing: 0) {
-                    if controller.selectedSong != nil {
-                        loadedSong(width: proxy.size.width)
+                    if let track {
+                        loadedSong(track, width: proxy.size.width)
                     } else if controller.isRestoringLastSong {
                         RestoringState(diameter: wheelDiameter(width: proxy.size.width))
                     } else if controller.canUseMusic {
@@ -54,6 +80,7 @@ struct PracticeView: View {
                 .frame(maxWidth: .infinity, minHeight: proxy.size.height)
             }
         }
+        .modifier(ArtworkGround(palette: track?.palette, artwork: controller.selectedSong?.artwork))
         .sheet(isPresented: $showPicker) {
             SongPickerView { song in
                 Task { await controller.select(song: song) }
@@ -88,8 +115,8 @@ struct PracticeView: View {
     // MARK: - Practising
 
     @ViewBuilder
-    private func loadedSong(width: CGFloat) -> some View {
-        nowPlaying
+    private func loadedSong(_ track: Track, width: CGFloat) -> some View {
+        nowPlaying(track)
 
         Spacer(minLength: 16)
 
@@ -109,7 +136,7 @@ struct PracticeView: View {
         // Always laid out so toggling the loop doesn't shift everything above it.
         Text(loopCaption ?? " ")
             .font(.footnote.weight(.medium))
-            .foregroundStyle(.tint)
+            .foregroundStyle(textTint)
             .lineLimit(1)
             .opacity(loopCaption == nil ? 0 : 1)
             .accessibilityHidden(loopCaption == nil)
@@ -195,7 +222,7 @@ struct PracticeView: View {
                     controller.isLoopOn ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary),
                     in: Circle()
                 )
-                .foregroundStyle(controller.isLoopOn ? AnyShapeStyle(Color.onAccent) : AnyShapeStyle(.secondary))
+                .foregroundStyle(controller.isLoopOn ? AnyShapeStyle(onAccent) : AnyShapeStyle(.secondary))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Loop")
@@ -311,12 +338,12 @@ struct PracticeView: View {
 
     // MARK: - Header
 
-    private var nowPlaying: some View {
+    private func nowPlaying(_ track: Track) -> some View {
         VStack(spacing: 4) {
-            Text(controller.selectedSong?.title ?? "")
+            Text(track.title)
                 .font(.title2.bold())
                 .multilineTextAlignment(.center)
-            Text(controller.selectedSong?.artistName ?? "")
+            Text(track.artistName)
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 8) {
@@ -368,13 +395,13 @@ struct PracticeView: View {
                 isPrompting ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary),
                 in: Capsule()
             )
-            .foregroundStyle(isPrompting ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+            .foregroundStyle(isPrompting ? AnyShapeStyle(textTint) : AnyShapeStyle(.secondary))
     }
 
     /// Reads the `@Query` results rather than fetching, so the chip restyles
     /// the moment the store changes — including from the Saved tab.
     private var savedSong: SavedSong? {
-        guard let songID = controller.selectedSong?.id.rawValue else { return nil }
+        guard let songID = track?.id else { return nil }
         return savedSongs.first { $0.songID == songID }
     }
 
@@ -482,13 +509,16 @@ private struct ArrivalState: View {
                     .frame(height: 50)
                     .padding(.horizontal, 20)
             }
-            .buttonStyle(.borderedProminent)
+            // Tinted rather than solid, so it's the same coral as the chips
+            // and speed pills: a solid fill reads as a brighter, other colour.
+            .buttonStyle(.bordered)
             .buttonBorderShape(.capsule)
+            .tint(.accentText)
             .padding(.top, 24)
 
             Text(footnote)
                 .font(.footnote)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.top, 12)
                 .padding(.horizontal, 40)
@@ -497,6 +527,42 @@ private struct ArrivalState: View {
         }
         // So its own gaps, not the stack around it, absorb the spare space.
         .frame(maxHeight: .infinity)
+    }
+}
+
+/// Paints the loaded screen in the cover's colours, under a blurred copy of
+/// the cover. Covers without colours keep the system look and the coral tint.
+private struct ArtworkGround: ViewModifier {
+    let palette: ArtworkPalette?
+    let artwork: Artwork?
+
+    func body(content: Content) -> some View {
+        if let palette {
+            content
+                .foregroundStyle(palette.foreground)
+                .tint(palette.foreground)
+                .backgroundStyle(palette.background)
+                .environment(\.onAccent, palette.background)
+                .environment(\.colorScheme, palette.isLight ? .light : .dark)
+                .background { backdrop(palette) }
+        } else {
+            content
+        }
+    }
+
+    private func backdrop(_ palette: ArtworkPalette) -> some View {
+        ZStack(alignment: .top) {
+            palette.background
+            if let artwork {
+                ArtworkImage(artwork, width: 460, height: 460)
+                    .frame(maxWidth: .infinity, maxHeight: 460)
+                    .blur(radius: 60)
+                    .opacity(0.8)
+                    .mask(LinearGradient(colors: [.black, .clear], startPoint: .center, endPoint: .bottom))
+            }
+        }
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
     }
 }
 
@@ -567,33 +633,46 @@ private struct DialSilhouette: View {
     }
 }
 
-/// The point marker the track draws, with a plus. No SF Symbol says "put a
-/// mark here" — flag came closest and read as reporting a problem.
-private struct MarkGlyph: View {
-    var body: some View {
-        Canvas { context, size in
-            let scale = size.width / 24
-            var path = Path()
-            path.move(to: CGPoint(x: 3.5 * scale, y: 19.5 * scale))
-            path.addLine(to: CGPoint(x: 20.5 * scale, y: 19.5 * scale))
-            path.move(to: CGPoint(x: 9 * scale, y: 19.5 * scale))
-            path.addLine(to: CGPoint(x: 9 * scale, y: 7.5 * scale))
-            path.move(to: CGPoint(x: 15 * scale, y: 5 * scale))
-            path.addLine(to: CGPoint(x: 20.5 * scale, y: 5 * scale))
-            path.move(to: CGPoint(x: 17.75 * scale, y: 2.25 * scale))
-            path.addLine(to: CGPoint(x: 17.75 * scale, y: 7.75 * scale))
-            context.stroke(
-                path,
-                with: .style(.foreground),
-                style: StrokeStyle(lineWidth: 1.8 * scale, lineCap: .round)
-            )
-        }
-    }
-}
-
 #Preview {
     PracticeView(controller: PlaybackController())
         .modelContainer(try! AppSchema.inMemoryContainer())
+}
+
+#Preview("Dark cover") {
+    loadedPreview(palette: ArtworkPalette(
+        background: CGColor(srgbRed: 0.12, green: 0.16, blue: 0.33, alpha: 1),
+        foreground: CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)
+    ))
+}
+
+#Preview("Light cover") {
+    loadedPreview(palette: ArtworkPalette(
+        background: CGColor(srgbRed: 0.95, green: 0.94, blue: 0.91, alpha: 1),
+        foreground: CGColor(srgbRed: 0.11, green: 0.11, blue: 0.10, alpha: 1)
+    ))
+}
+
+#Preview("Cover without colours") {
+    loadedPreview(palette: nil)
+}
+
+@MainActor
+private func loadedPreview(palette: ArtworkPalette?) -> some View {
+    let container = try! AppSchema.inMemoryContainer()
+    let song = SavedSong.save(
+        songID: "1", title: "Little Wing", artistName: "Jimi Hendrix",
+        artworkData: nil, speed: 0.6, in: container.mainContext
+    )
+    SongMarker.add(to: song, name: "Intro", startTime: 0, endTime: 22, in: container.mainContext)
+    SongMarker.add(to: song, name: "Solo", startTime: 96, endTime: 112, in: container.mainContext)
+    SongMarker.add(to: song, name: "Verse 2", startTime: 150, endTime: nil, in: container.mainContext)
+    let controller = PlaybackController()
+    controller.playbackRate = 0.6
+    return PracticeView(
+        controller: controller,
+        previewTrack: .init(id: "1", title: "Little Wing", artistName: "Jimi Hendrix", palette: palette)
+    )
+    .modelContainer(container)
 }
 
 #Preview("Nothing loaded") {

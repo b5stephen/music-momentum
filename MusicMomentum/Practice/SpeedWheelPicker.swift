@@ -74,25 +74,10 @@ struct SpeedWheelPicker: View {
         }
     }
 
+    /// Hierarchical rather than a system fill, so it takes the cover's
+    /// colour on the practice screen.
     private var rim: some View {
-        Circle()
-            .fill(
-                LinearGradient(
-                    colors: [Color(.tertiarySystemFill), Color(.quaternarySystemFill)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .overlay(
-                Circle().strokeBorder(
-                    LinearGradient(
-                        colors: [.white.opacity(0.35), .clear, .black.opacity(0.12)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-            )
+        Circle().fill(.quaternary)
     }
 
     private var gauge: some View {
@@ -102,7 +87,7 @@ struct SpeedWheelPicker: View {
 
             context.stroke(
                 arc(center: center, radius: radius, to: Double(maxPercent)),
-                with: .color(.primary.opacity(0.12)),
+                with: .style(HierarchicalShapeStyle.primary.opacity(0.12)),
                 style: StrokeStyle(lineWidth: 6, lineCap: .round)
             )
             context.stroke(
@@ -128,7 +113,7 @@ struct SpeedWheelPicker: View {
                 path.addLine(to: point(from: center, radius: outer - (isMajor ? 14 : 8), angle: angle))
                 context.stroke(
                     path,
-                    with: .color(.primary.opacity(isMajor ? 0.35 : 0.18)),
+                    with: .style(HierarchicalShapeStyle.primary.opacity(isMajor ? 0.35 : 0.18)),
                     style: StrokeStyle(lineWidth: isMajor ? 2 : 1.5, lineCap: .round)
                 )
             }

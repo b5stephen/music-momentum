@@ -54,7 +54,9 @@ struct SavedSongsView: View {
                         } label: {
                             Label("Add Song", systemImage: "music.note.list")
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.capsule)
+                        .tint(.accentText)
                         .disabled(!controller.canUseMusic)
                     }
                 } else {
@@ -358,7 +360,7 @@ private struct SavedSongRow: View {
                 Text("\(song.percent)%")
                     .font(.subheadline.weight(.semibold))
                     .monospacedDigit()
-                    .foregroundStyle(.tint)
+                    .foregroundStyle(Color.accentText)
             }
             // A plain button in a `List` row would let the whole row trigger it.
             .buttonStyle(.borderless)

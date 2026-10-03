@@ -29,6 +29,9 @@ struct MarkerPills: View {
     var onAddMarker: (() -> Void)?
 
     @ScaledMetric(relativeTo: .footnote) private var dotSize: CGFloat = 6
+    /// A pill's height, so the mark button lines up with them.
+    @ScaledMetric(relativeTo: .footnote) private var markSize: CGFloat = 32
+    @Environment(\.onAccent) private var onAccent
 
     private enum PillState {
         case idle, cued, looping
@@ -136,19 +139,15 @@ struct MarkerPills: View {
         }
     }
 
-    /// Outlined rather than filled so it doesn't read as an idle marker.
+    /// The practice screen's mark button in miniature, round so it doesn't
+    /// read as a marker. Grey: on every saved row, coral would drown the list.
     private func markPill(_ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: "plus")
-                    .font(.system(size: 9, weight: .semibold))
-                Text("Mark")
-                    .font(.footnote.weight(.medium))
-            }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 7)
-            .overlay(Capsule().strokeBorder(.tint, lineWidth: 1))
-            .foregroundStyle(.tint)
+            MarkGlyph()
+                .frame(width: markSize * 0.52, height: markSize * 0.52)
+                .frame(width: markSize, height: markSize)
+                .background(.quaternary, in: Circle())
+                .foregroundStyle(.secondary)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Mark this point")
@@ -187,7 +186,7 @@ struct MarkerPills: View {
     private func foreground(_ state: PillState) -> AnyShapeStyle {
         switch state {
         case .idle, .cued: AnyShapeStyle(.primary)
-        case .looping: AnyShapeStyle(Color.onAccent)
+        case .looping: AnyShapeStyle(onAccent)
         }
     }
 
