@@ -333,18 +333,18 @@ struct PracticeView: View {
             )
             .padding(.horizontal, 32)
 
-            if let saved = savedSong, !saved.sortedMarkers.isEmpty {
-                MarkerPills(
-                    markers: saved.sortedMarkers,
-                    isLooping: { controller.isLooping($0) },
-                    isCued: { isCued($0) },
-                    onTap: { tapped($0) },
-                    onPlayLoop: { controller.playOnLoop($0) },
-                    onJump: { controller.jump(to: $0) },
-                    onEdit: { markerSheet = .edit($0) },
-                    onDelete: { delete($0) }
-                )
-            }
+            // Always laid out, so switching between songs with and without
+            // markers doesn't shift the centred stack.
+            MarkerPills(
+                markers: savedSong?.sortedMarkers ?? [],
+                isLooping: { controller.isLooping($0) },
+                isCued: { isCued($0) },
+                onTap: { tapped($0) },
+                onPlayLoop: { controller.playOnLoop($0) },
+                onJump: { controller.jump(to: $0) },
+                onEdit: { markerSheet = .edit($0) },
+                onDelete: { delete($0) }
+            )
         }
     }
 

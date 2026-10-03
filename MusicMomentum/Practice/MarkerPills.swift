@@ -47,6 +47,9 @@ struct MarkerPills: View {
                     markPill(onAddMarker)
                 }
             }
+            // Holds a pill's height with no pills, so the practice screen
+            // doesn't jump between songs with and without markers.
+            .frame(minHeight: markSize)
             .padding(.vertical, 2)
         }
         .scrollIndicators(.hidden)
