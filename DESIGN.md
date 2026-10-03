@@ -38,17 +38,19 @@ On the website, each feature gets its own accent: coral for speed, amber for mar
 
 With a song loaded, the practice screen is painted in the cover's own colours, the way Apple Music's Now Playing is. `ArtworkPalette` averages the cover image, whole and in a 3×3 grid, and the screen draws those as a mesh gradient: the cover blurred into its colours. Library artwork's `musicKit://` URLs can't be fetched, so a library song is sampled from its catalog counterpart's cover. `Artwork.backgroundColor` stands in only while that loads, or when there's no cover to fetch, because it's a single colour and often the border: Count on Me's is cream where the cover is mostly gold.
 
-The ground is fitted to Apple Music screenshots, in OKLCH:
+The ground is tuned against Apple Music on the same iPhone, in OKLCH. The aim is Apple's colour and depth, not an exact match:
 
-- **The average, not the most vivid hue.** Picking the strongest hue turned Weather With You's mostly brown cover sky blue and Sunshine of Your Love's pink. Averages are taken as the pixels are stored (gamma-encoded), as Apple's are; a linear average comes out paler.
-- **Darken, keep the chroma.** Lightness is mapped to `0.105 + 0.56 × L`, never above 0.62, and chroma is left alone, so a bright cover lands on its richest shade: Count on Me's gold sits at 0.6 near the edge of sRGB, rather than pale khaki. Grey stays grey.
-- **Each mesh point is halfway between its region and the whole cover,** so the ground varies the way a heavy blur does without one corner taking over.
-- **Level through the top half, then darker towards the bottom:** black over the mesh, from clear at 45% to 38% at the bottom. It's the one gradient in the app.
+- **The average, led by the colourful pixels.** Picking the single strongest hue turned Weather With You's cover sky blue and Sunshine of Your Love's pink; a plain average let Count on Me's cream road turn its gold yellow-green. Lightness is averaged as the pixels are stored (gamma-encoded); hue and chroma are weighted by each pixel's chroma. A cover's warm and cool parts still cancel: Weather With You comes out grey, as Apple's does.
+- **Bright and vivid.** Lightness drops by a step of 0.12, so a bright cover stays bright: Count on Me's gold sits at 0.78 against Apple's 0.77–0.82. Saturation goes up by a third relative to what sRGB allows. Pale and grey covers stop at 0.5, so light text still reads on them. Grey stays grey.
+- **Yellows turn towards orange,** or darkening them reads as olive, and the bottom of the screen turns them further, as Apple's gold deepens to amber.
+- **Nearly one colour.** Each mesh point keeps only a quarter of its region's own colour, and none is less colourful than the whole cover, so a cover's pale parts don't darken into grey patches.
+- **Brightest behind the title and dial,** the mesh's middle row lifted a little, then darkening from a third of the way down towards a very dark shade of the cover's own colour: black greys it.
+- **The mesh drifts while the song plays,** its inner points slowly wandering on unrelated periods, and holds still while it's paused or when Reduce Motion is on.
 - **Light text always:** near-white tinted with the cover's hue. The screen is always in dark appearance, so every hierarchical style and `.quaternary` fill becomes the light text at low opacity, which reads as glass on any ground. Never fills of a dark text colour on a light ground: that's what made the first version look muddy.
 - **"On"** (loop button, looping pill, speed arc, Play) is a solid fill of the text colour with a darker shade of the ground on top.
 - **The selected tab** takes the text colour while Practice is showing, because coral vanishes on a red or orange cover.
 
-Coral steps aside on this screen. Covers without colours, and the screen with nothing loaded, keep the system background and the coral tint. The tuning was worked out on the Album Colour Study design canvas against Apple Music screenshots.
+Coral steps aside on this screen. Covers without colours, and the screen with nothing loaded, keep the system background and the coral tint. The first tuning was worked out on the Album Colour Study design canvas; the current one against Apple Music on a device.
 
 ## Type
 

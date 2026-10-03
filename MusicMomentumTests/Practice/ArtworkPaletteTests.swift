@@ -44,30 +44,45 @@ struct ArtworkPaletteTests {
         return ArtworkPalette.ground(for: .init(average: cover, mesh: Array(repeating: cover, count: 9)))
     }
 
-    @Test("A bright cover darkens into its richest shade")
+    @Test("A bright cover stays bright, vivid and warm")
     func brightGold() {
-        // Count on Me's average; Apple Music paints it L 0.60, C 0.12.
-        let cover = colour(0xF7D273)
-        let top = ground(0xF7D273).mesh[0]
-        #expect(abs(top.l - 0.6) < 0.02)
-        #expect(abs(top.c - cover.c) < 0.005)
-        #expect(top.vividness > 0.9)
+        // Count on Me's middle; Apple Music paints it around #D8A015.
+        let cover = colour(0xF6CE66)
+        let shade = ArtworkPalette.shade(cover)
+        let top = ground(0xF6CE66).mesh[0]
+        #expect(shade.l > 0.7 && shade.l < 0.76)
+        #expect(top.vividness > 0.98)
+        #expect(top.h < cover.h - 4)
+        #expect(ground(0xF6CE66).shadow.h < top.h - 4)
     }
 
-    @Test("A dark red keeps its hue and chroma and carries light text")
+    @Test("Brightest through the middle, darker along the top where the title sits")
+    func glow() {
+        let mesh = ground(0xF6CE66).mesh
+        #expect(mesh[3].l > mesh[0].l + 0.05)
+        #expect(mesh[3].l > mesh[6].l)
+    }
+
+    @Test("A dark red keeps its hue, stays vivid and carries light text")
     func darkRed() {
         let cover = colour(0x973F37)
         let ground = ground(0x973F37)
         #expect(abs(ground.mesh[4].h - cover.h) < 1)
-        #expect(abs(ground.mesh[4].c - cover.c) < 0.005)
-        #expect(ground.mesh[4].l < cover.l - 0.08)
+        #expect(ground.mesh[4].vividness > cover.vividness)
+        #expect(ground.mesh[0].l < cover.l - 0.1)
         #expect(contrast(ground.text, ground.mesh[4]) >= 4.5)
     }
 
-    @Test("Even a white cover stays dark enough for light text")
+    @Test("A white cover stays dark enough for light text")
     func whiteDarkens() {
-        #expect(ground(0xFFFFFF).mesh[0].l <= 0.62)
-        #expect(contrast(ground(0xFFFFFF).text, ground(0xFFFFFF).mesh[0]) >= 3)
+        let ground = ground(0xFFFFFF)
+        #expect(ground.mesh[0].l <= 0.5)
+        #expect(ground.mesh.allSatisfy { contrast(ground.text, $0) >= 4.5 })
+    }
+
+    @Test("A dark cover isn't darkened into black")
+    func darkCover() {
+        #expect(ArtworkPalette.shade(colour(0x202830)).l >= min(colour(0x202830).l, 0.25) - 0.001)
     }
 
     @Test("Grey stays grey")
@@ -77,15 +92,23 @@ struct ArtworkPaletteTests {
         #expect(ground.text.c < 0.005)
     }
 
-    @Test("Each mesh point sits halfway between its region and the whole cover")
+    @Test("Each mesh point leans towards the whole cover")
     func meshPullsToAverage() throws {
         let red = colour(0xC03020), blue = colour(0x2050C0)
         let regions = ArtworkPalette.Regions(average: colour(0x704070), mesh: [red] + Array(repeating: blue, count: 8))
         let ground = ArtworkPalette.ground(for: regions)
-        let corner = ground.mesh[0], other = ground.mesh[8]
+        let corner = ground.mesh[0], other = ground.mesh[2]
         #expect(corner.h < 60 || corner.h > 300)
-        #expect(abs(corner.h - other.h) > 60)
+        #expect(abs(corner.h - other.h) > 20)
         #expect(corner.c < ArtworkPalette.ground(for: .init(average: red, mesh: [red])).mesh[0].c)
+    }
+
+    @Test("A pale region keeps the cover's colour")
+    func paleRegion() {
+        let gold = colour(0xE0A010), cream = colour(0xF5EBC8)
+        let ground = ArtworkPalette.ground(for: .init(average: gold, mesh: [cream] + Array(repeating: gold, count: 8)))
+        #expect(ground.mesh[0].c >= ground.mesh[2].c - 0.001)
+        #expect(abs(ground.mesh[0].h - gold.h) < 15)
     }
 
     /// A `side`×`side` bitmap whose left half is `left` and right half `right`.
@@ -96,21 +119,42 @@ struct ArtworkPaletteTests {
         }
     }
 
-    @Test("Averages the whole cover as stored, and each region apart")
+    @Test("Averages the whole cover, and each region apart")
     func regions() throws {
         let regions = try #require(ArtworkPalette.regions(rgba: halves(0xFF0000, 0x0000FF), side: 8))
         let purple = colour(0x800080)
         #expect(abs(regions.average.l - purple.l) < 0.01)
-        #expect(abs(regions.average.h - purple.h) < 2)
+        // Weighted towards the more colourful blue, but still purple.
+        #expect((270...340).contains(regions.average.h))
         #expect(abs(regions.mesh[0].h - colour(0xFF0000).h) < 1)
         #expect(abs(regions.mesh[2].h - colour(0x0000FF).h) < 1)
-        #expect(abs(regions.mesh[4].h - purple.h) < 2)
+        #expect((270...340).contains(regions.mesh[4].h))
         #expect(regions.mesh[6] == regions.mesh[0])
+    }
+
+    @Test("A pale part dilutes the hue less than a colourful one")
+    func colourfulPixelsLead() throws {
+        // A gold cover crossed by a cream road, as Count on Me is.
+        let regions = try #require(ArtworkPalette.regions(rgba: halves(0xF5EBC8, 0xF0B020, side: 20), side: 20))
+        let (cream, gold) = (colour(0xF5EBC8), colour(0xF0B020))
+        #expect(abs(regions.average.h - gold.h) < abs(regions.average.h - cream.h))
+    }
+
+    @Test("A pale border barely moves the hue")
+    func border() throws {
+        let side = 20
+        let framed = (0..<side * side).flatMap { i -> [UInt8] in
+            let (x, y) = (i % side, i / side)
+            let isBorder = min(x, y, side - 1 - x, side - 1 - y) < 3
+            return isBorder ? [0xF5, 0xEB, 0xC8, 255] : [0xE0, 0xA0, 0x10, 255]
+        }
+        let regions = try #require(ArtworkPalette.regions(rgba: framed, side: side))
+        #expect(abs(regions.average.h - colour(0xE0A010).h) < 3)
     }
 
     @Test("Ignores transparent pixels and empty images")
     func transparent() {
-        #expect(ArtworkPalette.regions(rgba: [], side: 4) == nil)
-        #expect(ArtworkPalette.regions(rgba: Array(repeating: 0, count: 64), side: 4) == nil)
+        #expect(ArtworkPalette.regions(rgba: [], side: 8) == nil)
+        #expect(ArtworkPalette.regions(rgba: Array(repeating: 0, count: 256), side: 8) == nil)
     }
 }

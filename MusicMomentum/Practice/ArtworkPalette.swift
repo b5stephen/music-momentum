@@ -14,12 +14,14 @@ import SwiftUI
 struct ArtworkPalette: Equatable {
     /// 3×3, row by row from the top left.
     var mesh: [Color]
+    var shadow: Color
     /// What "on" fills put their glyph in.
     var background: Color
     var foreground: Color
 
     init(ground: Ground) {
         mesh = ground.mesh.map { Color(cgColor: $0.cgColor) }
+        shadow = Color(cgColor: ground.shadow.cgColor)
         background = Color(cgColor: ground.glyph.cgColor)
         foreground = Color(cgColor: ground.text.cgColor)
     }
@@ -69,49 +71,89 @@ struct ArtworkPalette: Equatable {
 
     nonisolated struct Ground: Equatable {
         var mesh: [OKLCH]
+        /// What the bottom of the screen darkens towards.
+        var shadow: OKLCH
         var glyph: OKLCH
         var text: OKLCH
     }
 
-    /// Fitted to Apple Music: lightness is compressed to 0.1–0.62 but chroma
-    /// is kept, so a cover darkens into its richest shade rather than turning
-    /// pale or grey. Each region is pulled halfway to the average, so the mesh
-    /// varies the way a heavy blur does without one corner taking over.
+    /// Each region keeps only a quarter of its own colour, as Apple's ground
+    /// is nearly one colour, and none is less colourful than the average: a
+    /// cover's pale parts, darkened, show through as grey patches.
     nonisolated static func ground(for regions: Regions) -> Ground {
-        func shade(_ colour: OKLCH) -> OKLCH {
-            OKLCH(l: min(0.62, 0.105 + 0.56 * colour.l), c: colour.c, h: colour.h)
-        }
         let average = shade(regions.average)
         return Ground(
-            mesh: regions.mesh.map { mix(average, shade($0)) },
-            glyph: OKLCH(l: average.l * 0.85, c: average.c * 0.85, h: average.h),
+            mesh: regions.mesh.enumerated().map { index, region in
+                let point = mix(average, shade(region), by: 0.25)
+                // A near-grey point's hue is noise, so it takes the cover's.
+                let h = point.c < 0.02 ? average.h : point.h
+                let row = rows[index / 3]
+                return OKLCH(l: point.l + row.lift, c: max(point.c, average.c), h: h - row.warmth * warmth(h))
+            },
+            shadow: OKLCH(l: 0.2, c: average.c, h: average.h - 2 * warmth(average.h)),
+            glyph: OKLCH(l: min(0.45, average.l * 0.85), c: average.c, h: average.h - warmth(average.h)),
             text: OKLCH(l: 0.96, c: min(0.06, average.c * 0.5), h: average.h)
         )
     }
 
-    /// Halfway between, in sRGB, as a blur would mix them.
-    private nonisolated static func mix(_ a: OKLCH, _ b: OKLCH) -> OKLCH {
-        let (x, y) = (a.srgb, b.srgb)
-        return OKLCH(red: (x.red + y.red) / 2, green: (x.green + y.green) / 2, blue: (x.blue + y.blue) / 2)
+    /// Each row of the mesh, top to bottom: the lightness added, as Apple's
+    /// ground is darker along the top edge, where the title sits, and
+    /// brightest in the middle, which is what makes it glow; and how far
+    /// yellows warm, as Apple's gold deepens to amber towards the bottom.
+    private nonisolated static let rows: [(lift: Double, warmth: Double)] = [(-0.07, 1), (0.04, 1), (-0.03, 2.5)]
+
+    /// Fitted to Apple Music: a step darker, so a bright cover stays bright,
+    /// and a third more saturated relative to what sRGB allows, so it stays
+    /// vivid. Pale and grey covers stop darker, as light text on a light grey
+    /// ground is unreadable and looks washed out.
+    nonisolated static func shade(_ colour: OKLCH) -> OKLCH {
+        let ceiling = 0.5 + 0.3 * colour.vividness
+        let l = min(ceiling, max(min(colour.l, 0.25), colour.l - 0.12))
+        return OKLCH(l: l, c: min(1, colour.vividness * 1.3) * OKLCH.maxChroma(l: l, h: colour.h), h: colour.h)
     }
 
-    /// The whole cover's average colour, and the averages of a 3×3 grid whose
-    /// edge cells are a quarter wide and the middle one half, so each matches
-    /// a mesh point's surroundings. Averaged as stored (gamma-encoded), as
-    /// Apple's are: a linear average comes out paler. `rgba` is a `side`×`side`
-    /// 8-bit RGBA bitmap from the top row down.
+    /// Degrees a hue turns towards orange as it darkens: yellows only, which
+    /// otherwise read as olive.
+    private nonisolated static func warmth(_ h: Double) -> Double {
+        8 * max(0, 1 - abs(h - 85) / 20)
+    }
+
+    /// Mixed in sRGB, as a blur would mix them.
+    private nonisolated static func mix(_ a: OKLCH, _ b: OKLCH, by t: Double) -> OKLCH {
+        let (x, y) = (a.srgb, b.srgb)
+        return OKLCH(red: x.red + (y.red - x.red) * t, green: x.green + (y.green - x.green) * t, blue: x.blue + (y.blue - x.blue) * t)
+    }
+
+    /// The cover's average colour, and the averages of a 3×3 grid whose edge
+    /// cells are a quarter wide and the middle one half, so each matches a
+    /// mesh point's surroundings. Lightness is averaged as stored
+    /// (gamma-encoded), as Apple's is: a linear average comes out paler. Hue
+    /// and chroma are weighted towards colourful pixels, so Count on Me's
+    /// cream road doesn't turn its gold yellow-green, while a busy cover's
+    /// colours still blend. `rgba` is a `side`×`side` 8-bit RGBA bitmap from
+    /// the top row down.
     nonisolated static func regions(rgba: [UInt8], side: Int) -> Regions? {
-        guard side >= 4, rgba.count >= side * side * 4 else { return nil }
+        guard side >= 8, rgba.count >= side * side * 4 else { return nil }
         func average(rows: Range<Int>, columns: Range<Int>) -> OKLCH? {
             var (r, g, b, n) = (0.0, 0.0, 0.0, 0.0)
+            var (a, bee, weight) = (0.0, 0.0, 0.0)
             for y in rows {
                 for x in columns {
                     let i = (y * side + x) * 4
                     guard rgba[i + 3] >= 128 else { continue }
-                    r += Double(rgba[i]); g += Double(rgba[i + 1]); b += Double(rgba[i + 2]); n += 1
+                    let (red, green, blue) = (Double(rgba[i]) / 255, Double(rgba[i + 1]) / 255, Double(rgba[i + 2]) / 255)
+                    r += red; g += green; b += blue; n += 1
+                    let pixel = OKLCH(red: red, green: green, blue: blue)
+                    let w = 0.02 + pixel.c
+                    a += w * pixel.c * cos(pixel.h * .pi / 180)
+                    bee += w * pixel.c * sin(pixel.h * .pi / 180)
+                    weight += w
                 }
             }
-            return n > 0 ? OKLCH(red: r / n / 255, green: g / n / 255, blue: b / n / 255) : nil
+            guard n > 0 else { return nil }
+            let plain = OKLCH(red: r / n, green: g / n, blue: b / n)
+            let (wa, wb) = (a / weight, bee / weight)
+            return OKLCH(l: plain.l, c: hypot(wa, wb), h: atan2(wb, wa) * 180 / .pi)
         }
         guard let whole = average(rows: 0..<side, columns: 0..<side) else { return nil }
         let bounds = [0, side / 4, side - side / 4, side]
