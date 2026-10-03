@@ -423,19 +423,21 @@ private struct SpeedEditorSheet: View {
 
     var body: some View {
         NavigationStack {
-            GeometryReader { proxy in
-                VStack(spacing: 12) {
-                    Text(song.title)
-                        .font(.headline)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
+            VStack(spacing: 12) {
+                Text(song.title)
+                    .font(.headline)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
 
+                // The medium detent is short in landscape and in small iPad
+                // windows, so height bounds the wheel as well as width.
+                GeometryReader { proxy in
                     SpeedWheelPicker(
                         speed: $speed,
-                        diameter: min(260, max(160, proxy.size.width - 130))
+                        diameter: min(min(260, max(160, proxy.size.width - 130)), proxy.size.height)
                     )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 }
-                .frame(maxWidth: .infinity)
             }
             .padding()
             .navigationTitle("Practice Speed")
