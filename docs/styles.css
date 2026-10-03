@@ -244,17 +244,19 @@ p { margin: 0; }
 }
 .screen svg { display: block; }
 .screen.cover {
-  --ground: var(--art-bg);
-  --sec: rgba(255, 255, 255, 0.7);
+  --ground: var(--art-mid);
+  --fg: var(--art-text);
+  --sec: color-mix(in srgb, var(--art-text) 62%, transparent);
   --fill: rgba(255, 255, 255, 0.14);
   --accent: var(--fg);
-  --on-accent: var(--art-bg);
-  --hub: var(--art-bg);
+  --on-accent: var(--art-mid);
+  --hub: var(--art-mid);
+  /* The cover's dominant colour, darkening down the screen, as ArtworkPalette derives it. */
+  background: linear-gradient(var(--art-top), var(--art-mid) 55%, var(--art-bottom));
+  color: var(--fg);
 }
-/* Stands in for the blurred cover the app draws behind the top of the screen. */
-.screen.cover::before { content: ""; position: absolute; inset: -20% -20% 40%; background: radial-gradient(circle at 25% 35%, var(--art-a), transparent 55%), radial-gradient(circle at 75% 25%, var(--art-b), transparent 50%); filter: blur(24px); opacity: 0.75; -webkit-mask: linear-gradient(#000 45%, transparent); mask: linear-gradient(#000 45%, transparent); }
-.screen.cover > * { position: relative; }
-.screen.cover > .tabbar { position: absolute; background: rgba(255, 255, 255, 0.14); }
+.screen.cover .tabbar { background: rgba(255, 255, 255, 0.14); }
+.screen.cover .tab.on { color: var(--fg); }
 .island { position: absolute; top: 10px; left: 50%; width: 84px; height: 24px; margin-left: -42px; border-radius: 999px; background: #000; box-shadow: 0 0 0 1px #1A1A1A; }
 
 .tabbar { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: rgba(44, 44, 48, 0.92); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
