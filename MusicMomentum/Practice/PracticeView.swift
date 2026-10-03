@@ -19,6 +19,7 @@ struct PracticeView: View {
     var onTint: (Color?) -> Void = { _ in }
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Query private var savedSongs: [SavedSong]
     @State private var showPicker = false
     @State private var markerSheet: MarkerSheet?
@@ -27,6 +28,8 @@ struct PracticeView: View {
     @State private var palette: (songID: String, palette: ArtworkPalette?)?
     /// Measured, so the wide layout's wheel takes exactly what the title leaves.
     @State private var wideHeaderHeight: CGFloat = 110
+    /// Measured, so the wide layout's cover takes exactly what the player leaves.
+    @State private var widePlayerHeight: CGFloat = 200
 
     /// Editing carries the marker's identity so switching straight from one
     /// marker to another rebuilds the sheet.
@@ -78,7 +81,11 @@ struct PracticeView: View {
                 VStack(spacing: 0) {
                     if let track {
                         if Self.isWide(proxy.size) {
-                            loadedSongWide(track, size: proxy.size)
+                            loadedSongWide(
+                                track,
+                                size: proxy.size,
+                                tabBarInset: verticalSizeClass == .compact ? proxy.safeAreaInsets.bottom : 0
+                            )
                         } else {
                             loadedSong(track, size: proxy.size)
                         }
@@ -193,14 +200,21 @@ struct PracticeView: View {
     /// Landscape phones and wide iPad windows: the song and its speed on the
     /// left, playback on the right. Stacked, the wheel would be left too
     /// short to turn and the transport would scroll under the tab bar.
-    private func loadedSongWide(_ track: Track, size: CGSize) -> some View {
+    /// On a landscape phone the tab bar floats in the middle of the bottom
+    /// edge, so the inset it reserves is empty beside it. The columns centre
+    /// on the whole screen by dropping half of `tabBarInset`, and the player's
+    /// cover gives up the height that costs it.
+    private func loadedSongWide(_ track: Track, size: CGSize, tabBarInset: CGFloat) -> some View {
         let leading = Self.wideLeadingWidth(size.width)
         let diameter = Self.wideWheelDiameter(
             width: leading,
             height: size.height - Self.verticalPadding - wideHeaderHeight - Self.wideHeaderGap
         )
-        let coverSide = min(180, size.height - Self.verticalPadding - Self.widePlayerHeight - Self.wideCoverGap)
-        return HStack(alignment: .wheelCentre, spacing: 0) {
+        let coverSide = min(
+            180,
+            size.height - Self.verticalPadding - widePlayerHeight - Self.wideCoverGap - tabBarInset
+        )
+        return HStack(spacing: 0) {
             VStack(spacing: Self.wideHeaderGap) {
                 nowPlaying(track, showsCover: false)
                     .lineLimit(2)
@@ -213,7 +227,6 @@ struct PracticeView: View {
                     savedSpeed: savedSong?.speed,
                     diameter: diameter
                 )
-                .alignmentGuide(.wheelCentre) { $0[VerticalAlignment.center] }
             }
             .frame(width: leading)
 
@@ -223,16 +236,21 @@ struct PracticeView: View {
                     cover(track.artwork, side: coverSide)
                         .padding(.bottom, Self.wideCoverGap)
                 }
-                timeline
-                    .padding(.bottom, 24)
-                transportControls
-                loopCaptionLine
+                VStack(spacing: 0) {
+                    timeline
+                        .padding(.bottom, 24)
+                    transportControls
+                    loopCaptionLine
+                }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                    widePlayerHeight = $0
+                }
             }
-            .alignmentGuide(.wheelCentre) { $0[VerticalAlignment.center] }
             .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: 960)
         .frame(maxHeight: .infinity)
+        .offset(y: tabBarInset / 2)
     }
 
     // Always laid out so toggling the loop doesn't shift everything above it.
@@ -255,9 +273,7 @@ struct PracticeView: View {
     /// The top and bottom padding round the screen's content.
     private static let verticalPadding: CGFloat = 22
     private static let wideHeaderGap: CGFloat = 20
-    /// Roughly the timeline, marker pills, transport and loop caption.
-    private static let widePlayerHeight: CGFloat = 230
-    private static let wideCoverGap: CGFloat = 24
+    private static let wideCoverGap: CGFloat = 20
 
     /// Grows with the window up to what the wheel needs, and never takes so
     /// much that the transport's five controls are squeezed.
@@ -984,16 +1000,4 @@ private func loadedPreview(palette: ArtworkPalette?) -> some View {
         footnote: "Settings › Music Momentum › Media & Apple Music"
     ) {}
         .padding(.vertical, 16)
-}
-
-private extension VerticalAlignment {
-    /// Lines the wide layout's playback column up with the wheel's centre
-    /// rather than the title above it.
-    enum WheelCentre: AlignmentID {
-        static func defaultValue(in context: ViewDimensions) -> CGFloat {
-            context[VerticalAlignment.center]
-        }
-    }
-
-    static let wheelCentre = VerticalAlignment(WheelCentre.self)
 }
