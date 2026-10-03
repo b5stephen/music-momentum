@@ -87,10 +87,14 @@ struct SavedSongsView: View {
                                 onEditSpeed: { editing = song },
                                 onAddMarker: { openEditor(song) }
                             )
-                            .listRowInsets(EdgeInsets(
+                            // Padding rather than row insets, so a separator
+                            // drawn here spans the cell like the pill row's.
+                            .padding(EdgeInsets(
                                 top: 10, leading: 16, bottom: markers.isEmpty ? 10 : 0, trailing: trailingInset
                             ))
+                            .listRowInsets(EdgeInsets())
                             .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
                             .overlay(alignment: .bottom) {
                                 if markers.isEmpty { separator }
                             }
@@ -114,6 +118,7 @@ struct SavedSongsView: View {
                                 )
                                 .listRowInsets(EdgeInsets())
                                 .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
                                 .padding(.vertical, 10)
                                 .overlay(alignment: .bottom) { separator }
                             }
@@ -125,8 +130,8 @@ struct SavedSongsView: View {
                     .environment(\.defaultMinListRowHeight, 0)
                 }
             }
-            // Beside the card, the stack's own opaque background would cut the
-            // cover's glow off in a hard line at the list's leading edge.
+            // Beside the card, the stack's own opaque background (and the
+            // rows', cleared above) would box the list off from the cover's glow.
             .containerBackground(
                 isBesidePractice ? AnyShapeStyle(.clear) : AnyShapeStyle(Color(.systemBackground)),
                 for: .navigation
