@@ -73,9 +73,8 @@ struct PracticeView: View {
     private var onAccent: Color { track?.palette?.background ?? .onAccent }
 
     var body: some View {
-        // Spacers absorb spare height (below the controls with a song loaded on
-        // a phone, around everything on an iPad or without a song); the screen
-        // only scrolls once they've given it all back.
+        // Spacers absorb spare height around everything; the screen only
+        // scrolls once they've given it all back.
         GeometryReader { proxy in
             ScrollView {
                 VStack(spacing: 0) {
@@ -102,7 +101,7 @@ struct PracticeView: View {
 
                     messages
                 }
-                .padding(.top, track == nil ? 16 : 6)
+                .padding(.top, track == nil ? 16 : Self.topPadding)
                 .padding(.bottom, 16)
                 .frame(maxWidth: .infinity, minHeight: proxy.size.height)
             }
@@ -166,11 +165,9 @@ struct PracticeView: View {
 
     @ViewBuilder
     private func loadedSong(_ track: Track, size: CGSize) -> some View {
-        // On an iPad-sized window the spare height is too much to leave under
-        // the controls, so the stack sits in the middle instead.
-        if size.width >= Self.roomyWidth {
-            Spacer(minLength: 0)
-        }
+        // Centred: left under the controls, a tall phone's spare height made
+        // the screen look top-heavy.
+        Spacer(minLength: 0)
 
         nowPlaying(track)
 
@@ -192,8 +189,8 @@ struct PracticeView: View {
 
         loopCaptionLine
 
-        // Past the wheel gaps' 30pt, spare height collects above the tab bar
-        // rather than spreading the controls apart on tall phones.
+        // Past the wheel gaps' 30pt, spare height goes round the stack rather
+        // than spreading the controls apart.
         Spacer(minLength: 0)
     }
 
@@ -210,10 +207,12 @@ struct PracticeView: View {
             width: leading,
             height: size.height - Self.verticalPadding - wideHeaderHeight - Self.wideHeaderGap
         )
-        let coverSide = min(
-            180,
-            size.height - Self.verticalPadding - widePlayerHeight - Self.wideCoverGap - tabBarInset
-        )
+        // Centred, the player column reaches half its height below the
+        // middle, which `tabBarInset` has dropped; the transport stays clear
+        // of the tab bar.
+        let middle = Self.topPadding + (size.height - Self.verticalPadding) / 2 + tabBarInset / 2
+        let playerColumnHeight = min(size.height - Self.verticalPadding, 2 * (size.height - 8 - middle))
+        let coverSide = min(180, playerColumnHeight - widePlayerHeight - Self.wideCoverGap)
         return HStack(spacing: 0) {
             VStack(spacing: Self.wideHeaderGap) {
                 nowPlaying(track, showsCover: false)
@@ -239,8 +238,13 @@ struct PracticeView: View {
                 VStack(spacing: 0) {
                     timeline
                         .padding(.bottom, 24)
+                    // Hung below rather than stacked: it's blank until a loop
+                    // runs, and its space would lift the column off centre.
                     transportControls
-                    loopCaptionLine
+                        .overlay(alignment: .bottom) {
+                            loopCaptionLine
+                                .alignmentGuide(.bottom) { $0[.top] }
+                        }
                 }
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
                     widePlayerHeight = $0
@@ -272,8 +276,9 @@ struct PracticeView: View {
 
     /// The top and bottom padding round the screen's content.
     private static let verticalPadding: CGFloat = 22
+    private static let topPadding: CGFloat = 6
     private static let wideHeaderGap: CGFloat = 20
-    private static let wideCoverGap: CGFloat = 20
+    private static let wideCoverGap: CGFloat = 16
 
     /// Grows with the window up to what the wheel needs, and never takes so
     /// much that the transport's five controls are squeezed.
