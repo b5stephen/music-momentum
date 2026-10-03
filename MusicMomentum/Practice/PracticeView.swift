@@ -25,6 +25,8 @@ struct PracticeView: View {
     /// The selected song's palette, kept so `track` doesn't rebuild it on
     /// every read: `Artwork.backgroundColor`'s, then the sampled cover's.
     @State private var palette: (songID: String, palette: ArtworkPalette?)?
+    /// Measured, so the wide layout's wheel takes exactly what the title leaves.
+    @State private var wideHeaderHeight: CGFloat = 110
 
     /// Editing carries the marker's identity so switching straight from one
     /// marker to another rebuilds the sheet.
@@ -66,20 +68,28 @@ struct PracticeView: View {
     private var onAccent: Color { track?.palette?.background ?? .onAccent }
 
     var body: some View {
-        // Spacers absorb spare height (below the controls with a song loaded,
-        // around the dial without); the screen only scrolls once they've given
-        // it all back.
+        // Spacers absorb spare height (below the controls with a song loaded on
+        // a phone, around everything on an iPad or without a song); the screen
+        // only scrolls once they've given it all back.
         GeometryReader { proxy in
             ScrollView {
                 VStack(spacing: 0) {
                     if let track {
-                        loadedSong(track, size: proxy.size)
+                        if Self.isWide(proxy.size) {
+                            loadedSongWide(track, size: proxy.size)
+                        } else {
+                            loadedSong(track, size: proxy.size)
+                        }
                     } else if controller.isRestoringLastSong {
-                        RestoringState(diameter: wheelDiameter(width: proxy.size.width))
+                        RestoringState(
+                            diameter: arrivalDiameter(proxy.size),
+                            leadingWidth: arrivalLeadingWidth(proxy.size),
+                            isRoomy: proxy.size.width >= Self.roomyWidth
+                        )
                     } else if controller.canUseMusic {
-                        noSong(width: proxy.size.width)
+                        noSong(size: proxy.size)
                     } else {
-                        noAccess(width: proxy.size.width)
+                        noAccess(size: proxy.size)
                     }
 
                     messages
@@ -140,6 +150,12 @@ struct PracticeView: View {
 
     @ViewBuilder
     private func loadedSong(_ track: Track, size: CGSize) -> some View {
+        // On an iPad-sized window the spare height is too much to leave under
+        // the controls, so the stack sits in the middle instead.
+        if size.width >= Self.roomyWidth {
+            Spacer(minLength: 0)
+        }
+
         nowPlaying(track)
 
         wheelGap
@@ -153,11 +169,59 @@ struct PracticeView: View {
         wheelGap
 
         timeline
+            .frame(maxWidth: Self.roomyWidth)
             .padding(.bottom, 34)
 
         transportControls
 
-        // Always laid out so toggling the loop doesn't shift everything above it.
+        loopCaptionLine
+
+        // Past the wheel gaps' 30pt, spare height collects above the tab bar
+        // rather than spreading the controls apart on tall phones.
+        Spacer(minLength: 0)
+    }
+
+    /// Landscape phones and wide iPad windows: the song and its speed on the
+    /// left, playback on the right. Stacked, the wheel would be left too
+    /// short to turn and the transport would scroll under the tab bar.
+    private func loadedSongWide(_ track: Track, size: CGSize) -> some View {
+        let leading = Self.wideLeadingWidth(size.width)
+        let diameter = Self.wideWheelDiameter(
+            width: leading,
+            height: size.height - Self.verticalPadding - wideHeaderHeight - Self.wideHeaderGap
+        )
+        return HStack(alignment: .wheelCentre, spacing: 0) {
+            VStack(spacing: Self.wideHeaderGap) {
+                nowPlaying(track)
+                    .lineLimit(2)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                        wideHeaderHeight = $0
+                    }
+
+                SpeedWheelPicker(
+                    speed: $controller.playbackRate,
+                    savedSpeed: savedSong?.speed,
+                    diameter: diameter
+                )
+                .alignmentGuide(.wheelCentre) { $0[VerticalAlignment.center] }
+            }
+            .frame(width: leading)
+
+            VStack(spacing: 0) {
+                timeline
+                    .padding(.bottom, 24)
+                transportControls
+                loopCaptionLine
+            }
+            .alignmentGuide(.wheelCentre) { $0[VerticalAlignment.center] }
+            .frame(maxWidth: .infinity)
+        }
+        .frame(maxWidth: 960)
+        .frame(maxHeight: .infinity)
+    }
+
+    // Always laid out so toggling the loop doesn't shift everything above it.
+    private var loopCaptionLine: some View {
         Text(loopCaption ?? " ")
             .font(.footnote.weight(.medium))
             .foregroundStyle(textTint)
@@ -166,10 +230,25 @@ struct PracticeView: View {
             .accessibilityHidden(loopCaption == nil)
             .padding(.top, 14)
             .padding(.horizontal, 24)
+    }
 
-        // Past the wheel gaps' 30pt, spare height collects above the tab bar
-        // rather than spreading the controls apart on tall phones.
-        Spacer(minLength: 0)
+    /// Wider than tall, and with room for the transport beside the wheel.
+    private static func isWide(_ size: CGSize) -> Bool {
+        size.width > size.height && size.width >= 700
+    }
+
+    /// The top and bottom padding round the screen's content.
+    private static let verticalPadding: CGFloat = 22
+    private static let wideHeaderGap: CGFloat = 20
+
+    /// Grows with the window up to what the wheel needs, and never takes so
+    /// much that the transport's five controls are squeezed.
+    private static func wideLeadingWidth(_ width: CGFloat) -> CGFloat {
+        min(380, width * 0.46)
+    }
+
+    private static func wideWheelDiameter(width: CGFloat, height: CGFloat) -> CGFloat {
+        max(150, min(320, width - 48, height))
     }
 
     /// Gives up height on short phones before the screen has to scroll.
@@ -183,7 +262,21 @@ struct PracticeView: View {
     private static let controlsHeight: CGFloat = 420
 
     private func wheelDiameter(width: CGFloat) -> CGFloat {
-        min(260, max(160, width - 130))
+        min(width >= Self.roomyWidth ? 320 : 260, max(160, width - 130))
+    }
+
+    /// Past a phone's width: the wheel grows to the wide layout's size, so
+    /// resizing an iPad window between the layouts doesn't resize the wheel.
+    private static let roomyWidth: CGFloat = 600
+
+    /// Wide, the silhouette sits where the wheel's column goes, beside the copy.
+    private func arrivalDiameter(_ size: CGSize) -> CGFloat {
+        guard let leading = arrivalLeadingWidth(size) else { return wheelDiameter(width: size.width) }
+        return Self.wideWheelDiameter(width: leading, height: size.height - Self.verticalPadding - 32)
+    }
+
+    private func arrivalLeadingWidth(_ size: CGSize) -> CGFloat? {
+        Self.isWide(size) ? Self.wideLeadingWidth(size.width) : nil
     }
 
     @ViewBuilder
@@ -446,9 +539,11 @@ struct PracticeView: View {
     // MARK: - Arriving
 
     @ViewBuilder
-    private func noSong(width: CGFloat) -> some View {
+    private func noSong(size: CGSize) -> some View {
         ArrivalState(
-            diameter: wheelDiameter(width: width),
+            diameter: arrivalDiameter(size),
+            leadingWidth: arrivalLeadingWidth(size),
+            isRoomy: size.width >= Self.roomyWidth,
             systemImage: "music.note.list",
             headline: "Nothing loaded yet",
             detail: "Pick a song from Apple Music and slow it down to a speed you can actually play.",
@@ -461,9 +556,11 @@ struct PracticeView: View {
 
     /// Once denied the system won't prompt again, so the button goes to Settings.
     @ViewBuilder
-    private func noAccess(width: CGFloat) -> some View {
+    private func noAccess(size: CGSize) -> some View {
         ArrivalState(
-            diameter: wheelDiameter(width: width),
+            diameter: arrivalDiameter(size),
+            leadingWidth: arrivalLeadingWidth(size),
+            isRoomy: size.width >= Self.roomyWidth,
             systemImage: "lock",
             headline: "Apple Music access needed",
             detail: "Music Momentum plays songs from your own library and Apple Music. It can't reach either one until you allow it.",
@@ -517,6 +614,11 @@ struct PracticeView: View {
 /// where the dial goes, so a song arriving reads as the screen filling in.
 private struct ArrivalState: View {
     var diameter: CGFloat
+    /// Set when wide: the silhouette's column, beside the copy.
+    var leadingWidth: CGFloat?
+    /// Stacked on an iPad, the gap between silhouette and copy stops growing
+    /// and the pair sits in the middle, as the loaded screen does.
+    var isRoomy = false
     var systemImage: String
     var headline: String
     var detail: String
@@ -525,13 +627,36 @@ private struct ArrivalState: View {
     var action: () -> Void
 
     var body: some View {
+        if let leadingWidth {
+            HStack(spacing: 0) {
+                DialSilhouette(diameter: diameter, systemImage: systemImage)
+                    .frame(width: leadingWidth)
+                copy
+                    .frame(maxWidth: 480)
+                    .frame(maxWidth: .infinity)
+            }
+            .frame(maxWidth: 960, maxHeight: .infinity)
+        } else {
+            VStack(spacing: 0) {
+                Spacer(minLength: 16)
+
+                DialSilhouette(diameter: diameter, systemImage: systemImage)
+
+                Spacer(minLength: 16)
+                    .frame(maxHeight: isRoomy ? 40 : .infinity)
+
+                copy
+                    .frame(maxWidth: 480)
+
+                Spacer(minLength: 16)
+            }
+            // So its own gaps, not the stack around it, absorb the spare space.
+            .frame(maxHeight: .infinity)
+        }
+    }
+
+    private var copy: some View {
         VStack(spacing: 0) {
-            Spacer(minLength: 16)
-
-            DialSilhouette(diameter: diameter, systemImage: systemImage)
-
-            Spacer(minLength: 16)
-
             VStack(spacing: 8) {
                 Text(headline)
                     .font(.title2.weight(.semibold))
@@ -562,11 +687,7 @@ private struct ArrivalState: View {
                 .multilineTextAlignment(.center)
                 .padding(.top, 12)
                 .padding(.horizontal, 40)
-
-            Spacer(minLength: 16)
         }
-        // So its own gaps, not the stack around it, absorb the spare space.
-        .frame(maxHeight: .infinity)
     }
 }
 
@@ -669,22 +790,39 @@ private struct ChipFill: View {
 /// arrival copy goes, so a song landing looks the same as it does from the picker.
 private struct RestoringState: View {
     var diameter: CGFloat
+    var leadingWidth: CGFloat?
+    var isRoomy = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 16)
+        if let leadingWidth {
+            HStack(spacing: 0) {
+                DialSilhouette(diameter: diameter, systemImage: "music.note.list")
+                    .frame(width: leadingWidth)
+                spinner
+                    .frame(maxWidth: .infinity)
+            }
+            .frame(maxWidth: 960, maxHeight: .infinity)
+        } else {
+            VStack(spacing: 0) {
+                Spacer(minLength: 16)
 
-            DialSilhouette(diameter: diameter, systemImage: "music.note.list")
+                DialSilhouette(diameter: diameter, systemImage: "music.note.list")
 
-            Spacer(minLength: 16)
+                Spacer(minLength: 16)
+                    .frame(maxHeight: isRoomy ? 40 : .infinity)
 
-            ProgressView()
-                .controlSize(.large)
-                .accessibilityLabel("Loading your last song")
+                spinner
 
-            Spacer(minLength: 16)
+                Spacer(minLength: 16)
+            }
+            .frame(maxHeight: .infinity)
         }
-        .frame(maxHeight: .infinity)
+    }
+
+    private var spinner: some View {
+        ProgressView()
+            .controlSize(.large)
+            .accessibilityLabel("Loading your last song")
     }
 }
 
@@ -753,6 +891,15 @@ private struct DialSilhouette: View {
     loadedPreview(palette: nil)
 }
 
+#Preview("Landscape", traits: .landscapeLeft) {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)))
+}
+
+#Preview("Landscape, nothing loaded", traits: .landscapeLeft) {
+    PracticeView(controller: PlaybackController())
+        .modelContainer(try! AppSchema.inMemoryContainer())
+}
+
 @MainActor
 private func loadedPreview(palette: ArtworkPalette?) -> some View {
     let container = try! AppSchema.inMemoryContainer()
@@ -801,3 +948,14 @@ private func loadedPreview(palette: ArtworkPalette?) -> some View {
         .padding(.vertical, 16)
 }
 
+private extension VerticalAlignment {
+    /// Lines the wide layout's playback column up with the wheel's centre
+    /// rather than the title above it.
+    enum WheelCentre: AlignmentID {
+        static func defaultValue(in context: ViewDimensions) -> CGFloat {
+            context[VerticalAlignment.center]
+        }
+    }
+
+    static let wheelCentre = VerticalAlignment(WheelCentre.self)
+}
