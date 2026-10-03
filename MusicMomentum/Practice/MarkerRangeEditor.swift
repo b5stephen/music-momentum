@@ -45,7 +45,10 @@ struct MarkerRangeEditor: View {
     }
 
     private static let grabRadius: CGFloat = 28
-    private static let barHeight: CGFloat = 64
+    /// The touch area; the track drawn across its middle is much thinner.
+    private static let barHeight: CGFloat = 44
+    private static let trackHeight: CGFloat = 8
+    private static let handleSize: CGFloat = 20
     private static let labelHeight: CGFloat = 18
 
     private var span: TimeInterval {
@@ -87,25 +90,20 @@ struct MarkerRangeEditor: View {
             let width = proxy.size.width
 
             ZStack(alignment: .topLeading) {
-                if let end {
-                    let left = x(start, width: width)
-                    let right = x(end, width: width)
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(.quaternary)
-                        .frame(height: Self.barHeight)
-                        .overlay(alignment: .leading) {
+                Capsule()
+                    .fill(.quaternary)
+                    .overlay(alignment: .leading) {
+                        if let end {
+                            let left = x(start, width: width)
                             Rectangle()
                                 .fill(.tint)
-                                .opacity(0.3)
-                                .frame(width: max(0, right - left))
+                                .frame(width: max(0, x(end, width: width) - left))
                                 .offset(x: left)
                         }
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                } else {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(.quaternary)
-                        .frame(height: Self.barHeight)
-                }
+                    }
+                    .clipShape(Capsule())
+                    .frame(height: Self.trackHeight)
+                    .offset(y: (Self.barHeight - Self.trackHeight) / 2)
 
                 ticks(width: width)
 
@@ -123,39 +121,21 @@ struct MarkerRangeEditor: View {
         }
     }
 
-    /// Needs a head, full contrast and a halo to tell it from the tick lines.
     private func playheadLine(at position: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            Triangle()
-                .fill(.primary)
-                .frame(width: 9, height: 6)
-            Rectangle()
-                .fill(.primary)
-                .frame(width: 2)
-                .frame(maxHeight: .infinity)
-        }
-        .frame(width: 9, height: Self.barHeight)
-        .background(alignment: .top) {
-            Rectangle()
-                .fill(.background.opacity(0.85))
-                .frame(width: 6, height: Self.barHeight)
-        }
-        .offset(x: position - 4.5)
+        Capsule()
+            .fill(.primary)
+            .frame(width: 2, height: Self.barHeight - 12)
+            .offset(x: position - 1, y: 6)
     }
 
+    /// The end handle is hollow, filled with the form cell's colour so the
+    /// clip doesn't show through it.
     private func handle(at position: CGFloat, filled: Bool) -> some View {
-        VStack(spacing: 0) {
-            Circle()
-                .fill(filled ? AnyShapeStyle(.tint) : AnyShapeStyle(.background))
-                .overlay(Circle().strokeBorder(.tint, lineWidth: 3))
-                .frame(width: 22, height: 22)
-                .shadow(radius: 1, y: 1)
-            Rectangle()
-                .fill(.tint)
-                .frame(width: 3, height: Self.barHeight - 11)
-        }
-        .frame(width: 22)
-        .offset(x: position - 11)
+        Circle()
+            .fill(filled ? AnyShapeStyle(.tint) : AnyShapeStyle(Color(.secondarySystemGroupedBackground)))
+            .overlay(Circle().strokeBorder(.tint, lineWidth: 3))
+            .frame(width: Self.handleSize, height: Self.handleSize)
+            .offset(x: position - Self.handleSize / 2, y: (Self.barHeight - Self.handleSize) / 2)
     }
 
     private func ticks(width: CGFloat) -> some View {
@@ -166,8 +146,7 @@ struct MarkerRangeEditor: View {
         return ForEach(Array(times), id: \.self) { time in
             let position = x(time, width: width)
             VStack(spacing: 2) {
-                Rectangle()
-                    .fill(.secondary.opacity(0.4))
+                Color.clear
                     .frame(width: 1, height: Self.barHeight)
                 Text(PlaybackScrubber.timeLabel(time))
                     .font(.caption2.monospacedDigit())
@@ -250,17 +229,6 @@ struct MarkerRangeEditor: View {
         }
         if nearest.1 <= Self.grabRadius { return nearest.0 }
         return zoom == .whole ? .nothing : .pan(from: windowStart)
-    }
-}
-
-private struct Triangle: Shape {
-    nonisolated func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
-        path.closeSubpath()
-        return path
     }
 }
 

@@ -349,12 +349,13 @@ p { margin: 0; }
 .seg { display: flex; padding: 2px; border-radius: 999px; background: rgba(118, 118, 128, 0.24); font-size: 10px; font-weight: 500; }
 .seg i { font-style: normal; padding: 3px 10px; border-radius: 999px; }
 .seg i.on { background: #636366; }
-.strip { position: relative; height: 54px; border-radius: 10px; background: rgba(118, 118, 128, 0.18); }
-.strip-band { position: absolute; top: 0; bottom: 0; left: 39%; width: 13%; background: rgba(255, 102, 64, 0.3); border-left: 2px solid var(--coral); border-right: 2px solid var(--coral); }
+.strip { position: relative; height: 30px; }
+.strip::before { content: ""; position: absolute; left: 0; right: 0; top: 11px; height: 8px; border-radius: 4px; background: rgba(118, 118, 128, 0.24); }
+.strip-band { position: absolute; top: 11px; height: 8px; left: 39%; width: 13%; background: var(--coral); }
 .strip-band::before, .strip-band::after { content: ""; position: absolute; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%; border: 2px solid var(--coral); background: #2C2C2E; }
 .strip-band::before { left: -7px; background: var(--coral); }
 .strip-band::after { right: -7px; }
-.strip-head { position: absolute; top: 4px; bottom: 4px; left: 41.6%; width: 2px; background: rgba(255, 255, 255, 0.7); }
+.strip-head { position: absolute; top: 3px; bottom: 3px; left: 41.6%; width: 2px; border-radius: 1px; background: #fff; }
 .strip-labels { display: flex; justify-content: space-between; font-size: 9.5px; color: rgba(235, 235, 245, 0.45); margin-top: 6px; }
 .times { display: grid; grid-template-columns: 1fr 1fr; }
 .times > div { padding: 6px 8px; display: flex; flex-direction: column; gap: 3px; border-radius: 12px; }
