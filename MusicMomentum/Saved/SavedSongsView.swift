@@ -77,44 +77,45 @@ struct SavedSongsView: View {
                     // below for the same reason.
                     List {
                         ForEach(songs) { song in
+                            let markers = song.sortedMarkers
                             SavedSongRow(
                                 song: song,
                                 isLoading: loadingID == song.songID,
                                 isCurrent: controller.selectedSong?.id.rawValue == song.songID,
                                 isPlaying: controller.isPlaying,
                                 onPlay: { practice(song) },
-                                onEditSpeed: { editing = song }
+                                onEditSpeed: { editing = song },
+                                onAddMarker: { openEditor(song) }
                             )
-                            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 0, trailing: trailingInset))
+                            .listRowInsets(EdgeInsets(
+                                top: 10, leading: 16, bottom: markers.isEmpty ? 10 : 0, trailing: trailingInset
+                            ))
                             .listRowSeparator(.hidden)
+                            .overlay(alignment: .bottom) {
+                                if markers.isEmpty { separator }
+                            }
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) { delete(song) } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
                             }
 
-                            // Always drawn, so the Mark pill sits in the same
-                            // place whether or not the song has markers.
-                            MarkerPills(
-                                markers: song.sortedMarkers,
-                                inset: trailingInset,
-                                leadingInset: SavedSongRow.titleInset,
-                                // A tap edits here; loading the song is the row
-                                // above's job, and still a long press away.
-                                onTap: { openEditor(song, marker: $0) },
-                                jumpTitle: "Practice From Here",
-                                onJump: { practice(song, jumpingTo: $0) },
-                                onDelete: { delete($0) },
-                                onAddMarker: { openEditor(song) }
-                            )
-                            .listRowInsets(EdgeInsets())
-                            .listRowSeparator(.hidden)
-                            .padding(.vertical, 10)
-                            .overlay(alignment: .bottom) {
-                                Rectangle()
-                                    .fill(.separator)
-                                    .frame(height: 0.5)
-                                    .padding(.leading, SavedSongRow.titleInset)
+                            if !markers.isEmpty {
+                                MarkerPills(
+                                    markers: markers,
+                                    inset: trailingInset,
+                                    leadingInset: SavedSongRow.titleInset,
+                                    // A tap edits here; loading the song is the row
+                                    // above's job, and still a long press away.
+                                    onTap: { openEditor(song, marker: $0) },
+                                    jumpTitle: "Practice From Here",
+                                    onJump: { practice(song, jumpingTo: $0) },
+                                    onDelete: { delete($0) }
+                                )
+                                .listRowInsets(EdgeInsets())
+                                .listRowSeparator(.hidden)
+                                .padding(.vertical, 10)
+                                .overlay(alignment: .bottom) { separator }
                             }
                         }
                     }
@@ -206,6 +207,13 @@ struct SavedSongsView: View {
                 .presentationDetents([.medium])
             }
         }
+    }
+
+    private var separator: some View {
+        Rectangle()
+            .fill(.separator)
+            .frame(height: 0.5)
+            .padding(.leading, SavedSongRow.titleInset)
     }
 
     // MARK: - Actions
@@ -361,6 +369,9 @@ private struct SavedSongRow: View {
     let isPlaying: Bool
     let onPlay: () -> Void
     let onEditSpeed: () -> Void
+    let onAddMarker: () -> Void
+
+    @ScaledMetric(relativeTo: .subheadline) private var markGlyphSize: CGFloat = 16
 
     /// Artwork plus gap; the pills and separator line up with it.
     static let titleInset: CGFloat = 76
@@ -390,25 +401,40 @@ private struct SavedSongRow: View {
 
             Spacer(minLength: 8)
 
-            Button(action: onEditSpeed) {
-                Text("\(song.percent)%")
-                    .font(.subheadline.weight(.semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.accentText)
+            // Mark sits after the speed so it doesn't move as the percentage
+            // changes width.
+            HStack(spacing: 8) {
+                Button(action: onEditSpeed) {
+                    Text("\(song.percent)%")
+                        .font(.subheadline.weight(.semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.accentText)
+                }
+                // A plain button in a `List` row would let the whole row trigger it.
+                .buttonStyle(.borderless)
+                .buttonBorderShape(.capsule)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(.tint.opacity(0.12), in: .capsule)
+                .accessibilityLabel("Speed, \(song.percent) percent")
+                .accessibilityHint("Change the practice speed")
+
+                Button(action: onAddMarker) {
+                    MarkGlyph()
+                        .frame(width: markGlyphSize, height: markGlyphSize)
+                        .foregroundStyle(Color.accentText)
+                }
+                .buttonStyle(.borderless)
+                .padding(6)
+                .background(.tint.opacity(0.12), in: .circle)
+                .accessibilityLabel("Add marker")
             }
-            // A plain button in a `List` row would let the whole row trigger it.
-            .buttonStyle(.borderless)
-            .buttonBorderShape(.capsule)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(.tint.opacity(0.12), in: .capsule)
-            .accessibilityLabel("Speed, \(song.percent) percent")
-            .accessibilityHint("Change the practice speed")
         }
         .contentShape(Rectangle())
         .onTapGesture(perform: onPlay)
         .accessibilityElement(children: .combine)
         .accessibilityAction(named: "Practice", onPlay)
+        .accessibilityAction(named: "Add Marker", onAddMarker)
     }
 
     @ViewBuilder

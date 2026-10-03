@@ -25,12 +25,10 @@ struct MarkerPills: View {
     var onJump: ((SongMarker) -> Void)?
     var onEdit: ((SongMarker) -> Void)?
     var onDelete: ((SongMarker) -> Void)?
-    /// When set, the row ends with a Mark pill.
-    var onAddMarker: (() -> Void)?
 
     @ScaledMetric(relativeTo: .footnote) private var dotSize: CGFloat = 6
-    /// A pill's height, so the mark button lines up with them.
-    @ScaledMetric(relativeTo: .footnote) private var markSize: CGFloat = 32
+    /// A pill's height.
+    @ScaledMetric(relativeTo: .footnote) private var pillHeight: CGFloat = 32
     @Environment(\.onAccent) private var onAccent
 
     private enum PillState {
@@ -43,13 +41,10 @@ struct MarkerPills: View {
                 ForEach(markers) { marker in
                     pill(marker)
                 }
-                if let onAddMarker {
-                    markPill(onAddMarker)
-                }
             }
             // Holds a pill's height with no pills, so the practice screen
             // doesn't jump between songs with and without markers.
-            .frame(minHeight: markSize)
+            .frame(minHeight: pillHeight)
             .padding(.vertical, 2)
         }
         .scrollIndicators(.hidden)
@@ -142,20 +137,6 @@ struct MarkerPills: View {
         }
     }
 
-    /// The practice screen's mark button in miniature, round so it doesn't
-    /// read as a marker. Grey: on every saved row, coral would drown the list.
-    private func markPill(_ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            MarkGlyph()
-                .frame(width: markSize * 0.52, height: markSize * 0.52)
-                .frame(width: markSize, height: markSize)
-                .background(.quaternary, in: Circle())
-                .foregroundStyle(.secondary)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Mark this point")
-    }
-
     @ViewBuilder
     private func glyph(_ marker: SongMarker) -> some View {
         if marker.isClip {
@@ -242,7 +223,7 @@ private extension View {
             onEdit: { _ in }, onDelete: { _ in }
         )
 
-        MarkerPills(markers: [], onTap: { _ in }, onAddMarker: {})
+        MarkerPills(markers: [], onTap: { _ in })
     }
     .modelContainer(container)
 }
