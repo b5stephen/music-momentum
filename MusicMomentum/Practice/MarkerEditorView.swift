@@ -170,7 +170,7 @@ struct MarkerEditorView: View {
                         dismiss()
                     } label: {
                         Image(systemName: "checkmark")
-                            .foregroundStyle(Color.accentText)
+                            .foregroundStyle(Color.accentColor)
                     }
                     .accessibilityLabel("Save")
                 }
@@ -232,10 +232,10 @@ struct MarkerEditorView: View {
     }
 
     private var times: some View {
-        HStack(spacing: 0) {
+        // No divider: one panel is always tinted, and that separates them.
+        HStack(spacing: 6) {
             if end != nil {
                 timeColumn("Start", time: $start, range: startRange, handle: .start)
-                Divider()
                 timeColumn("End", time: endBinding, range: endRange, handle: .end)
             } else {
                 timeColumn("Time", time: $start, range: startRange, handle: .start)
@@ -261,9 +261,11 @@ struct MarkerEditorView: View {
                     .font(.caption2.weight(.semibold))
                     .tracking(0.4)
                     .foregroundStyle(isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                    .fixedSize()
+                    .layoutPriority(1)
                 Spacer(minLength: 4)
                 if isSelected {
-                    nowChip(for: title)
+                    playheadChip(for: title)
                 }
             }
             PreciseTimeField(time: time, range: range) { selected = handle }
@@ -284,20 +286,39 @@ struct MarkerEditorView: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
-    private func nowChip(for title: String) -> some View {
+    /// "Now" read as the clock, not the song. The glyph is the strip's
+    /// playhead in miniature. Half a clip on a mini can't fit both beside the
+    /// column title, so it sheds the glyph, then the word.
+    private func playheadChip(for title: String) -> some View {
         Button {
             setSelected(controller.playbackTime)
         } label: {
-            Text("Now")
-                .font(.caption2.weight(.semibold))
-                .padding(.horizontal, 9)
-                .padding(.vertical, 3)
-                // The cell's colour, so it stands off the tinted panel it sits in.
-                .background(Color(.secondarySystemGroupedBackground), in: Capsule())
-                .foregroundStyle(Color.accentText)
+            ViewThatFits(in: .horizontal) {
+                chipBody { playheadGlyph; Text("Playhead") }
+                chipBody { Text("Playhead") }
+                chipBody { playheadGlyph }
+            }
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Set \(title.lowercased()) to the current position")
+    }
+
+    private var playheadGlyph: some View {
+        VStack(spacing: 0) {
+            Circle().frame(width: 5, height: 5)
+            Capsule().frame(width: 1.5, height: 7)
+        }
+    }
+
+    private func chipBody(@ViewBuilder _ content: () -> some View) -> some View {
+        HStack(spacing: 4, content: content)
+            .font(.caption2.weight(.semibold))
+            .fixedSize()
+            .padding(.horizontal, 9)
+            .padding(.vertical, 3)
+            // The cell's colour, so it stands off the tinted panel it sits in.
+            .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+            .foregroundStyle(Color.accentText)
     }
 
     private var nudgeRow: some View {

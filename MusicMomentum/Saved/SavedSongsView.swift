@@ -454,7 +454,7 @@ private struct SpeedEditorSheet: View {
                         dismiss()
                     } label: {
                         Image(systemName: "checkmark")
-                            .foregroundStyle(Color.accentText)
+                            .foregroundStyle(Color.accentColor)
                     }
                     .accessibilityLabel("Save")
                 }

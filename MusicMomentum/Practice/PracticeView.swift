@@ -119,7 +119,7 @@ struct PracticeView: View {
             SongPickerView { song in
                 Task { await controller.select(song: song) }
             }
-            .tint(.accentColor)
+            .tint(nil as Color?)
         }
         .sheet(item: $markerSheet) { sheet in
             Group {
@@ -145,7 +145,9 @@ struct PracticeView: View {
             }
             // `RootTabView` tints the tab bar with the cover's near-white text
             // colour, and sheets inherit it; on a light sheet it all but vanishes.
-            .tint(.accentColor)
+            // Cleared rather than set to the accent: an explicit tint also turns
+            // the toolbar's Close coral, which a sheet from Saved doesn't do.
+            .tint(nil as Color?)
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { controller.refreshPlaybackTime() }
