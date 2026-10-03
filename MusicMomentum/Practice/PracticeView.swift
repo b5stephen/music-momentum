@@ -48,6 +48,7 @@ struct PracticeView: View {
         var title: String
         var artistName: String
         var palette: ArtworkPalette?
+        var artwork: Artwork?
     }
 
     private var track: Track? {
@@ -58,7 +59,8 @@ struct PracticeView: View {
             artistName: song.artistName,
             palette: palette?.songID == song.id.rawValue
                 ? palette?.palette
-                : ArtworkPalette(song.artwork)
+                : ArtworkPalette(song.artwork),
+            artwork: song.artwork
         )
     }
 
@@ -197,9 +199,10 @@ struct PracticeView: View {
             width: leading,
             height: size.height - Self.verticalPadding - wideHeaderHeight - Self.wideHeaderGap
         )
+        let coverSide = min(180, size.height - Self.verticalPadding - Self.widePlayerHeight - Self.wideCoverGap)
         return HStack(alignment: .wheelCentre, spacing: 0) {
             VStack(spacing: Self.wideHeaderGap) {
-                nowPlaying(track)
+                nowPlaying(track, showsCover: false)
                     .lineLimit(2)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
                         wideHeaderHeight = $0
@@ -215,6 +218,11 @@ struct PracticeView: View {
             .frame(width: leading)
 
             VStack(spacing: 0) {
+                // On a short landscape phone there's no room left for it.
+                if coverSide >= 64 {
+                    cover(track.artwork, side: coverSide)
+                        .padding(.bottom, Self.wideCoverGap)
+                }
                 timeline
                     .padding(.bottom, 24)
                 transportControls
@@ -247,6 +255,9 @@ struct PracticeView: View {
     /// The top and bottom padding round the screen's content.
     private static let verticalPadding: CGFloat = 22
     private static let wideHeaderGap: CGFloat = 20
+    /// Roughly the timeline, marker pills, transport and loop caption.
+    private static let widePlayerHeight: CGFloat = 230
+    private static let wideCoverGap: CGFloat = 24
 
     /// Grows with the window up to what the wheel needs, and never takes so
     /// much that the transport's five controls are squeezed.
@@ -476,21 +487,46 @@ struct PracticeView: View {
 
     // MARK: - Header
 
-    private func nowPlaying(_ track: Track) -> some View {
-        VStack(spacing: 4) {
-            Text(track.title)
-                .font(.title2.bold())
-                .multilineTextAlignment(.center)
-            Text(track.artistName)
-                .foregroundStyle(.secondary)
+    /// The cover shows where the screen's colours come from. Wide, it sits
+    /// over the player instead.
+    private func nowPlaying(_ track: Track, showsCover: Bool = true) -> some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 14) {
+                if showsCover {
+                    cover(track.artwork, side: 64)
+                }
+
+                VStack(alignment: showsCover ? .leading : .center, spacing: 4) {
+                    Text(track.title)
+                        .font(.title2.bold())
+                    Text(track.artistName)
+                        .foregroundStyle(.secondary)
+                }
+                .multilineTextAlignment(showsCover ? .leading : .center)
+            }
 
             HStack(spacing: 8) {
                 saveChip
                 changeSongChip
             }
-            .padding(.top, 8)
         }
         .padding(.horizontal)
+    }
+
+    @ViewBuilder
+    private func cover(_ artwork: Artwork?, side: CGFloat) -> some View {
+        let radius = side / 8
+        if let artwork {
+            ArtworkImage(artwork, width: side, height: side)
+                .clipShape(.rect(cornerRadius: radius))
+                .accessibilityHidden(true)
+        } else {
+            RoundedRectangle(cornerRadius: radius)
+                .fill(.quaternary)
+                .frame(width: side, height: side)
+                .overlay { Image(systemName: "music.note").foregroundStyle(.secondary) }
+                .accessibilityHidden(true)
+        }
     }
 
     @ViewBuilder

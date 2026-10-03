@@ -50,6 +50,7 @@ The ground is tuned against Apple Music on the same iPhone, in OKLCH. The aim is
 - **Smoked glass on bright covers.** Where the ground is bright (Count on Me's gold), light glass washes out, so the chips and the speed wheel's rim take the ground's dark shadow colour at 24% instead. Darker grounds keep light glass.
 - **"On"** (loop button, looping pill, speed arc, Play) is a solid fill of the text colour with a darker shade of the ground on top.
 - **The selected tab** takes the text colour while Practice is showing, because coral vanishes on a red or orange cover.
+- **The cover itself is shown,** so it's plain where the colours come from. On a phone it's a 64pt thumbnail beside the title and artist, the three centred as a group with the chips beneath. Wide, it heads the player column, up to 180pt and dropped when the height runs out, and the title stands alone over the dial. Drawing the cover into the ground, faded from the top as Apple Music does, was tried and dropped: no fade looked right across every cover.
 
 Coral steps aside on this screen. Covers without colours, and the screen with nothing loaded, keep the system background and the coral tint. The first tuning was worked out on the Album Colour Study design canvas; the current one against Apple Music on a device.
 
