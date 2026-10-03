@@ -15,11 +15,14 @@ struct PracticeView: View {
     /// Stands in for `controller.selectedSong` in previews, since `Song` has
     /// no public initialiser.
     var previewTrack: Track?
+    /// Hands the practice screen's tint up to the tab bar, which sits outside it.
+    var onTint: (Color?) -> Void = { _ in }
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.modelContext) private var modelContext
     @Query private var savedSongs: [SavedSong]
     @State private var showPicker = false
     @State private var markerSheet: MarkerSheet?
+    @State private var sampledPalette: (songID: String, palette: ArtworkPalette)?
 
     /// Editing carries the marker's identity so switching straight from one
     /// marker to another rebuilds the sheet.
@@ -49,7 +52,9 @@ struct PracticeView: View {
             id: song.id.rawValue,
             title: song.title,
             artistName: song.artistName,
-            palette: ArtworkPalette(song.artwork)
+            palette: sampledPalette?.songID == song.id.rawValue
+                ? sampledPalette?.palette
+                : ArtworkPalette(song.artwork)
         )
     }
 
@@ -82,7 +87,18 @@ struct PracticeView: View {
                 .frame(maxWidth: .infinity, minHeight: proxy.size.height)
             }
         }
-        .modifier(ArtworkGround(palette: track?.palette, artwork: controller.selectedSong?.artwork))
+        .modifier(ArtworkGround(palette: track?.palette))
+        .task(id: controller.selectedSong?.id) {
+            guard let song = controller.selectedSong, let artwork = song.artwork,
+                  let palette = await ArtworkPalette.sampled(from: artwork)
+            else { return }
+            withAnimation(.easeInOut(duration: 0.4)) {
+                sampledPalette = (song.id.rawValue, palette)
+            }
+        }
+        .onChange(of: track?.palette, initial: true) { _, palette in
+            onTint(palette?.foreground)
+        }
         .sheet(isPresented: $showPicker) {
             SongPickerView { song in
                 Task { await controller.select(song: song) }
@@ -551,11 +567,10 @@ private struct ArrivalState: View {
     }
 }
 
-/// Paints the loaded screen in the cover's colours, under a blurred copy of
-/// the cover. Covers without colours keep the system look and the coral tint.
+/// Paints the loaded screen in the cover's colours. Covers without colours
+/// keep the system look and the coral tint.
 private struct ArtworkGround: ViewModifier {
     let palette: ArtworkPalette?
-    let artwork: Artwork?
 
     func body(content: Content) -> some View {
         if let palette {
@@ -564,7 +579,7 @@ private struct ArtworkGround: ViewModifier {
                 .tint(palette.foreground)
                 .backgroundStyle(palette.background)
                 .environment(\.onAccent, palette.background)
-                .environment(\.colorScheme, palette.isLight ? .light : .dark)
+                .environment(\.colorScheme, .dark)
                 .background { backdrop(palette) }
         } else {
             content
@@ -572,16 +587,15 @@ private struct ArtworkGround: ViewModifier {
     }
 
     private func backdrop(_ palette: ArtworkPalette) -> some View {
-        ZStack(alignment: .top) {
-            palette.background
-            if let artwork {
-                ArtworkImage(artwork, width: 460, height: 460)
-                    .frame(maxWidth: .infinity, maxHeight: 460)
-                    .blur(radius: 60)
-                    .opacity(0.8)
-                    .mask(LinearGradient(colors: [.black, .clear], startPoint: .center, endPoint: .bottom))
-            }
-        }
+        LinearGradient(
+            stops: [
+                .init(color: palette.top, location: 0),
+                .init(color: palette.background, location: 0.55),
+                .init(color: palette.bottom, location: 1),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
         .ignoresSafeArea()
         .accessibilityHidden(true)
     }
@@ -660,17 +674,15 @@ private struct DialSilhouette: View {
 }
 
 #Preview("Dark cover") {
-    loadedPreview(palette: ArtworkPalette(
-        background: CGColor(srgbRed: 0.12, green: 0.16, blue: 0.33, alpha: 1),
-        foreground: CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)
-    ))
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)))
 }
 
-#Preview("Light cover") {
-    loadedPreview(palette: ArtworkPalette(
-        background: CGColor(srgbRed: 0.95, green: 0.94, blue: 0.91, alpha: 1),
-        foreground: CGColor(srgbRed: 0.11, green: 0.11, blue: 0.10, alpha: 1)
-    ))
+#Preview("Bright cover") {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.88, green: 0.64, blue: 0.05)))
+}
+
+#Preview("Grey cover") {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.25, green: 0.25, blue: 0.25)))
 }
 
 #Preview("Cover without colours") {

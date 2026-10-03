@@ -36,7 +36,18 @@ On the website, each feature gets its own accent: coral for speed, amber for mar
 
 ## Artwork colour on Practice
 
-With a song loaded, the practice screen is painted in the cover's own colours: `ArtworkPalette` reads `Artwork.backgroundColor` and `primaryTextColor`, which Apple Music picks to read on each other. The background is the cover colour under a blurred copy of the cover; the foreground, `.tint` and every hierarchical style become the cover's text colour; "on" (loop button, looping pill, speed arc) is a solid fill of that text colour with the background colour on top, the way Apple Music's Play button works. Coral steps aside here because it would vanish on a red or orange cover. It follows the cover, not the system appearance, so a light cover gives a light screen in dark mode. Covers without colours, and the screen with nothing loaded, keep the system background and the coral tint. This is the one place the app uses a gradient: the fade from the blurred cover into its background.
+With a song loaded, the practice screen is painted in the cover's own colours, the way Apple Music's Now Playing is. `ArtworkPalette` samples the cover image for its dominant colour: the hue covering the most of it, weighted by saturation, so a vivid subject beats a pale border. `Artwork.backgroundColor` stands in only while the image loads, or when it can't be fetched (library artwork's `musicKit://` URLs), because it's often the border: Count on Me's is cream, which can only darken to olive.
+
+The ground is derived in OKLCH, not used as sampled:
+
+- **Always dark enough for light text, except where a hue is only rich when light.** Vivid colours keep their lightness up to just under their sRGB cusp, so a gold cover stays bright gold while reds and blues sit around 0.45–0.6. Muted covers go no lighter than 0.46. Grey stays grey.
+- **Saturation is kept relative to what sRGB allows**, so a vivid cover stays vivid as it darkens and a muted one stays muted.
+- **A vertical gradient darker towards the bottom**, the one gradient in the app. Yellows and oranges warm towards orange as they darken; darkening at the same hue turns them olive.
+- **Light text always:** near-white tinted with the cover's hue. The screen is always in dark appearance, so every hierarchical style and `.quaternary` fill becomes the light text at low opacity, which reads as glass on any ground. Never fills of a dark text colour on a light ground: that's what made the first version look muddy.
+- **"On"** (loop button, looping pill, speed arc, Play) is a solid fill of the text colour with the ground's midpoint on top.
+- **The selected tab** takes the text colour while Practice is showing, because coral vanishes on a red or orange cover.
+
+Coral steps aside on this screen. Covers without colours, and the screen with nothing loaded, keep the system background and the coral tint. The tuning was worked out on the Album Colour Study design canvas against Apple Music screenshots.
 
 ## Type
 
@@ -47,7 +58,7 @@ With a song loaded, the practice screen is painted in the cover's own colours: `
 
 - Coral on black is about 7:1, so tinted text and icons on the dark background are fine.
 - Coral on white is also only about 2.9:1, so coral *text* on a plain background uses `AccentText`, which darkens to about 5.3:1 in light mode. Fills keep the bright coral in both modes.
-- White on coral is only about 2.9:1, under the 4.5:1 that small text needs. Text on a solid coral fill uses `OnAccent` (about 6.5:1 on the dark-mode coral), as the looping pill, the loop button when it's on, and the website's buttons do. On an artwork-coloured practice screen the same job falls to the cover's background colour. Don't put white on coral.
+- White on coral is only about 2.9:1, under the 4.5:1 that small text needs. Text on a solid coral fill uses `OnAccent` (about 6.5:1 on the dark-mode coral), as the looping pill, the loop button when it's on, and the website's buttons do. On an artwork-coloured practice screen the same job falls to the ground's midpoint. Don't put white on coral.
 - Touch targets are at least 44pt.
 
 ## Website

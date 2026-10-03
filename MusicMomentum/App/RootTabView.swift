@@ -13,6 +13,7 @@ struct RootTabView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var controller = PlaybackController()
     @State private var tab: TabID = .practice
+    @State private var practiceTint: Color?
 
     private enum TabID {
         case practice, saved
@@ -21,13 +22,16 @@ struct RootTabView: View {
     var body: some View {
         TabView(selection: $tab) {
             Tab("Practice", systemImage: "guitars", value: .practice) {
-                PracticeView(controller: controller)
+                PracticeView(controller: controller) { practiceTint = $0 }
             }
 
             Tab("Saved", systemImage: "bookmark", value: .saved) {
                 SavedSongsView(controller: controller) { tab = .practice }
             }
         }
+        // Coral vanishes on a red or orange cover, so the selected tab takes
+        // the practice screen's text colour while it's showing.
+        .tint(tab == .practice ? practiceTint : nil)
         .task { controller.configure(modelContext: modelContext) }
         // Duplicates and another device's library artwork only ever arrive by
         // sync, so tidying on each import is enough.
