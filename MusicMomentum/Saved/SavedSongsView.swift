@@ -9,6 +9,9 @@ import SwiftUI
 
 struct SavedSongsView: View {
     let controller: PlaybackController
+    /// Beside the floating practice card, which already names the screen's
+    /// job and offers the way to pick a song.
+    var isBesidePractice = false
     /// Brings the practice tab forward.
     let onPractice: () -> Void
 
@@ -43,7 +46,9 @@ struct SavedSongsView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if songs.isEmpty {
+                if songs.isEmpty, isBesidePractice {
+                    ContentUnavailableView("No saved songs yet", systemImage: "bookmark")
+                } else if songs.isEmpty {
                     ContentUnavailableView {
                         Label("No saved songs yet", systemImage: "bookmark")
                     } description: {
@@ -72,6 +77,8 @@ struct SavedSongsView: View {
                             SavedSongRow(
                                 song: song,
                                 isLoading: loadingID == song.songID,
+                                isCurrent: controller.selectedSong?.id.rawValue == song.songID,
+                                isPlaying: controller.isPlaying,
                                 onPlay: { practice(song) },
                                 onEditSpeed: { editing = song }
                             )
@@ -114,19 +121,23 @@ struct SavedSongsView: View {
                     .environment(\.defaultMinListRowHeight, 0)
                 }
             }
-            .navigationTitle("Saved")
+            .navigationTitle(isBesidePractice ? "" : "Saved")
+            .navigationBarTitleDisplayMode(isBesidePractice ? .inline : .automatic)
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Picker("Sort By", selection: $order) {
-                            ForEach(SongOrder.allCases) { order in
-                                Text(order.title).tag(order)
+                // Hidden rather than disabled: a greyed glyph beside Add read
+                // as a second, broken add button.
+                if !songs.isEmpty {
+                    ToolbarItem(placement: .primaryAction) {
+                        Menu {
+                            Picker("Sort By", selection: $order) {
+                                ForEach(SongOrder.allCases) { order in
+                                    Text(order.title).tag(order)
+                                }
                             }
+                        } label: {
+                            Label("Sort", systemImage: "arrow.up.arrow.down")
                         }
-                    } label: {
-                        Label("Sort", systemImage: "arrow.up.arrow.down")
                     }
-                    .disabled(songs.isEmpty)
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -342,6 +353,9 @@ private enum SongOrder: String, CaseIterable, Identifiable {
 private struct SavedSongRow: View {
     let song: SavedSong
     let isLoading: Bool
+    /// Loaded in the practice screen, which on a wide iPad is right beside it.
+    let isCurrent: Bool
+    let isPlaying: Bool
     let onPlay: () -> Void
     let onEditSpeed: () -> Void
 
@@ -353,9 +367,18 @@ private struct SavedSongRow: View {
             artwork
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(song.title)
-                    .font(.body)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(song.title)
+                        .font(.body)
+                        .lineLimit(1)
+                    if isCurrent {
+                        Image(systemName: "waveform")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .symbolEffect(.variableColor.iterative, isActive: isPlaying)
+                            .accessibilityLabel("In practice")
+                    }
+                }
                 Text(song.artistName)
                     .font(.caption)
                     .foregroundStyle(.secondary)

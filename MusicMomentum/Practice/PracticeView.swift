@@ -15,8 +15,11 @@ struct PracticeView: View {
     /// Stands in for `controller.selectedSong` in previews, since `Song` has
     /// no public initialiser.
     var previewTrack: Track?
-    /// Hands the practice screen's tint up to the tab bar, which sits outside it.
-    var onTint: (Color?) -> Void = { _ in }
+    /// Set when Saved is on screen beside it rather than in another tab.
+    var savedIsBeside = false
+    /// Hands the cover's palette up to the tab bar and the floating card's
+    /// glow, which sit outside the screen.
+    var onPalette: (ArtworkPalette?) -> Void = { _ in }
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.modelContext) private var modelContext
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -120,7 +123,7 @@ struct PracticeView: View {
             }
         }
         .onChange(of: track?.palette, initial: true) { _, palette in
-            onTint(palette?.foreground)
+            onPalette(palette)
         }
         .sheet(isPresented: $showPicker) {
             SongPickerView { song in
@@ -611,7 +614,9 @@ struct PracticeView: View {
             headline: "Nothing loaded yet",
             detail: "Pick a song from Apple Music and slow it down to a speed you can actually play.",
             actionTitle: "Choose a Song",
-            footnote: "Or open Saved to pick up where you left off."
+            footnote: savedIsBeside
+                ? "Or tap one of your saved songs."
+                : "Or open Saved to pick up where you left off."
         ) {
             Task { showPicker = await controller.requestAuthorizationIfNeeded() }
         }
