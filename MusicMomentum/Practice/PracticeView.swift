@@ -83,8 +83,7 @@ struct PracticeView: View {
                     } else if controller.isRestoringLastSong {
                         RestoringState(
                             diameter: arrivalDiameter(proxy.size),
-                            leadingWidth: arrivalLeadingWidth(proxy.size),
-                            isRoomy: proxy.size.width >= Self.roomyWidth
+                            leadingWidth: arrivalLeadingWidth(proxy.size)
                         )
                     } else if controller.canUseMusic {
                         noSong(size: proxy.size)
@@ -551,7 +550,6 @@ struct PracticeView: View {
         ArrivalState(
             diameter: arrivalDiameter(size),
             leadingWidth: arrivalLeadingWidth(size),
-            isRoomy: size.width >= Self.roomyWidth,
             systemImage: "music.note.list",
             headline: "Nothing loaded yet",
             detail: "Pick a song from Apple Music and slow it down to a speed you can actually play.",
@@ -568,7 +566,6 @@ struct PracticeView: View {
         ArrivalState(
             diameter: arrivalDiameter(size),
             leadingWidth: arrivalLeadingWidth(size),
-            isRoomy: size.width >= Self.roomyWidth,
             systemImage: "lock",
             headline: "Apple Music access needed",
             detail: "Music Momentum plays songs from your own library and Apple Music. It can't reach either one until you allow it.",
@@ -618,15 +615,13 @@ struct PracticeView: View {
     }
 }
 
-/// The practice screen with no song: same flexible gaps, the dial's silhouette
-/// where the dial goes, so a song arriving reads as the screen filling in.
+/// The practice screen with no song: the dial's silhouette above the copy,
+/// the pair centred. Pinned to the top like the loaded wheel, it left the
+/// copy stranded at the bottom of a phone with a void between them.
 private struct ArrivalState: View {
     var diameter: CGFloat
     /// Set when wide: the silhouette's column, beside the copy.
     var leadingWidth: CGFloat?
-    /// Stacked on an iPad, the gap between silhouette and copy stops growing
-    /// and the pair sits in the middle, as the loaded screen does.
-    var isRoomy = false
     var systemImage: String
     var headline: String
     var detail: String
@@ -651,7 +646,7 @@ private struct ArrivalState: View {
                 DialSilhouette(diameter: diameter, systemImage: systemImage)
 
                 Spacer(minLength: 16)
-                    .frame(maxHeight: isRoomy ? 40 : .infinity)
+                    .frame(maxHeight: 40)
 
                 copy
                     .frame(maxWidth: 480)
@@ -799,7 +794,6 @@ private struct ChipFill: View {
 private struct RestoringState: View {
     var diameter: CGFloat
     var leadingWidth: CGFloat?
-    var isRoomy = false
 
     var body: some View {
         if let leadingWidth {
@@ -817,7 +811,7 @@ private struct RestoringState: View {
                 DialSilhouette(diameter: diameter, systemImage: "music.note.list")
 
                 Spacer(minLength: 16)
-                    .frame(maxHeight: isRoomy ? 40 : .infinity)
+                    .frame(maxHeight: 40)
 
                 spinner
 
