@@ -72,12 +72,6 @@ nonisolated struct OKLCH: Equatable {
         return low
     }
 
-    /// The lightness at which a hue reaches its most saturated: high for
-    /// yellow, low for blue.
-    static func cuspLightness(h: Double) -> Double {
-        stride(from: 0.2, through: 0.98, by: 0.01).max { maxChroma(l: $0, h: h) < maxChroma(l: $1, h: h) } ?? 0.5
-    }
-
     private static func linearRGB(l: Double, c: Double, h: Double) -> (Double, Double, Double) {
         let a = c * cos(h * .pi / 180), b = c * sin(h * .pi / 180)
         let lms = (

@@ -89,8 +89,8 @@ struct PracticeView: View {
         }
         .modifier(ArtworkGround(palette: track?.palette))
         .task(id: controller.selectedSong?.id) {
-            guard let song = controller.selectedSong, let artwork = song.artwork,
-                  let palette = await ArtworkPalette.sampled(from: artwork)
+            guard let song = controller.selectedSong,
+                  let palette = await ArtworkPalette.sampled(from: song)
             else { return }
             withAnimation(.easeInOut(duration: 0.4)) {
                 sampledPalette = (song.id.rawValue, palette)
@@ -586,16 +586,22 @@ private struct ArtworkGround: ViewModifier {
         }
     }
 
+    /// Level through the top half, then darkening to about 60% at the
+    /// bottom, as Apple Music's is.
     private func backdrop(_ palette: ArtworkPalette) -> some View {
-        LinearGradient(
-            stops: [
-                .init(color: palette.top, location: 0),
-                .init(color: palette.background, location: 0.55),
-                .init(color: palette.bottom, location: 1),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
+        MeshGradient(
+            width: 3,
+            height: 3,
+            points: (0..<3).flatMap { row in (0..<3).map { SIMD2(Float($0) / 2, Float(row) / 2) } },
+            colors: palette.mesh
         )
+        .overlay {
+            LinearGradient(
+                stops: [.init(color: .clear, location: 0.45), .init(color: .black.opacity(0.38), location: 1)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
         .ignoresSafeArea()
         .accessibilityHidden(true)
     }

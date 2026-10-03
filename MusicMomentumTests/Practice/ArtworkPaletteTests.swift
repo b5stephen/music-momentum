@@ -8,8 +8,8 @@ import Testing
 @testable import MusicMomentum
 
 /// The practice screen's ground is derived, not picked, so the covers that
-/// went wrong before are pinned here: a yellow that turned olive and a pale
-/// border chosen over the cover's subject.
+/// went wrong before are pinned here: a gold cover that came out pale khaki
+/// and a blue sky chosen over a mostly brown cover.
 @Suite("Artwork palette")
 struct ArtworkPaletteTests {
     private func colour(_ hex: UInt32) -> OKLCH {
@@ -39,60 +39,78 @@ struct ArtworkPaletteTests {
         #expect(abs(back.blue * 255 - Double(hex & 0xFF)) < 0.5)
     }
 
-    @Test("A vivid yellow stays bright and warms as it darkens")
-    func vividYellow() {
-        let cover = colour(0xE0A30C)
-        let ground = ArtworkPalette.ground(for: cover)
-        #expect(ground.top.l > 0.7)
-        #expect(ground.top.vividness > 0.9)
-        #expect(ground.bottom.l < ground.top.l - 0.2)
-        #expect(ground.bottom.h < ground.top.h - 8)
+    private func ground(_ hex: UInt32) -> ArtworkPalette.Ground {
+        let cover = colour(hex)
+        return ArtworkPalette.ground(for: .init(average: cover, mesh: Array(repeating: cover, count: 9)))
     }
 
-    @Test("A dark red keeps its lightness and carries light text")
+    @Test("A bright cover darkens into its richest shade")
+    func brightGold() {
+        // Count on Me's average; Apple Music paints it L 0.60, C 0.12.
+        let cover = colour(0xF7D273)
+        let top = ground(0xF7D273).mesh[0]
+        #expect(abs(top.l - 0.6) < 0.02)
+        #expect(abs(top.c - cover.c) < 0.005)
+        #expect(top.vividness > 0.9)
+    }
+
+    @Test("A dark red keeps its hue and chroma and carries light text")
     func darkRed() {
-        let cover = colour(0x87302F)
-        let ground = ArtworkPalette.ground(for: cover)
-        #expect(abs(ground.top.l - cover.l) < 0.001)
-        #expect(contrast(ground.text, ground.top) >= 4.5)
+        let cover = colour(0x973F37)
+        let ground = ground(0x973F37)
+        #expect(abs(ground.mesh[4].h - cover.h) < 1)
+        #expect(abs(ground.mesh[4].c - cover.c) < 0.005)
+        #expect(ground.mesh[4].l < cover.l - 0.08)
+        #expect(contrast(ground.text, ground.mesh[4]) >= 4.5)
     }
 
-    @Test("Muted and pale covers darken")
-    func mutedDarkens() {
-        #expect(ArtworkPalette.ground(for: colour(0xF5E7B5)).top.l <= 0.77)
-        #expect(ArtworkPalette.ground(for: colour(0xA89A8A)).top.l <= 0.46)
+    @Test("Even a white cover stays dark enough for light text")
+    func whiteDarkens() {
+        #expect(ground(0xFFFFFF).mesh[0].l <= 0.62)
+        #expect(contrast(ground(0xFFFFFF).text, ground(0xFFFFFF).mesh[0]) >= 3)
     }
 
     @Test("Grey stays grey")
     func greyStaysGrey() {
-        let ground = ArtworkPalette.ground(for: colour(0x5F5F5F))
-        #expect(ground.top.c < 0.005)
-        #expect(ground.bottom.c < 0.005)
+        let ground = ground(0x5F5F5F)
+        #expect(ground.mesh.allSatisfy { $0.c < 0.005 })
         #expect(ground.text.c < 0.005)
     }
 
-    private func pixels(_ runs: [(hex: UInt32, count: Int)]) -> [UInt8] {
-        runs.flatMap { run in
-            Array(repeating: [UInt8(run.hex >> 16 & 0xFF), UInt8(run.hex >> 8 & 0xFF), UInt8(run.hex & 0xFF), 255], count: run.count)
-                .flatMap { $0 }
+    @Test("Each mesh point sits halfway between its region and the whole cover")
+    func meshPullsToAverage() throws {
+        let red = colour(0xC03020), blue = colour(0x2050C0)
+        let regions = ArtworkPalette.Regions(average: colour(0x704070), mesh: [red] + Array(repeating: blue, count: 8))
+        let ground = ArtworkPalette.ground(for: regions)
+        let corner = ground.mesh[0], other = ground.mesh[8]
+        #expect(corner.h < 60 || corner.h > 300)
+        #expect(abs(corner.h - other.h) > 60)
+        #expect(corner.c < ArtworkPalette.ground(for: .init(average: red, mesh: [red])).mesh[0].c)
+    }
+
+    /// A `side`×`side` bitmap whose left half is `left` and right half `right`.
+    private func halves(_ left: UInt32, _ right: UInt32, side: Int = 8) -> [UInt8] {
+        (0..<side * side).flatMap { i -> [UInt8] in
+            let hex = i % side < side / 2 ? left : right
+            return [UInt8(hex >> 16 & 0xFF), UInt8(hex >> 8 & 0xFF), UInt8(hex & 0xFF), 255]
         }
     }
 
-    @Test("Picks the vivid subject over a larger pale border")
-    func subjectOverBorder() throws {
-        let dominant = try #require(ArtworkPalette.dominantColour(rgba: pixels([(0xF5E7B5, 600), (0xE0A30C, 400)])))
-        #expect(abs(dominant.h - colour(0xE0A30C).h) < 6)
-    }
-
-    @Test("A black-and-white cover comes out grey")
-    func blackAndWhite() throws {
-        let dominant = try #require(ArtworkPalette.dominantColour(rgba: pixels([(0x202020, 500), (0xD0D0D0, 300), (0x6A6A6A, 200)])))
-        #expect(dominant.c < 0.01)
+    @Test("Averages the whole cover as stored, and each region apart")
+    func regions() throws {
+        let regions = try #require(ArtworkPalette.regions(rgba: halves(0xFF0000, 0x0000FF), side: 8))
+        let purple = colour(0x800080)
+        #expect(abs(regions.average.l - purple.l) < 0.01)
+        #expect(abs(regions.average.h - purple.h) < 2)
+        #expect(abs(regions.mesh[0].h - colour(0xFF0000).h) < 1)
+        #expect(abs(regions.mesh[2].h - colour(0x0000FF).h) < 1)
+        #expect(abs(regions.mesh[4].h - purple.h) < 2)
+        #expect(regions.mesh[6] == regions.mesh[0])
     }
 
     @Test("Ignores transparent pixels and empty images")
     func transparent() {
-        #expect(ArtworkPalette.dominantColour(rgba: []) == nil)
-        #expect(ArtworkPalette.dominantColour(rgba: [255, 0, 0, 0]) == nil)
+        #expect(ArtworkPalette.regions(rgba: [], side: 4) == nil)
+        #expect(ArtworkPalette.regions(rgba: Array(repeating: 0, count: 64), side: 4) == nil)
     }
 }
