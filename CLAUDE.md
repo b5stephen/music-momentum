@@ -36,5 +36,6 @@ The simulator must run iOS ≥ 26.4 or the build is rejected with "doesn't match
 - Comments record only what the code can't say — a MusicKit quirk, a past bug, a non-obvious invariant. Don't narrate the code; when touching a file, delete comments that fail that test.
 - Anything pure or model-only whose failure would silently corrupt data or misplace a marker gets a unit test: `Loop.step`, the model mutators, `PlayParameterIDs`, `PreciseTime`. `PlaybackController` and views are not unit-tested; don't mock the player to get there. Tests are Swift Testing (`@Test`, `#expect`), each building its own in-memory `ModelContext` in `init()`; the UI test target is still the Xcode template.
 - Pure helpers are `nonisolated` so tests can call them off the main actor.
+- `DESIGN.md` is the palette and visual language for the app and the `docs/` website. Read it before changing how anything looks, and update it when that language changes.
 - Every view file has a `#Preview` per meaningful state (empty, loaded, error), built on `AppSchema.inMemoryContainer()`; trivial glyphs and rows can skip it.
 - Commit messages: sentence-case imperative title, then prose paragraphs on the behaviour change and what was wrong before (see `git log`). Commit and push directly on `main`.
