@@ -53,10 +53,14 @@ struct SavedSongsView: View {
                             chooseSong()
                         } label: {
                             Label("Add Song", systemImage: "music.note.list")
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(Color.accentText)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 10)
+                                .background(Color.accentColor.opacity(0.14), in: Capsule())
                         }
-                        .buttonStyle(.bordered)
-                        .buttonBorderShape(.capsule)
-                        .tint(.accentText)
+                        // Not `.bordered`, which turns grey once its text is recoloured.
+                        .buttonStyle(.plain)
                         .disabled(!controller.canUseMusic)
                     }
                 } else {
@@ -71,6 +75,7 @@ struct SavedSongsView: View {
                                 onPlay: { practice(song) },
                                 onEditSpeed: { editing = song }
                             )
+                            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 0, trailing: 16))
                             .listRowSeparator(.hidden)
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) { delete(song) } label: {
@@ -94,7 +99,7 @@ struct SavedSongsView: View {
                             )
                             .listRowInsets(EdgeInsets())
                             .listRowSeparator(.hidden)
-                            .padding(.bottom, 10)
+                            .padding(.vertical, 10)
                             .overlay(alignment: .bottom) {
                                 Rectangle()
                                     .fill(.separator)
@@ -104,6 +109,9 @@ struct SavedSongsView: View {
                         }
                     }
                     .listStyle(.plain)
+                    // Otherwise the pill row is stretched to 44pt and the rows
+                    // drift apart.
+                    .environment(\.defaultMinListRowHeight, 0)
                 }
             }
             .navigationTitle("Saved")

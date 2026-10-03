@@ -6,9 +6,9 @@ The palette and visual language for the app and its website. The app's colours c
 
 | Name | Hex | Role |
 |---|---|---|
-| Coral | `#FF6640` | The accent. `AccentColor` in the asset catalog, Display P3 `1.00 0.33 0.16` light and `1.00 0.40 0.24` dark (lighter so it doesn't go muddy on black). `#FF6640` is the sRGB stand-in the website uses. |
+| Coral | `#FF6640` | The accent. `AccentColor` in the asset catalog, the same sRGB `#FF6640` in light and dark, as on the website and in the designs. Keep it sRGB: Display P3 components with the same numbers render a redder, more saturated coral on an iPhone. |
 | On-accent | `#1A0A05` | Text and glyphs on a solid coral fill. `OnAccent` in the asset catalog; the website's text on coral buttons. |
-| Accent text | `#C43A12` light, coral dark | Coral used as text on a plain background. `AccentText` in the asset catalog: coral itself is under 3:1 on white, so light mode darkens it. |
+| Accent text | `#C43A12` light, `#FF6640` dark | Coral used as text on a plain background. `AccentText` in the asset catalog: coral itself is under 3:1 on white, so light mode darkens it. |
 | Amber | `#FFB23E` | Taken from the app icon's orange. Website only so far. |
 | Rose | `#FF4F8B` | Website only so far. |
 | Violet | `#9C8CFF` | Website only so far; the website uses it for iCloud sync. |

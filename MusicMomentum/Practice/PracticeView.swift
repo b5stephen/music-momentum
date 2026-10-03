@@ -59,13 +59,14 @@ struct PracticeView: View {
     private var onAccent: Color { track?.palette?.background ?? .onAccent }
 
     var body: some View {
-        // The gaps either side of the wheel absorb spare height; the screen only
-        // scrolls once they've given it all back.
+        // Spacers absorb spare height (below the controls with a song loaded,
+        // around the dial without); the screen only scrolls once they've given
+        // it all back.
         GeometryReader { proxy in
             ScrollView {
                 VStack(spacing: 0) {
                     if let track {
-                        loadedSong(track, width: proxy.size.width)
+                        loadedSong(track, size: proxy.size)
                     } else if controller.isRestoringLastSong {
                         RestoringState(diameter: wheelDiameter(width: proxy.size.width))
                     } else if controller.canUseMusic {
@@ -76,7 +77,8 @@ struct PracticeView: View {
 
                     messages
                 }
-                .padding(.vertical, 16)
+                .padding(.top, track == nil ? 16 : 6)
+                .padding(.bottom, 16)
                 .frame(maxWidth: .infinity, minHeight: proxy.size.height)
             }
         }
@@ -115,18 +117,18 @@ struct PracticeView: View {
     // MARK: - Practising
 
     @ViewBuilder
-    private func loadedSong(_ track: Track, width: CGFloat) -> some View {
+    private func loadedSong(_ track: Track, size: CGSize) -> some View {
         nowPlaying(track)
 
-        Spacer(minLength: 16)
+        wheelGap
 
         SpeedWheelPicker(
             speed: $controller.playbackRate,
             savedSpeed: savedSong?.speed,
-            diameter: wheelDiameter(width: width)
+            diameter: min(wheelDiameter(width: size.width), max(150, size.height - Self.controlsHeight))
         )
 
-        Spacer(minLength: 16)
+        wheelGap
 
         timeline
             .padding(.bottom, 34)
@@ -142,7 +144,21 @@ struct PracticeView: View {
             .accessibilityHidden(loopCaption == nil)
             .padding(.top, 14)
             .padding(.horizontal, 24)
+
+        // Past the wheel gaps' 30pt, spare height collects above the tab bar
+        // rather than spreading the controls apart on tall phones.
+        Spacer(minLength: 0)
     }
+
+    /// Gives up height on short phones before the screen has to scroll.
+    private var wheelGap: some View {
+        Spacer(minLength: 16).frame(maxHeight: 30)
+    }
+
+    /// Roughly everything on the loaded screen but the wheel. Subtracted from
+    /// the height so on a short phone the wheel shrinks and the transport
+    /// stays above the tab bar instead of scrolling under it.
+    private static let controlsHeight: CGFloat = 420
 
     private func wheelDiameter(width: CGFloat) -> CGFloat {
         min(260, max(160, width - 130))
@@ -361,19 +377,22 @@ struct PracticeView: View {
         let saved = savedSong
         let isCurrent = saved?.percent == percent
 
-        Button {
-            controller.saveCurrentSong()
-        } label: {
-            if isCurrent {
-                chipLabel("Saved at \(percent)%", systemImage: "bookmark.fill", isPrompting: false)
-            } else if saved != nil {
-                chipLabel("Update to \(percent)%", systemImage: "bookmark.fill", isPrompting: true)
-            } else {
-                chipLabel("Save at \(percent)%", systemImage: "bookmark", isPrompting: true)
+        // Settled, it's a label rather than a disabled button, which would
+        // dim it below legible.
+        if isCurrent {
+            chipLabel("Saved at \(percent)%", systemImage: "bookmark.fill", isPrompting: false)
+        } else {
+            Button {
+                controller.saveCurrentSong()
+            } label: {
+                if saved != nil {
+                    chipLabel("Update to \(percent)%", systemImage: "bookmark.fill", isPrompting: true)
+                } else {
+                    chipLabel("Save at \(percent)%", systemImage: "bookmark", isPrompting: true)
+                }
             }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
-        .disabled(isCurrent)
     }
 
     private var changeSongChip: some View {
@@ -504,16 +523,18 @@ private struct ArrivalState: View {
             .multilineTextAlignment(.center)
             .padding(.horizontal, 40)
 
+            // Tinted rather than solid, so it's the same coral as the chips and
+            // speed pills: a solid fill reads as a brighter, other colour. Drawn
+            // by hand because `.bordered` turns grey once its text is recoloured.
             Button(action: action) {
                 Text(actionTitle)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(Color.accentText)
                     .frame(height: 50)
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 30)
+                    .background(Color.accentColor.opacity(0.14), in: Capsule())
             }
-            // Tinted rather than solid, so it's the same coral as the chips
-            // and speed pills: a solid fill reads as a brighter, other colour.
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.capsule)
-            .tint(.accentText)
+            .buttonStyle(.plain)
             .padding(.top, 24)
 
             Text(footnote)

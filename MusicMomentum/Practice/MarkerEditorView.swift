@@ -138,12 +138,17 @@ struct MarkerEditorView: View {
 
                 if isEditing {
                     Section {
-                        Button("Delete Marker", role: .destructive) {
+                        Button(role: .destructive) {
                             confirmingDelete = true
+                        } label: {
+                            Text("Delete Marker")
+                                .frame(maxWidth: .infinity)
                         }
                     }
                 }
             }
+            .listSectionSpacing(20)
+            .contentMargins(.top, 4, for: .scrollContent)
             .navigationTitle(isEditing ? "Edit Marker" : "New Marker")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -292,8 +297,7 @@ struct MarkerEditorView: View {
             nudge(0.1)
             nudge(1)
         }
-        .controlSize(.small)
-        .tint(.primary)
+        .buttonStyle(FillButtonStyle())
         .padding(.vertical, 4)
     }
 
@@ -305,7 +309,6 @@ struct MarkerEditorView: View {
                 .font(.footnote.monospacedDigit())
                 .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.bordered)
         .accessibilityLabel(amount > 0 ? "Later by \(PreciseTime.nudgeLabel(amount))" : "Earlier by \(PreciseTime.nudgeLabel(-amount))")
     }
 
@@ -334,8 +337,7 @@ struct MarkerEditorView: View {
                 }
             }
         }
-        .buttonStyle(.bordered)
-        .tint(.primary)
+        .buttonStyle(FillButtonStyle())
     }
 
     private var playPauseButton: some View {
@@ -344,7 +346,7 @@ struct MarkerEditorView: View {
         } label: {
             Image(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
                 .font(.footnote.weight(.semibold))
-                .frame(width: 30)
+                .frame(width: 52)
                 .frame(minHeight: 28)
         }
         .accessibilityLabel(controller.isPlaying ? "Pause" : "Play")
@@ -358,12 +360,24 @@ struct MarkerEditorView: View {
         Button(action: action) {
             Label(title, systemImage: "arrow.turn.down.right")
                 .font(.footnote.weight(.medium))
-                // A bordered label's icon keeps the app tint whatever `.tint` says.
-                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, minHeight: 28)
         }
         .accessibilityLabel(spoken)
+    }
+}
+
+/// The nudge and cue buttons: a capsule on the lightest system fill, which
+/// keeps them quieter than `.bordered` and leaves the coral to the clip.
+private struct FillButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.vertical, 6)
+            .background(Color(.tertiarySystemFill), in: Capsule())
+            .foregroundStyle(.primary)
+            .opacity(configuration.isPressed ? 0.5 : isEnabled ? 1 : 0.4)
     }
 }
 

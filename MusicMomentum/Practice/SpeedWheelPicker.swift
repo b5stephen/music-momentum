@@ -88,12 +88,12 @@ struct SpeedWheelPicker: View {
             context.stroke(
                 arc(center: center, radius: radius, to: Double(maxPercent)),
                 with: .style(HierarchicalShapeStyle.primary.opacity(0.12)),
-                style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                style: StrokeStyle(lineWidth: 6 * scale, lineCap: .round)
             )
             context.stroke(
                 arc(center: center, radius: radius, to: ringPercent),
                 with: .style(.tint),
-                style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                style: StrokeStyle(lineWidth: 6 * scale, lineCap: .round)
             )
         }
         .animation(isDragging ? nil : .snappy(duration: 0.35), value: ringPercent)
@@ -102,7 +102,7 @@ struct SpeedWheelPicker: View {
     private var teeth: some View {
         Canvas { context, size in
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
-            let outer = size.width / 2 - inset - 16
+            let outer = size.width / 2 - inset - 16 * scale
             let count = Int(360 / degreesPerPercent)
 
             for index in 0..<count {
@@ -110,7 +110,7 @@ struct SpeedWheelPicker: View {
                 let angle = Angle.degrees(Double(index) * degreesPerPercent)
                 var path = Path()
                 path.move(to: point(from: center, radius: outer, angle: angle))
-                path.addLine(to: point(from: center, radius: outer - (isMajor ? 14 : 8), angle: angle))
+                path.addLine(to: point(from: center, radius: outer - (isMajor ? 14 : 8) * scale, angle: angle))
                 context.stroke(
                     path,
                     with: .style(HierarchicalShapeStyle.primary.opacity(isMajor ? 0.35 : 0.18)),
@@ -129,17 +129,17 @@ struct SpeedWheelPicker: View {
 
             VStack(spacing: 2) {
                 Text("SPEED")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .font(.system(size: 10 * scale, weight: .semibold, design: .rounded))
                     .kerning(1.6)
                     .foregroundStyle(.secondary)
 
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
                     Text("\(displayPercent)")
-                        .font(.system(size: 52, weight: .bold, design: .rounded))
+                        .font(.system(size: 52 * scale, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .contentTransition(.numericText())
                     Text("%")
-                        .font(.system(size: 22, weight: .semibold, design: .rounded))
+                        .font(.system(size: 22 * scale, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
                 .animation(.snappy(duration: 0.15), value: displayPercent)
@@ -209,7 +209,10 @@ struct SpeedWheelPicker: View {
     /// Unrounded, so the arc grows smoothly rather than stepping.
     private var ringPercent: Double { dragPercent ?? Double(currentPercent) }
 
-    private var inset: CGFloat { 12 }
+    /// Every size inside the wheel is drawn for a 260pt dial and scales with
+    /// it, so a short phone's smaller wheel keeps its proportions.
+    private var scale: CGFloat { diameter / 260 }
+    private var inset: CGFloat { 12 * scale }
 
     /// Screen angles run 0° at 3 o'clock, clockwise, so the gap is centred on 90°.
     private var sweep: Double { 284 }

@@ -40,7 +40,9 @@ struct PlaybackScrubber: View {
     }
 
     var body: some View {
-        VStack(spacing: 6) {
+        // The bar's 44pt is touch area around a 6pt track, so the labels tuck
+        // up under the track rather than under the touch area.
+        VStack(spacing: -4) {
             bar
             labels
         }

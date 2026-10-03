@@ -76,7 +76,11 @@ struct MarkerRangeEditor: View {
             strip
                 .frame(height: Self.barHeight + Self.labelHeight + 8)
         }
-        .onAppear { recentre() }
+        .onAppear {
+            // A short clip is a sliver on the whole song, so it opens zoomed in.
+            if let end, end - start <= 25 { zoom = .thirty }
+            recentre()
+        }
         .onChange(of: zoom) { recentre() }
         // Nudges and the typed fields can push a handle out of view.
         .onChange(of: start) { if !window.contains(start) { recentre() } }
