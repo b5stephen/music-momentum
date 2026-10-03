@@ -7,6 +7,7 @@ The palette and visual language for the app and its website. The app's colours c
 | Name | Hex | Role |
 |---|---|---|
 | Coral | `#FF6640` | The accent. `AccentColor` in the asset catalog, Display P3 `1.00 0.33 0.16` light and `1.00 0.40 0.24` dark (lighter so it doesn't go muddy on black). `#FF6640` is the sRGB stand-in the website uses. |
+| On-accent | `#1A0A05` | Text and glyphs on a solid coral fill. `OnAccent` in the asset catalog; the website's text on coral buttons. |
 | Amber | `#FFB23E` | Taken from the app icon's orange. Website only so far. |
 | Rose | `#FF4F8B` | Website only so far. |
 | Violet | `#9C8CFF` | Website only so far; the website uses it for iCloud sync. |
@@ -21,7 +22,7 @@ On the website, each feature gets its own accent: coral for speed, amber for mar
 
 - **One tint.** Coral is the only accent in the app, applied through `.tint`. Amber, rose and violet belong to the website and marketing. Before bringing one into the app, give it a job the tint can't do, and record that job here.
 - **Coral means "on" or "act on this".** It marks the loop when it's running, a looping clip, the chip that prompts you to save, and play/pause. Don't use it for decoration, or it stops meaning anything.
-- **Fill carries state; glyph carries kind.** A marker pill is idle in `.quaternary`, cued at `.tint` 12%, and looping in solid `.tint` with white text. A dot marks a point and `SpanGlyph` marks a clip, so the fill never has to explain what a marker is.
+- **Fill carries state; glyph carries kind.** A marker pill is idle in `.quaternary`, cued at `.tint` 12%, and looping in solid `.tint` with `OnAccent` text. A dot marks a point and `SpanGlyph` marks a clip, so the fill never has to explain what a marker is.
 - **Only one state shouts.** Looping is the one solid-tint state. Cued keeps the primary text colour and only hints through its fill and glyph.
 - **Chips:** a chip that prompts you to act is `.tint` at 14% with tinted text; a settled chip is `.quaternary` with secondary text.
 - **Round controls** (loop, mark) are 46pt circles: `.tint` fill with a white glyph when on, and `.quaternary` with a secondary glyph when off.
@@ -36,7 +37,8 @@ On the website, each feature gets its own accent: coral for speed, amber for mar
 ## Contrast
 
 - Coral on black is about 7:1, so tinted text and icons on the dark background are fine.
-- White on coral is only about 2.9:1, which passes only for bold or large type. The looping pill's white footnote text falls below the 4.5:1 that small text needs. Check this before adding any more white-on-coral text. The website puts dark text (`#1A0A05`) on coral buttons for this reason.
+- White on coral is only about 2.9:1, under the 4.5:1 that small text needs. Text on a solid coral fill uses `OnAccent` (about 6.5:1 on the dark-mode coral), as the looping pill and the website's buttons do.
+- Two places still put white on coral: the selected Point/Clip switch in the marker editor (footnote text), and the loop button's glyph when it's on. Move them to `OnAccent` when they're next touched.
 - Touch targets are at least 44pt.
 
 ## Website

@@ -182,11 +182,12 @@ struct MarkerPills: View {
     }
 
     /// Cued keeps the primary text so only the fill and glyph hint at it;
-    /// looping is the one state that shouts.
+    /// looping is the one state that shouts. White on the coral tint is under
+    /// 3:1, too faint for footnote text, so looping uses the dark on-accent colour.
     private func foreground(_ state: PillState) -> AnyShapeStyle {
         switch state {
         case .idle, .cued: AnyShapeStyle(.primary)
-        case .looping: AnyShapeStyle(.white)
+        case .looping: AnyShapeStyle(Color.onAccent)
         }
     }
 
