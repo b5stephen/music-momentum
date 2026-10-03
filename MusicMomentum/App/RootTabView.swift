@@ -69,7 +69,7 @@ struct RootTabView: View {
 
     /// Landscape, with room for Saved beside a phone-width card. Narrower
     /// than this, the saved rows' marker pills start to wrap.
-    private static func floats(_ size: CGSize) -> Bool {
+    private nonisolated static func floats(_ size: CGSize) -> Bool {
         size.width > size.height && size.width >= 1000
     }
 }
