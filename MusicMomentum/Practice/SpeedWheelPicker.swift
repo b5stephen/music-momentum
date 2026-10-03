@@ -13,6 +13,7 @@ import UIKit
 /// limit — only the value and the arc around the rim do.
 struct SpeedWheelPicker: View {
     @Binding var speed: Double
+    @Environment(\.smokedFill) private var smokedFill
 
     /// A double tap toggles between this and full speed; with none, it only
     /// ever goes to full speed.
@@ -77,7 +78,7 @@ struct SpeedWheelPicker: View {
     /// Hierarchical rather than a system fill, so it takes the cover's
     /// colour on the practice screen.
     private var rim: some View {
-        Circle().fill(.quaternary)
+        Circle().fill(smokedFill.map(AnyShapeStyle.init) ?? AnyShapeStyle(.quaternary))
     }
 
     private var gauge: some View {

@@ -426,10 +426,7 @@ struct PracticeView: View {
             .font(.footnote.weight(.medium))
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(
-                isPrompting ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary),
-                in: Capsule()
-            )
+            .background { ChipFill(isPrompting: isPrompting) }
             .foregroundStyle(isPrompting ? AnyShapeStyle(textTint) : AnyShapeStyle(.secondary))
     }
 
@@ -584,6 +581,7 @@ private struct ArtworkGround: ViewModifier {
                 .tint(palette.foreground)
                 .backgroundStyle(palette.background)
                 .environment(\.onAccent, palette.background)
+                .environment(\.smokedFill, palette.isBright ? palette.shadow.opacity(0.24) : nil)
                 .environment(\.colorScheme, .dark)
                 .background { backdrop(palette) }
         } else {
@@ -643,6 +641,21 @@ private final class DriftClock {
             runningSince = nil
         }
         return banked + (runningSince.map { date.timeIntervalSince($0) } ?? 0)
+    }
+}
+
+/// A chip's capsule: tinted when it prompts, light glass when settled, and
+/// smoked either way on a bright cover.
+private struct ChipFill: View {
+    var isPrompting: Bool
+    @Environment(\.smokedFill) private var smokedFill
+
+    var body: some View {
+        if let smokedFill {
+            Capsule().fill(smokedFill)
+        } else {
+            Capsule().fill(isPrompting ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary))
+        }
     }
 }
 

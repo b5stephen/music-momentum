@@ -18,12 +18,16 @@ struct ArtworkPalette: Equatable {
     /// What "on" fills put their glyph in.
     var background: Color
     var foreground: Color
+    /// Light glass washes out on a bright ground, so controls there take a
+    /// smoked fill instead.
+    var isBright: Bool
 
     init(ground: Ground) {
         mesh = ground.mesh.map { Color(cgColor: $0.cgColor) }
         shadow = Color(cgColor: ground.shadow.cgColor)
         background = Color(cgColor: ground.glyph.cgColor)
         foreground = Color(cgColor: ground.text.cgColor)
+        isBright = ground.mesh[3...5].map(\.l).reduce(0, +) / 3 > 0.6
     }
 
     init(cover: OKLCH) {
@@ -188,4 +192,8 @@ extension EnvironmentValues {
     /// Text and glyphs on a solid tint fill. The asset's dark brown everywhere
     /// but the practice screen, where the tint is the cover's text colour.
     @Entry var onAccent: Color = .onAccent
+    /// The fill of settled controls (the speed wheel's rim, Practice's chips)
+    /// on a bright cover, where the usual light glass washes out. `nil` keeps
+    /// the light glass.
+    @Entry var smokedFill: Color? = nil
 }

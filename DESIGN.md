@@ -31,7 +31,7 @@ On the website, each feature gets its own accent: coral for speed, amber for mar
 - **Saved list:** markers are plain `.quaternary` pills and the Mark button is a grey circle with `MarkGlyph`, the practice screen's mark button in miniature. The speed pill is the only coral on a row.
 - **Round controls** (loop, mark) are 46pt circles: `.tint` fill with an `OnAccent` glyph when on, and `.quaternary` with a secondary glyph when off.
 - **Scrubber:** the played part is `.tint` at 45%, clips are `.primary` at 25%, and a looping clip is solid `.tint`, ringed in the background colour so the played fill can't swallow it.
-- **Speed wheel:** a flat `.quaternary` rim, no bevel or gradient, so it takes whatever foreground it sits on.
+- **Speed wheel:** a flat `.quaternary` rim, no bevel or gradient, so it takes whatever foreground it sits on. On a bright cover it's smoked instead (see below).
 - **Banners stay away from coral's hue.** Warnings are yellow. Errors sit on neutral grey with a coral icon. Banner text is always the primary label colour, so only the icon and background carry colour. Don't use orange or red near the accent; they read as the same colour. The same goes for inline warnings: a song gone from the library gets a yellow triangle and secondary text, not red text.
 
 ## Artwork colour on Practice
@@ -47,6 +47,7 @@ The ground is tuned against Apple Music on the same iPhone, in OKLCH. The aim is
 - **Brightest behind the title and dial,** the mesh's middle row lifted a little, then darkening from a third of the way down towards a very dark shade of the cover's own colour: black greys it.
 - **The mesh drifts while the song plays,** its inner points slowly wandering on unrelated periods, and holds still while it's paused or when Reduce Motion is on.
 - **Light text always:** near-white tinted with the cover's hue. The screen is always in dark appearance, so every hierarchical style and `.quaternary` fill becomes the light text at low opacity, which reads as glass on any ground. Never fills of a dark text colour on a light ground: that's what made the first version look muddy.
+- **Smoked glass on bright covers.** Where the ground is bright (Count on Me's gold), light glass washes out, so the chips and the speed wheel's rim take the ground's dark shadow colour at 24% instead. Darker grounds keep light glass.
 - **"On"** (loop button, looping pill, speed arc, Play) is a solid fill of the text colour with a darker shade of the ground on top.
 - **The selected tab** takes the text colour while Practice is showing, because coral vanishes on a red or orange cover.
 
