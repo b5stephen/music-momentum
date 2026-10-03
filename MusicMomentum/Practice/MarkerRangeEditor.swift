@@ -12,7 +12,7 @@ import UIKit
 ///
 /// No waveform: Apple Music tracks are DRM-protected and neither MusicKit nor
 /// `MPMediaItem` gives out samples. Zoom does the job instead — a point is
-/// most of a second across a whole song, about 15ms in the 5s window.
+/// most of a second across a whole song, about 6ms zoomed all the way in.
 struct MarkerRangeEditor: View {
     @Binding var start: TimeInterval
     @Binding var end: TimeInterval?
@@ -22,19 +22,10 @@ struct MarkerRangeEditor: View {
     var onScrub: () -> Void = {}
     var onSeek: (TimeInterval) -> Void = { _ in }
 
-    enum Zoom: String, CaseIterable, Identifiable {
-        case whole = "Song", thirty = "30s", five = "5s"
-        var id: String { rawValue }
-        var span: TimeInterval? {
-            switch self {
-            case .whole: nil
-            case .thirty: 30
-            case .five: 5
-            }
-        }
-    }
-
-    @State private var zoom: Zoom = .whole
+    /// Seconds across the strip.
+    @State private var zoomSpan: TimeInterval = .infinity
+    /// How many zoom detents are wider than the span; a change is a click.
+    @State private var zoomBand = 0
     @State private var windowStart: TimeInterval = 0
     @State private var drag: Drag?
     /// Where the playhead is being dragged to. The seek waits for the drop:
@@ -56,7 +47,9 @@ struct MarkerRangeEditor: View {
         case pan(from: TimeInterval)
     }
 
-    private static let grabRadius: CGFloat = 28
+    /// Half of a 44pt target. Wider, and the handles and playhead claimed
+    /// most of a zoomed strip, leaving nowhere to pan from.
+    private static let grabRadius: CGFloat = 22
     /// The touch area; the track drawn across its middle is much thinner.
     private static let barHeight: CGFloat = 44
     private static let trackHeight: CGFloat = 8
@@ -70,9 +63,12 @@ struct MarkerRangeEditor: View {
     /// Further than this and a touch in the open is a pan, not a tap.
     private static let tapSlop: CGFloat = 6
     private static let labelHeight: CGFloat = 18
+    /// Below the labels, so the panning lane is an easy target.
+    private static let laneBottomPadding: CGFloat = 14
+    private static let minimumSpan: TimeInterval = 2
 
     private var span: TimeInterval {
-        min(zoom.span ?? duration, duration)
+        max(min(zoomSpan, duration), min(Self.minimumSpan, duration))
     }
 
     private var window: ClosedRange<TimeInterval> {
@@ -80,33 +76,119 @@ struct MarkerRangeEditor: View {
     }
 
     var body: some View {
-        VStack(spacing: 12) {
+        // Room for the drag bubble, which rides above the strip.
+        VStack(spacing: 20) {
             HStack {
-                Text("\(PlaybackScrubber.timeLabel(window.lowerBound)) – \(PlaybackScrubber.timeLabel(window.upperBound))")
-                    .font(.footnote.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Picker("Zoom", selection: $zoom) {
-                    ForEach(Zoom.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 150)
+                zoomChip
+                zoomSlider
             }
 
             strip
-                .frame(height: Self.barHeight + Self.labelHeight + 8)
+                .frame(height: Self.barHeight + Self.labelHeight + Self.laneBottomPadding)
         }
         .onAppear {
             // A short clip is a sliver on the whole song, so it opens zoomed in.
-            if let end, end - start <= 25 { zoom = .thirty }
+            if let end, end - start <= 25 { zoomSpan = 30 }
             recentre()
+            zoomBand = Self.zoomDetents.count { $0 > span }
         }
-        .onChange(of: zoom) { recentre() }
         // Nudges and the typed fields can push a handle out of view.
         .onChange(of: start) { if !window.contains(start) { recentre() } }
         .onChange(of: end) { if let end, !window.contains(end) { recentre() } }
         // The time fields carry the same values for VoiceOver.
         .accessibilityHidden(true)
+    }
+
+    /// Logarithmic, so each stretch of travel zooms by the same factor: 2s
+    /// to 10s gets as much room as a minute to the whole song.
+    private var zoomSlider: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "minus.magnifyingglass")
+            Slider(value: zoomLevel, in: 0...1)
+                // Coral is for the clip; a zoom setting isn't "on".
+                .tint(.secondary)
+            Image(systemName: "plus.magnifyingglass")
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+    }
+
+    private var zoomLevel: Binding<Double> {
+        Binding(
+            get: { Self.zoomLevel(span: span, duration: duration, minimum: Self.minimumSpan) },
+            set: { level in
+                let raw = Self.span(atZoomLevel: level, duration: duration, minimum: Self.minimumSpan)
+                zoom(to: Self.snappedSpan(raw))
+                zoomBand = Self.zoomDetents.count { $0 > raw }
+            }
+        )
+    }
+
+    /// Steps through the old presets, so a known zoom is still one tap away.
+    private var zoomChip: some View {
+        Button {
+            let presets = Self.zoomPresets.filter { $0 < duration }
+            let next = presets.first { $0 < span - 0.01 }
+            zoom(to: next ?? duration)
+            zoomBand = Self.zoomDetents.count { $0 > span }
+        } label: {
+            Text(Self.spanLabel(span, duration: duration))
+                .font(.footnote.weight(.medium).monospacedDigit())
+                .lineLimit(1)
+                .frame(minWidth: 72)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(.quaternary, in: Capsule())
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .sensoryFeedback(.selection, trigger: zoomBand)
+    }
+
+    /// Holds the marker still if it's in view, so zooming in from the whole
+    /// song doesn't lose it.
+    private func zoom(to newSpan: TimeInterval) {
+        let marker = end.map { (start + $0) / 2 } ?? start
+        let focus = window.contains(marker) ? marker : window.lowerBound + span / 2
+        let fraction = (focus - windowStart) / span
+        zoomSpan = newSpan
+        windowStart = clampWindowStart(focus - fraction * span)
+    }
+
+    /// The chip's stops, widest first; the whole song comes after the last.
+    private static let zoomPresets: [TimeInterval] = [30, 5]
+    /// Round spans the slider clicks at and settles on.
+    nonisolated static let zoomDetents: [TimeInterval] = [2, 5, 10, 15, 30, 60, 120, 300]
+
+    /// Within a few percent of a detent lands on it, so 5s can be set
+    /// exactly with the slider.
+    nonisolated static func snappedSpan(_ span: TimeInterval) -> TimeInterval {
+        zoomDetents.first { abs(log(span / $0)) < 0.05 } ?? span
+    }
+
+    /// Tenths under 10s, so the last stretch of the slider still reads as
+    /// moving.
+    nonisolated static func spanLabel(_ span: TimeInterval, duration: TimeInterval) -> String {
+        if span >= duration - 0.05 { return "Whole song" }
+        if span < 10 {
+            let tenths = Int((span * 10).rounded())
+            return tenths % 10 == 0 ? "\(tenths / 10)s" : "\(tenths / 10).\(tenths % 10)s"
+        }
+        let seconds = Int(span.rounded())
+        guard seconds >= 60 else { return "\(seconds)s" }
+        return seconds % 60 == 0 ? "\(seconds / 60)m" : "\(seconds / 60)m \(seconds % 60)s"
+    }
+
+    /// 0 is the whole song, 1 is `minimum` seconds across.
+    nonisolated static func span(atZoomLevel level: Double, duration: TimeInterval, minimum: TimeInterval) -> TimeInterval {
+        guard duration > minimum else { return duration }
+        return duration * pow(minimum / duration, level)
+    }
+
+    nonisolated static func zoomLevel(span: TimeInterval, duration: TimeInterval, minimum: TimeInterval) -> Double {
+        guard duration > minimum else { return 0 }
+        return max(0, min(1, log(duration / span) / log(duration / minimum)))
     }
 
     private var strip: some View {
@@ -495,9 +577,14 @@ struct MarkerRangeEditor: View {
     }
 
     /// The nearest handle wins, except above the track, where the playhead's
-    /// knob is. A drag in the open moves the playhead on the whole-song view,
-    /// where there's nothing to pan; zoomed in it pans, and a tap seeks.
+    /// knob is. Below the track, on the labels, nothing is grabbed, so there's
+    /// always somewhere to pan from. A drag in the open moves the playhead on
+    /// the whole-song view, where there's nothing to pan; zoomed in it pans,
+    /// and a tap seeks.
     private func pick(at touch: CGPoint, width: CGFloat) -> Drag {
+        let open: Drag = span >= duration ? .playhead : .pan(from: windowStart)
+        guard touch.y <= Self.barHeight else { return open }
+
         let playheadDistance = window.contains(playhead)
             ? abs(x(playhead, width: width) - touch.x) : .infinity
         let aboveTrack = touch.y < (Self.barHeight - Self.trackHeight) / 2
@@ -511,7 +598,7 @@ struct MarkerRangeEditor: View {
             return .playhead
         }
         if nearest.1 <= Self.grabRadius { return nearest.0 }
-        return zoom == .whole ? .playhead : .pan(from: windowStart)
+        return open
     }
 }
 

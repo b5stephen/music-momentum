@@ -44,4 +44,40 @@ struct MarkerRangeEditorTests {
         let ratio = major / MarkerRangeEditor.minorTickInterval(for: major)
         #expect(abs(ratio - ratio.rounded()) < 1e-9)
     }
+
+    @Test("Zoom slider ends are the whole song and the closest zoom")
+    func zoomEnds() {
+        #expect(MarkerRangeEditor.span(atZoomLevel: 0, duration: 245, minimum: 2) == 245)
+        #expect(abs(MarkerRangeEditor.span(atZoomLevel: 1, duration: 245, minimum: 2) - 2) < 1e-9)
+    }
+
+    @Test("Zoom level and span round-trip", arguments: [2.0, 5, 30, 120, 245])
+    func zoomRoundTrip(span: TimeInterval) {
+        let level = MarkerRangeEditor.zoomLevel(span: span, duration: 245, minimum: 2)
+        #expect(abs(MarkerRangeEditor.span(atZoomLevel: level, duration: 245, minimum: 2) - span) < 1e-6)
+    }
+
+    @Test("A song shorter than the closest zoom doesn't zoom")
+    func shortSong() {
+        #expect(MarkerRangeEditor.span(atZoomLevel: 1, duration: 1.5, minimum: 2) == 1.5)
+        #expect(MarkerRangeEditor.zoomLevel(span: 1.5, duration: 1.5, minimum: 2) == 0)
+    }
+
+    @Test("Zoom label reads as a length", arguments: [
+        (245.0, "Whole song"),
+        (90, "1m 30s"),
+        (120, "2m"),
+        (30, "30s"),
+        (4.5, "4.5s"),
+        (5, "5s"),
+    ])
+    func spanLabel(span: TimeInterval, text: String) {
+        #expect(MarkerRangeEditor.spanLabel(span, duration: 245) == text)
+    }
+
+    @Test("Slider settles on a nearby detent and leaves the rest alone")
+    func detentSnap() {
+        #expect(MarkerRangeEditor.snappedSpan(5.1) == 5)
+        #expect(MarkerRangeEditor.snappedSpan(7) == 7)
+    }
 }
