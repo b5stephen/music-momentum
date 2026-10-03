@@ -206,7 +206,7 @@ struct MarkerEditorView: View {
                 isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary),
                 in: Capsule()
             )
-            .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+            .foregroundStyle(isSelected ? AnyShapeStyle(Color.onAccent) : AnyShapeStyle(.primary))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)

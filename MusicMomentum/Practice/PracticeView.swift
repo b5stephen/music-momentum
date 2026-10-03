@@ -195,7 +195,7 @@ struct PracticeView: View {
                     controller.isLoopOn ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary),
                     in: Circle()
                 )
-                .foregroundStyle(controller.isLoopOn ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
+                .foregroundStyle(controller.isLoopOn ? AnyShapeStyle(Color.onAccent) : AnyShapeStyle(.secondary))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Loop")

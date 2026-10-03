@@ -279,7 +279,7 @@ p { margin: 0; }
 .transport { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center; justify-items: center; width: 100%; padding: 0 10px; margin-top: 22px; }
 .round { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(118, 118, 128, 0.24); color: rgba(235, 235, 245, 0.6); }
 .round svg { width: 18px; height: 18px; }
-.round.on { background: var(--coral); color: #fff; }
+.round.on { background: var(--coral); color: #1A0A05; }
 .skip { color: var(--coral); }
 .skip svg { width: 26px; height: 26px; }
 .big { width: 58px; height: 58px; border-radius: 50%; background: var(--coral); display: grid; place-items: center; color: #000; }
@@ -318,7 +318,7 @@ p { margin: 0; }
 .cell-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .cell-row .name { font-size: 14px; }
 .cell-row .pill { background: rgba(118, 118, 128, 0.24); }
-.cell-row .pill.sel { background: var(--coral); color: #fff; }
+.cell-row .pill.sel { background: var(--coral); color: #1A0A05; }
 .range-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .range-head span { font-size: 10.5px; color: rgba(235, 235, 245, 0.6); font-variant-numeric: tabular-nums; }
 .seg { display: flex; padding: 2px; border-radius: 999px; background: rgba(118, 118, 128, 0.24); font-size: 10px; font-weight: 500; }

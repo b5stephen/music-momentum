@@ -25,7 +25,7 @@ On the website, each feature gets its own accent: coral for speed, amber for mar
 - **Fill carries state; glyph carries kind.** A marker pill is idle in `.quaternary`, cued at `.tint` 12%, and looping in solid `.tint` with `OnAccent` text. A dot marks a point and `SpanGlyph` marks a clip, so the fill never has to explain what a marker is.
 - **Only one state shouts.** Looping is the one solid-tint state. Cued keeps the primary text colour and only hints through its fill and glyph.
 - **Chips:** a chip that prompts you to act is `.tint` at 14% with tinted text; a settled chip is `.quaternary` with secondary text.
-- **Round controls** (loop, mark) are 46pt circles: `.tint` fill with a white glyph when on, and `.quaternary` with a secondary glyph when off.
+- **Round controls** (loop, mark) are 46pt circles: `.tint` fill with an `OnAccent` glyph when on, and `.quaternary` with a secondary glyph when off.
 - **Scrubber:** the played part is `.tint` at 45%, clips are `.primary` at 25%, and a looping clip is solid `.tint`, ringed in the background colour so the played fill can't swallow it.
 - **Banners stay away from coral's hue.** Warnings are yellow. Errors sit on neutral grey with a coral icon. Banner text is always the primary label colour, so only the icon and background carry colour. Don't use orange or red near the accent; they read as the same colour.
 
@@ -37,8 +37,7 @@ On the website, each feature gets its own accent: coral for speed, amber for mar
 ## Contrast
 
 - Coral on black is about 7:1, so tinted text and icons on the dark background are fine.
-- White on coral is only about 2.9:1, under the 4.5:1 that small text needs. Text on a solid coral fill uses `OnAccent` (about 6.5:1 on the dark-mode coral), as the looping pill and the website's buttons do.
-- Two places still put white on coral: the selected Point/Clip switch in the marker editor (footnote text), and the loop button's glyph when it's on. Move them to `OnAccent` when they're next touched.
+- White on coral is only about 2.9:1, under the 4.5:1 that small text needs. Text on a solid coral fill uses `OnAccent` (about 6.5:1 on the dark-mode coral), as the looping pill, the loop button when it's on, the marker editor's selected Point/Clip switch and the website's buttons do. Don't put white on coral.
 - Touch targets are at least 44pt.
 
 ## Website
