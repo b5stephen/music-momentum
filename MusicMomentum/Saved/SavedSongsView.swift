@@ -12,6 +12,11 @@ struct SavedSongsView: View {
     /// Beside the floating practice card, which already names the screen's
     /// job and offers the way to pick a song.
     var isBesidePractice = false
+    /// The loaded song's cover colours, when the card beside is painted in them.
+    var practicePalette: ArtworkPalette?
+    /// Stands in for `controller.selectedSong` in previews, since `Song` has
+    /// no public initialiser.
+    var previewCurrentID: String?
     /// Brings the practice tab forward.
     let onPractice: () -> Void
 
@@ -78,11 +83,13 @@ struct SavedSongsView: View {
                     List {
                         ForEach(songs) { song in
                             let markers = song.sortedMarkers
+                            let isCurrent = (controller.selectedSong?.id.rawValue ?? previewCurrentID) == song.songID
                             SavedSongRow(
                                 song: song,
                                 isLoading: loadingID == song.songID,
-                                isCurrent: controller.selectedSong?.id.rawValue == song.songID,
+                                isCurrent: isCurrent,
                                 isPlaying: controller.isPlaying,
+                                chips: chipStyle(isCurrent: isCurrent),
                                 onPlay: { practice(song) },
                                 onEditSpeed: { editing = song },
                                 onAddMarker: { openEditor(song) }
@@ -225,6 +232,14 @@ struct SavedSongsView: View {
             .fill(.separator)
             .frame(height: 0.5)
             .padding(.leading, SavedSongRow.titleInset)
+    }
+
+    /// Coral beside a cover-coloured card clashes, so there the chips go
+    /// neutral and only the loaded song's take the card's colour.
+    private func chipStyle(isCurrent: Bool) -> SavedSongRow.ChipStyle {
+        guard isBesidePractice else { return .accent }
+        if isCurrent, let practicePalette { return .cover(practicePalette.mesh[4]) }
+        return .neutral
     }
 
     // MARK: - Actions
@@ -378,9 +393,34 @@ private struct SavedSongRow: View {
     /// Loaded in the practice screen, which on a wide iPad is right beside it.
     let isCurrent: Bool
     let isPlaying: Bool
+    let chips: ChipStyle
     let onPlay: () -> Void
     let onEditSpeed: () -> Void
     let onAddMarker: () -> Void
+
+    enum ChipStyle {
+        case accent, neutral
+        /// Filled with the cover's colour, with primary text: the cover's own
+        /// colours are tuned for light text on a dark ground, so as text they
+        /// fail on a light page.
+        case cover(Color)
+
+        var fill: AnyShapeStyle {
+            switch self {
+            case .accent: AnyShapeStyle(.tint.opacity(0.12))
+            case .neutral: AnyShapeStyle(.quaternary)
+            case .cover(let color): AnyShapeStyle(color.opacity(0.3))
+            }
+        }
+
+        var text: AnyShapeStyle {
+            switch self {
+            case .accent: AnyShapeStyle(Color.accentText)
+            case .neutral: AnyShapeStyle(.secondary)
+            case .cover: AnyShapeStyle(.primary)
+            }
+        }
+    }
 
     @ScaledMetric(relativeTo: .subheadline) private var markGlyphSize: CGFloat = 16
 
@@ -419,25 +459,25 @@ private struct SavedSongRow: View {
                     Text("\(song.percent)%")
                         .font(.subheadline.weight(.semibold))
                         .monospacedDigit()
-                        .foregroundStyle(Color.accentText)
+                        .foregroundStyle(chips.text)
                 }
                 // A plain button in a `List` row would let the whole row trigger it.
                 .buttonStyle(.borderless)
                 .buttonBorderShape(.capsule)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
-                .background(.tint.opacity(0.12), in: .capsule)
+                .background(chips.fill, in: .capsule)
                 .accessibilityLabel("Speed, \(song.percent) percent")
                 .accessibilityHint("Change the practice speed")
 
                 Button(action: onAddMarker) {
                     MarkGlyph()
                         .frame(width: markGlyphSize, height: markGlyphSize)
-                        .foregroundStyle(Color.accentText)
+                        .foregroundStyle(chips.text)
                 }
                 .buttonStyle(.borderless)
                 .padding(6)
-                .background(.tint.opacity(0.12), in: .circle)
+                .background(chips.fill, in: .circle)
                 .accessibilityLabel("Add marker")
             }
         }
