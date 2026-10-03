@@ -27,6 +27,9 @@ struct MarkerEditorView: View {
     /// How far before the end handle the End cue drops the playhead.
     private static let leadIn: TimeInterval = 2
     private static let defaultClipLength: TimeInterval = 4
+    /// Half Practice's 10: here it's for finding a spot, and 10 would leap
+    /// clean across the 5s zoom.
+    private static let skipInterval: TimeInterval = 5
 
     init(
         marker: SongMarker? = nil,
@@ -114,7 +117,9 @@ struct MarkerEditorView: View {
                         end: $end,
                         duration: duration,
                         playhead: controller.playbackTime,
-                        onGrab: { selected = $0 }
+                        onGrab: { selected = $0 },
+                        onScrub: { controller.isScrubbing = true },
+                        onSeek: { controller.endScrub(at: $0) }
                     )
                     .padding(.vertical, 8)
                 }
@@ -325,20 +330,27 @@ struct MarkerEditorView: View {
     /// The cue buttons leave the song running: a snippet that stops itself
     /// can't tell you whether the clip is the right piece of music.
     private var transportRow: some View {
-        HStack(spacing: 8) {
-            playPauseButton
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                skipButton(-Self.skipInterval)
+                playPauseButton
+                skipButton(Self.skipInterval)
+            }
 
-            if let end {
-                cueButton("Start", spoken: "Play from the start of the clip") {
-                    controller.playFrom(start)
-                }
-                // Before the end, so you hear the clip run into it.
-                cueButton("End", spoken: "Play into the end of the clip") {
-                    controller.playFrom(max(start, end - Self.leadIn))
-                }
-            } else {
-                cueButton("Play from here", spoken: "Play from the marker") {
-                    controller.playFrom(start)
+            // Each cue carries the dot of the time column it plays from.
+            HStack(spacing: 8) {
+                if let end {
+                    cueButton("Play from start", handle: .start, spoken: "Play from the start of the clip") {
+                        controller.playFrom(start)
+                    }
+                    // Before the end, so you hear the clip run into it.
+                    cueButton("Play into end", handle: .end, spoken: "Play into the end of the clip") {
+                        controller.playFrom(max(start, end - Self.leadIn))
+                    }
+                } else {
+                    cueButton("Play from marker", handle: .start, spoken: "Play from the marker") {
+                        controller.playFrom(start)
+                    }
                 }
             }
         }
@@ -351,22 +363,41 @@ struct MarkerEditorView: View {
         } label: {
             Image(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
                 .font(.footnote.weight(.semibold))
-                .frame(width: 52)
-                .frame(minHeight: 28)
+                .frame(maxWidth: .infinity, minHeight: 28)
         }
         .accessibilityLabel(controller.isPlaying ? "Pause" : "Play")
     }
 
+    private func skipButton(_ offset: TimeInterval) -> some View {
+        let seconds = Int(abs(offset))
+        return Button {
+            controller.skip(by: offset)
+        } label: {
+            Image(systemName: offset < 0 ? "gobackward.\(seconds)" : "goforward.\(seconds)")
+                .font(.subheadline.weight(.medium))
+                .frame(maxWidth: .infinity, minHeight: 28)
+        }
+        .accessibilityLabel(offset < 0 ? "Back \(seconds) seconds" : "Forward \(seconds) seconds")
+    }
+
     private func cueButton(
         _ title: String,
+        handle: MarkerHandle,
         spoken: String,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            Label(title, systemImage: "arrow.turn.down.right")
-                .font(.footnote.weight(.medium))
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, minHeight: 28)
+            Label {
+                Text(title)
+            } icon: {
+                Circle()
+                    .fill(handle == .start ? AnyShapeStyle(.secondary) : AnyShapeStyle(.clear))
+                    .strokeBorder(.secondary, lineWidth: 1.5)
+                    .frame(width: 8, height: 8)
+            }
+            .font(.footnote.weight(.medium))
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, minHeight: 28)
         }
         .accessibilityLabel(spoken)
     }

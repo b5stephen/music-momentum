@@ -25,10 +25,11 @@ final class PlaybackController {
     /// True while last launch's song is being looked up, so the practice
     /// screen can hold off showing "nothing loaded" for a song that's coming.
     private(set) var isRestoringLastSong = false
-    /// Read off the player, not mirrored: `MusicPlayer.State` is `Observable`
-    /// (iOS 26.4), so this stays right when playback is started or stopped
-    /// from outside the app.
-    var isPlaying: Bool { player.state.playbackStatus == .playing }
+    /// Mirrored: read straight off `player.state` (`Observable` since iOS
+    /// 26.4), the marker sheet's button was left showing Pause after the song
+    /// stopped. The status stream and the ticker both refresh it, so it still
+    /// follows playback started or stopped from outside the app.
+    private(set) var isPlaying = false
     var authorizationStatus: MusicAuthorization.Status = MusicAuthorization.currentStatus
 
     /// MusicKit publishes no change signal for the playhead, so it's polled.
@@ -73,6 +74,7 @@ final class PlaybackController {
     /// Kept out of `init` so the class stays easy to preview.
     func configure(modelContext: ModelContext) {
         self.modelContext = modelContext
+        refreshIsPlaying()
         readPlaybackTime()
         startTicking()
         startObservingStatus()
@@ -91,6 +93,7 @@ final class PlaybackController {
             let statuses = Observations { @MainActor in ApplicationMusicPlayer.shared.state.playbackStatus }
             for await status in statuses {
                 guard let self else { return }
+                self.refreshIsPlaying()
                 guard status == .playing, self.selectedSong != nil,
                       abs(Double(self.player.state.playbackRate) - self.playbackRate) > 0.01
                 else { continue }
@@ -136,10 +139,16 @@ final class PlaybackController {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(250))
                 guard let self else { return }
+                self.refreshIsPlaying()
                 guard self.isPlaying, !self.isScrubbing else { continue }
                 self.readPlaybackTime()
             }
         }
+    }
+
+    private func refreshIsPlaying() {
+        let playing = player.state.playbackStatus == .playing
+        if playing != isPlaying { isPlaying = playing }
     }
 
     private func readPlaybackTime() {
@@ -267,6 +276,7 @@ final class PlaybackController {
     func togglePlayPause() {
         if isPlaying {
             player.pause()
+            refreshIsPlaying()
         } else {
             play()
         }
@@ -276,6 +286,7 @@ final class PlaybackController {
         Task {
             do {
                 try await playerBox.play()
+                refreshIsPlaying()
                 errorMessage = nil
                 hasPlayed = true
                 markPracticed()
@@ -310,7 +321,10 @@ final class PlaybackController {
     /// Pauses so the song doesn't run on while the user names the marker, and
     /// returns the playhead for the editor to open at.
     func pauseForMarking() -> TimeInterval {
-        if isPlaying { player.pause() }
+        if isPlaying {
+            player.pause()
+            refreshIsPlaying()
+        }
         return playbackTime
     }
 

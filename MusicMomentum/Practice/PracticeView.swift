@@ -119,27 +119,33 @@ struct PracticeView: View {
             SongPickerView { song in
                 Task { await controller.select(song: song) }
             }
+            .tint(.accentColor)
         }
         .sheet(item: $markerSheet) { sheet in
-            if let duration = controller.duration {
-                switch sheet {
-                case .new(let start):
-                    MarkerEditorView(
-                        initialStart: start,
-                        duration: duration,
-                        controller: controller,
-                        onSave: addMarker
-                    )
-                case .edit(let marker):
-                    MarkerEditorView(
-                        marker: marker,
-                        duration: duration,
-                        controller: controller,
-                        onSave: { name, start, end in update(marker, name: name, start: start, end: end) },
-                        onDelete: { delete(marker) }
-                    )
+            Group {
+                if let duration = controller.duration {
+                    switch sheet {
+                    case .new(let start):
+                        MarkerEditorView(
+                            initialStart: start,
+                            duration: duration,
+                            controller: controller,
+                            onSave: addMarker
+                        )
+                    case .edit(let marker):
+                        MarkerEditorView(
+                            marker: marker,
+                            duration: duration,
+                            controller: controller,
+                            onSave: { name, start, end in update(marker, name: name, start: start, end: end) },
+                            onDelete: { delete(marker) }
+                        )
+                    }
                 }
             }
+            // `RootTabView` tints the tab bar with the cover's near-white text
+            // colour, and sheets inherit it; on a light sheet it all but vanishes.
+            .tint(.accentColor)
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { controller.refreshPlaybackTime() }
