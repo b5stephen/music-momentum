@@ -125,6 +125,12 @@ struct SavedSongsView: View {
                     .environment(\.defaultMinListRowHeight, 0)
                 }
             }
+            // Beside the card, the stack's own opaque background would cut the
+            // cover's glow off in a hard line at the list's leading edge.
+            .containerBackground(
+                isBesidePractice ? AnyShapeStyle(.clear) : AnyShapeStyle(Color(.systemBackground)),
+                for: .navigation
+            )
             .navigationTitle(isBesidePractice ? "" : "Saved")
             .navigationBarTitleDisplayMode(isBesidePractice ? .inline : .automatic)
             .toolbar {
