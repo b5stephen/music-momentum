@@ -114,7 +114,7 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
 
             saved
                 .scrollContentBackground(.hidden)
-                .padding(.leading, cardWidth + Self.margin)
+                .padding(.leading, cardWidth + 2 * Self.margin)
 
             practice
                 .background(Color(.secondarySystemGroupedBackground))
@@ -165,7 +165,9 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
             .contentShape(.rect)
             .hoverEffect(.highlight)
             .gesture(
-                DragGesture(minimumDistance: 2)
+                // Global, because the handle moves with the width it sets: measured
+                // locally, each step shifts the frame the next translation is read in.
+                DragGesture(minimumDistance: 2, coordinateSpace: .global)
                     .onChanged { value in
                         let start = dragStartWidth ?? cardWidth
                         dragStartWidth = start

@@ -22,6 +22,9 @@ struct SavedSongsView: View {
     @AppStorage("savedSongOrder") private var order: SongOrder = .changed
 
     private var songs: [SavedSong] { order.sorted(recentlyChanged) }
+    /// Beside the card, the rows end as far from the window edge as the card
+    /// sits from every edge, so the page reads as one set of margins.
+    private var trailingInset: CGFloat { isBesidePractice ? 28 : 16 }
 
     @State private var showPicker = false
     @State private var editing: SavedSong?
@@ -82,7 +85,7 @@ struct SavedSongsView: View {
                                 onPlay: { practice(song) },
                                 onEditSpeed: { editing = song }
                             )
-                            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 0, trailing: 16))
+                            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 0, trailing: trailingInset))
                             .listRowSeparator(.hidden)
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) { delete(song) } label: {
@@ -94,7 +97,7 @@ struct SavedSongsView: View {
                             // place whether or not the song has markers.
                             MarkerPills(
                                 markers: song.sortedMarkers,
-                                inset: 16,
+                                inset: trailingInset,
                                 leadingInset: SavedSongRow.titleInset,
                                 // A tap edits here; loading the song is the row
                                 // above's job, and still a long press away.
