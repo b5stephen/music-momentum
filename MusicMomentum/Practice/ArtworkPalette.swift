@@ -55,8 +55,8 @@ struct ArtworkPalette: Equatable {
 
     private nonisolated static let sampleSide = 32
 
-    /// Off the main actor, as decoding and averaging the cover is the one
-    /// part of this that does real work.
+    /// Without `@concurrent` this would decode on the main actor, the
+    /// project's default isolation.
     @concurrent
     private nonisolated static func ground(sampling data: Data) async -> Ground? {
         guard let rgba = pixels(of: data, side: sampleSide),

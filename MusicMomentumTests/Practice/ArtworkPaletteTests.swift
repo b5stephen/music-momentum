@@ -39,6 +39,13 @@ struct ArtworkPaletteTests {
         #expect(abs(back.blue * 255 - Double(hex & 0xFF)) < 0.5)
     }
 
+    @Test("A colour outside sRGB is pulled in, keeping its hue")
+    func outOfGamut() {
+        let fitted = OKLCH(l: 0.6, c: 0.4, h: 30).srgb
+        #expect([fitted.red, fitted.green, fitted.blue].allSatisfy { (0...1).contains($0) })
+        #expect(abs(OKLCH(red: fitted.red, green: fitted.green, blue: fitted.blue).h - 30) < 1)
+    }
+
     private func ground(_ hex: UInt32) -> ArtworkPalette.Ground {
         let cover = colour(hex)
         return ArtworkPalette.ground(for: .init(average: cover, mesh: Array(repeating: cover, count: 9)))

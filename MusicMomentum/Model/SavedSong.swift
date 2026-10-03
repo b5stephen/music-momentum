@@ -67,12 +67,8 @@ final class SavedSong {
         return try? JSONDecoder().decode(Artwork.self, from: artworkData)
     }
 
-    /// A library song's artwork points at the saving device's own library
-    /// (`musicKit://…`), which `ArtworkImage` on any other device silently
-    /// fails to draw; only catalog artwork is served over the web.
     var hasPortableArtwork: Bool {
-        guard let scheme = artwork?.url(width: 48, height: 48)?.scheme else { return false }
-        return scheme == "https" || scheme == "http"
+        artwork?.webURL(side: 48) != nil
     }
 }
 

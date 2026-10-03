@@ -95,7 +95,9 @@ struct PracticeView: View {
             if palette?.songID != song.id.rawValue {
                 palette = (song.id.rawValue, ArtworkPalette(song.artwork))
             }
-            guard let sampled = await ArtworkPalette.sampled(from: song) else { return }
+            // A superseded song's sample can land after the next song's
+            // fallback was cached, and would evict it.
+            guard let sampled = await ArtworkPalette.sampled(from: song), !Task.isCancelled else { return }
             withAnimation(.easeInOut(duration: 0.4)) {
                 palette = (song.id.rawValue, sampled)
             }

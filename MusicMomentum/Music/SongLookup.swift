@@ -5,7 +5,8 @@
 
 import MusicKit
 
-/// Turns a stored song ID back into a `Song` for the player.
+/// Turns a stored song ID back into a `Song`, for the player or to borrow a
+/// library song's catalog cover.
 enum SongLookup {
     /// Tries the library ID first, then the catalog ID: removing a song from
     /// the library orphans its library ID for good, and only the catalog ID
