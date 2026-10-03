@@ -337,13 +337,13 @@ p { margin: 0; }
 .sheet-nav { display: flex; align-items: center; justify-content: space-between; }
 .sheet-nav strong { font-size: 14px; font-weight: 600; }
 .sheet-nav span { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: rgba(118, 118, 128, 0.24); }
-.sheet-nav span.ok { background: var(--coral); color: #1A0A05; }
+.sheet-nav span.ok { color: var(--coral); }
 .sheet-nav svg { width: 14px; height: 14px; }
 .cell { background: #2C2C2E; border-radius: 22px; padding: 12px 14px; }
 .cell-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .cell-row .name { font-size: 14px; }
 .cell-row .pill { background: rgba(118, 118, 128, 0.24); }
-.cell-row .pill.sel { background: var(--coral); color: #1A0A05; }
+.cell-row .pill.sel { background: rgba(255, 102, 64, 0.14); color: var(--coral); }
 .range-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .range-head span { font-size: 10.5px; color: rgba(235, 235, 245, 0.6); font-variant-numeric: tabular-nums; }
 .seg { display: flex; padding: 2px; border-radius: 999px; background: rgba(118, 118, 128, 0.24); font-size: 10px; font-weight: 500; }
@@ -365,7 +365,7 @@ p { margin: 0; }
 .t-label .ring { width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--coral); }
 .t-label .ring.full { background: var(--coral); }
 .t-label.sel { color: #fff; }
-.t-label .now { margin-left: auto; padding: 2px 7px; border-radius: 999px; background: var(--coral); color: #1A0A05; letter-spacing: 0; }
+.t-label .now { margin-left: auto; padding: 2px 7px; border-radius: 999px; background: #2C2C2E; color: var(--coral); letter-spacing: 0; }
 .t-value { font-size: 21px; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 
 .nudges { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }

@@ -160,10 +160,12 @@ struct MarkerEditorView: View {
                         onSave(name, start, end)
                         dismiss()
                     } label: {
-                        // The system draws white, which is under 3:1 on coral.
                         Image(systemName: "checkmark")
-                            .foregroundStyle(Color.onAccent)
+                            .foregroundStyle(Color.accentText)
                     }
+                    // Glass like Close rather than the system's solid coral: in
+                    // this app only looping fills solid.
+                    .buttonStyle(.glass)
                 }
             }
             .confirmationDialog(
@@ -212,10 +214,10 @@ struct MarkerEditorView: View {
             .padding(.horizontal, 11)
             .padding(.vertical, 7)
             .background(
-                isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary),
+                isSelected ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary),
                 in: Capsule()
             )
-            .foregroundStyle(isSelected ? AnyShapeStyle(Color.onAccent) : AnyShapeStyle(.primary))
+            .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentText) : AnyShapeStyle(.primary))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
@@ -283,8 +285,9 @@ struct MarkerEditorView: View {
                 .font(.caption2.weight(.semibold))
                 .padding(.horizontal, 9)
                 .padding(.vertical, 3)
-                .background(.tint, in: Capsule())
-                .foregroundStyle(Color.onAccent)
+                // The cell's colour, so it stands off the tinted panel it sits in.
+                .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+                .foregroundStyle(Color.accentText)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Set \(title.lowercased()) to the current position")
