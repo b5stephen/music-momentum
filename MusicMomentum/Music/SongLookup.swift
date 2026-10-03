@@ -27,7 +27,7 @@ enum SongLookup {
 
     /// A 404 is the answer, not a failure: the ID belongs to the other
     /// namespace or the track has been pulled.
-    private static func catalogItem(id: String) async throws -> Song? {
+    static func catalogItem(id: String) async throws -> Song? {
         let request = MusicCatalogResourceRequest<Song>(matching: \.id, equalTo: MusicItemID(id))
         do {
             return try await request.response().items.first

@@ -22,7 +22,8 @@ struct ArtworkPalette: Equatable {
     /// smoked fill instead.
     var isBright: Bool
 
-    init(ground: Ground) {
+    private init(ground: Ground) {
+        assert(ground.mesh.count == 9, "The mesh is 3×3")
         mesh = ground.mesh.map { Color(cgColor: $0.cgColor) }
         shadow = Color(cgColor: ground.shadow.cgColor)
         background = Color(cgColor: ground.glyph.cgColor)
@@ -43,28 +44,25 @@ struct ArtworkPalette: Equatable {
         self.init(cover: cover)
     }
 
-    /// From the cover image. Library artwork's URLs are device-local
-    /// (`musicKit://`) and can't be fetched, so a library song is sampled from
-    /// its catalog counterpart's cover. `nil` when neither can be fetched.
+    /// From the cover image. `nil` when it can't be fetched.
     static func sampled(from song: Song) async -> ArtworkPalette? {
-        guard let artwork = await fetchableArtwork(of: song),
-              let url = artwork.url(width: 64, height: 64),
+        guard let url = await song.downloadableArtworkURL(side: 64),
               let (data, _) = try? await URLSession.shared.data(from: url),
-              let rgba = pixels(of: data),
-              let regions = regions(rgba: rgba, side: 32)
+              let ground = await ground(sampling: data)
         else { return nil }
-        return ArtworkPalette(ground: ground(for: regions))
+        return ArtworkPalette(ground: ground)
     }
 
-    private static func fetchableArtwork(of song: Song) async -> Artwork? {
-        func isFetchable(_ artwork: Artwork?) -> Bool {
-            ["https", "http"].contains(artwork?.url(width: 64, height: 64)?.scheme)
-        }
-        if isFetchable(song.artwork) { return song.artwork }
-        guard let catalogID = song.catalogID else { return nil }
-        let request = MusicCatalogResourceRequest<Song>(matching: \.id, equalTo: MusicItemID(catalogID))
-        let artwork = try? await request.response().items.first?.artwork
-        return isFetchable(artwork) ? artwork : nil
+    private nonisolated static let sampleSide = 32
+
+    /// Off the main actor, as decoding and averaging the cover is the one
+    /// part of this that does real work.
+    @concurrent
+    private nonisolated static func ground(sampling data: Data) async -> Ground? {
+        guard let rgba = pixels(of: data, side: sampleSide),
+              let regions = regions(rgba: rgba, side: sampleSide)
+        else { return nil }
+        return ground(for: regions)
     }
 
     nonisolated struct Regions: Equatable {
@@ -130,47 +128,66 @@ struct ArtworkPalette: Equatable {
 
     /// The cover's average colour, and the averages of a 3×3 grid whose edge
     /// cells are a quarter wide and the middle one half, so each matches a
-    /// mesh point's surroundings. Lightness is averaged as stored
-    /// (gamma-encoded), as Apple's is: a linear average comes out paler. Hue
-    /// and chroma are weighted towards colourful pixels, so Count on Me's
-    /// cream road doesn't turn its gold yellow-green, while a busy cover's
-    /// colours still blend. `rgba` is a `side`×`side` 8-bit RGBA bitmap from
-    /// the top row down.
+    /// mesh point's surroundings. `rgba` is a `side`×`side` premultiplied
+    /// 8-bit RGBA bitmap from the top row down, as `pixels(of:side:)` draws it.
     nonisolated static func regions(rgba: [UInt8], side: Int) -> Regions? {
         guard side >= 8, rgba.count >= side * side * 4 else { return nil }
-        func average(rows: Range<Int>, columns: Range<Int>) -> OKLCH? {
-            var (r, g, b, n) = (0.0, 0.0, 0.0, 0.0)
-            var (a, bee, weight) = (0.0, 0.0, 0.0)
-            for y in rows {
-                for x in columns {
-                    let i = (y * side + x) * 4
-                    guard rgba[i + 3] >= 128 else { continue }
-                    let (red, green, blue) = (Double(rgba[i]) / 255, Double(rgba[i + 1]) / 255, Double(rgba[i + 2]) / 255)
-                    r += red; g += green; b += blue; n += 1
-                    let pixel = OKLCH(red: red, green: green, blue: blue)
-                    let w = 0.02 + pixel.c
-                    a += w * pixel.c * cos(pixel.h * .pi / 180)
-                    bee += w * pixel.c * sin(pixel.h * .pi / 180)
-                    weight += w
-                }
-            }
-            guard n > 0 else { return nil }
-            let plain = OKLCH(red: r / n, green: g / n, blue: b / n)
-            let (wa, wb) = (a / weight, bee / weight)
-            return OKLCH(l: plain.l, c: hypot(wa, wb), h: atan2(wb, wa) * 180 / .pi)
-        }
-        guard let whole = average(rows: 0..<side, columns: 0..<side) else { return nil }
-        let bounds = [0, side / 4, side - side / 4, side]
-        let mesh = (0..<3).flatMap { row in
-            (0..<3).map { column in
-                average(rows: bounds[row]..<bounds[row + 1], columns: bounds[column]..<bounds[column + 1]) ?? whole
+        func band(_ i: Int) -> Int { i < side / 4 ? 0 : i < side - side / 4 ? 1 : 2 }
+        var cells = Array(repeating: Blend(), count: 9)
+        for y in 0..<side {
+            for x in 0..<side {
+                let i = (y * side + x) * 4
+                guard rgba[i + 3] >= 128 else { continue }
+                let alpha = Double(rgba[i + 3])
+                cells[band(y) * 3 + band(x)].add(
+                    red: Double(rgba[i]) / alpha,
+                    green: Double(rgba[i + 1]) / alpha,
+                    blue: Double(rgba[i + 2]) / alpha
+                )
             }
         }
-        return Regions(average: whole, mesh: mesh)
+        guard let whole = cells.reduce(Blend(), +).colour else { return nil }
+        return Regions(average: whole, mesh: cells.map { $0.colour ?? whole })
+    }
+
+    /// Running totals for one stretch of the cover. Lightness is averaged as
+    /// stored (gamma-encoded), as Apple's is: a linear average comes out
+    /// paler. Hue and chroma are weighted towards colourful pixels, so Count
+    /// on Me's cream road doesn't turn its gold yellow-green, while a busy
+    /// cover's colours still blend.
+    private nonisolated struct Blend {
+        var red = 0.0, green = 0.0, blue = 0.0, count = 0.0
+        var a = 0.0, b = 0.0, weight = 0.0
+
+        mutating func add(red: Double, green: Double, blue: Double) {
+            self.red += red
+            self.green += green
+            self.blue += blue
+            count += 1
+            let lab = OKLCH.oklab(red: red, green: green, blue: blue)
+            let w = 0.02 + hypot(lab.a, lab.b)
+            a += w * lab.a
+            b += w * lab.b
+            weight += w
+        }
+
+        static func + (x: Blend, y: Blend) -> Blend {
+            Blend(
+                red: x.red + y.red, green: x.green + y.green, blue: x.blue + y.blue, count: x.count + y.count,
+                a: x.a + y.a, b: x.b + y.b, weight: x.weight + y.weight
+            )
+        }
+
+        /// `nil` with no pixels to average.
+        var colour: OKLCH? {
+            guard count > 0 else { return nil }
+            let l = OKLCH(red: red / count, green: green / count, blue: blue / count).l
+            return OKLCH(l: l, a: a / weight, b: b / weight)
+        }
     }
 
     /// The image drawn into a small sRGB bitmap.
-    nonisolated static func pixels(of data: Data, side: Int = 32) -> [UInt8]? {
+    nonisolated static func pixels(of data: Data, side: Int) -> [UInt8]? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
               let srgb = CGColorSpace(name: CGColorSpace.sRGB)

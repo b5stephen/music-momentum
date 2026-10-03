@@ -100,7 +100,8 @@ struct ArtworkPaletteTests {
         let corner = ground.mesh[0], other = ground.mesh[2]
         #expect(corner.h < 60 || corner.h > 300)
         #expect(abs(corner.h - other.h) > 20)
-        #expect(corner.c < ArtworkPalette.ground(for: .init(average: red, mesh: [red])).mesh[0].c)
+        let allRed = ArtworkPalette.ground(for: .init(average: red, mesh: Array(repeating: red, count: 9)))
+        #expect(corner.c < allRed.mesh[0].c)
     }
 
     @Test("A pale region keeps the cover's colour")
@@ -150,6 +151,16 @@ struct ArtworkPaletteTests {
         }
         let regions = try #require(ArtworkPalette.regions(rgba: framed, side: side))
         #expect(abs(regions.average.h - colour(0xE0A010).h) < 3)
+    }
+
+    @Test("A half-transparent pixel counts as its own colour, not darkened")
+    func premultiplied() throws {
+        let opaque = try #require(ArtworkPalette.regions(rgba: halves(0xF0B020, 0xF0B020), side: 8))
+        // 0xF0B020 at alpha 128, premultiplied as CoreGraphics draws it.
+        let half = Array(repeating: [UInt8(0x78), 0x58, 0x10, 128], count: 64).flatMap { $0 }
+        let regions = try #require(ArtworkPalette.regions(rgba: half, side: 8))
+        #expect(abs(regions.average.l - opaque.average.l) < 0.01)
+        #expect(abs(regions.average.h - opaque.average.h) < 1)
     }
 
     @Test("Ignores transparent pixels and empty images")

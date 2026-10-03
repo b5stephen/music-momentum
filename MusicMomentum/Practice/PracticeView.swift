@@ -22,7 +22,9 @@ struct PracticeView: View {
     @Query private var savedSongs: [SavedSong]
     @State private var showPicker = false
     @State private var markerSheet: MarkerSheet?
-    @State private var sampledPalette: (songID: String, palette: ArtworkPalette)?
+    /// The selected song's palette, kept so `track` doesn't rebuild it on
+    /// every read: `Artwork.backgroundColor`'s, then the sampled cover's.
+    @State private var palette: (songID: String, palette: ArtworkPalette?)?
 
     /// Editing carries the marker's identity so switching straight from one
     /// marker to another rebuilds the sheet.
@@ -52,8 +54,8 @@ struct PracticeView: View {
             id: song.id.rawValue,
             title: song.title,
             artistName: song.artistName,
-            palette: sampledPalette?.songID == song.id.rawValue
-                ? sampledPalette?.palette
+            palette: palette?.songID == song.id.rawValue
+                ? palette?.palette
                 : ArtworkPalette(song.artwork)
         )
     }
@@ -89,11 +91,13 @@ struct PracticeView: View {
         }
         .modifier(ArtworkGround(palette: track?.palette, isPlaying: controller.isPlaying))
         .task(id: controller.selectedSong?.id) {
-            guard let song = controller.selectedSong,
-                  let palette = await ArtworkPalette.sampled(from: song)
-            else { return }
+            guard let song = controller.selectedSong else { return }
+            if palette?.songID != song.id.rawValue {
+                palette = (song.id.rawValue, ArtworkPalette(song.artwork))
+            }
+            guard let sampled = await ArtworkPalette.sampled(from: song) else { return }
             withAnimation(.easeInOut(duration: 0.4)) {
-                sampledPalette = (song.id.rawValue, palette)
+                palette = (song.id.rawValue, sampled)
             }
         }
         .onChange(of: track?.palette, initial: true) { _, palette in

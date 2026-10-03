@@ -23,16 +23,29 @@ nonisolated struct OKLCH: Equatable {
 
     /// Gamma-encoded sRGB components, 0...1.
     init(red: Double, green: Double, blue: Double) {
-        let (r, g, b) = (Self.linear(red), Self.linear(green), Self.linear(blue))
+        let lab = Self.oklab(red: red, green: green, blue: blue)
+        self.init(l: lab.l, a: lab.a, b: lab.b)
+    }
+
+    /// From OKLab's opposing axes, green to red and blue to yellow, which
+    /// average without a hue's wrap-around at 360°.
+    init(l: Double, a: Double, b: Double) {
+        self.init(l: l, c: hypot(a, b), h: atan2(b, a) * 180 / .pi)
+    }
+
+    /// OKLab for gamma-encoded sRGB components, 0...1.
+    static func oklab(red: Double, green: Double, blue: Double) -> (l: Double, a: Double, b: Double) {
+        let (r, g, b) = (linear(red), linear(green), linear(blue))
         let lms = (
             cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b),
             cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b),
             cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
         )
-        let lightness = 0.2104542553 * lms.0 + 0.7936177850 * lms.1 - 0.0040720468 * lms.2
-        let a = 1.9779984951 * lms.0 - 2.4285922050 * lms.1 + 0.4505937099 * lms.2
-        let b2 = 0.0259040371 * lms.0 + 0.7827717662 * lms.1 - 0.8086757660 * lms.2
-        self.init(l: lightness, c: hypot(a, b2), h: atan2(b2, a) * 180 / .pi)
+        return (
+            0.2104542553 * lms.0 + 0.7936177850 * lms.1 - 0.0040720468 * lms.2,
+            1.9779984951 * lms.0 - 2.4285922050 * lms.1 + 0.4505937099 * lms.2,
+            0.0259040371 * lms.0 + 0.7827717662 * lms.1 - 0.8086757660 * lms.2
+        )
     }
 
     init?(_ color: CGColor) {
@@ -45,8 +58,11 @@ nonisolated struct OKLCH: Equatable {
 
     /// Gamma-encoded sRGB, with chroma pulled in until the colour fits.
     var srgb: (red: Double, green: Double, blue: Double) {
-        let fitted = Self.linearRGB(l: l, c: min(c, Self.maxChroma(l: l, h: h)), h: h)
-        return (Self.encode(fitted.0), Self.encode(fitted.1), Self.encode(fitted.2))
+        var rgb = Self.linearRGB(l: l, c: c, h: h)
+        if !Self.isInGamut(rgb) {
+            rgb = Self.linearRGB(l: l, c: Self.maxChroma(l: l, h: h), h: h)
+        }
+        return (Self.encode(rgb.0), Self.encode(rgb.1), Self.encode(rgb.2))
     }
 
     var cgColor: CGColor {
@@ -60,16 +76,21 @@ nonisolated struct OKLCH: Equatable {
         return available > 0.0001 ? min(1, c / available) : 0
     }
 
-    /// The most chroma sRGB can show at this lightness and hue.
+    /// The most chroma sRGB can show at this lightness and hue, to within
+    /// 0.4 / 2¹⁶: far finer than an 8-bit channel can show.
     static func maxChroma(l: Double, h: Double) -> Double {
         guard l > 0, l < 1 else { return 0 }
         var (low, high) = (0.0, 0.4)
-        for _ in 0..<24 {
+        for _ in 0..<16 {
             let mid = (low + high) / 2
-            let rgb = linearRGB(l: l, c: mid, h: h)
-            if [rgb.0, rgb.1, rgb.2].allSatisfy({ (-0.0001...1.0001).contains($0) }) { low = mid } else { high = mid }
+            if isInGamut(linearRGB(l: l, c: mid, h: h)) { low = mid } else { high = mid }
         }
         return low
+    }
+
+    private static func isInGamut(_ rgb: (Double, Double, Double)) -> Bool {
+        let range = -0.0001...1.0001
+        return range.contains(rgb.0) && range.contains(rgb.1) && range.contains(rgb.2)
     }
 
     private static func linearRGB(l: Double, c: Double, h: Double) -> (Double, Double, Double) {
