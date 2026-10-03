@@ -5,26 +5,32 @@
 
 import SwiftUI
 
-/// The point marker the track draws, with a plus. No SF Symbol says "put a
-/// mark here" — flag came closest and read as reporting a problem.
+/// The pills' point dot with a plus, so the button reads as "another one of
+/// these". No SF Symbol says "put a mark here" — flag came closest and read as
+/// reporting a problem.
 struct MarkGlyph: View {
     var body: some View {
         Canvas { context, size in
             let scale = size.width / 24
-            var path = Path()
-            path.move(to: CGPoint(x: 3.5 * scale, y: 19.5 * scale))
-            path.addLine(to: CGPoint(x: 20.5 * scale, y: 19.5 * scale))
-            path.move(to: CGPoint(x: 9 * scale, y: 19.5 * scale))
-            path.addLine(to: CGPoint(x: 9 * scale, y: 7.5 * scale))
-            path.move(to: CGPoint(x: 15 * scale, y: 5 * scale))
-            path.addLine(to: CGPoint(x: 20.5 * scale, y: 5 * scale))
-            path.move(to: CGPoint(x: 17.75 * scale, y: 2.25 * scale))
-            path.addLine(to: CGPoint(x: 17.75 * scale, y: 7.75 * scale))
+            let dot = CGRect(
+                x: (10 - 4.2) * scale,
+                y: (14 - 4.2) * scale,
+                width: 8.4 * scale,
+                height: 8.4 * scale
+            )
+            context.fill(Path(ellipseIn: dot), with: .style(.foreground))
+
+            var plus = Path()
+            plus.move(to: CGPoint(x: 15 * scale, y: 5 * scale))
+            plus.addLine(to: CGPoint(x: 21 * scale, y: 5 * scale))
+            plus.move(to: CGPoint(x: 18 * scale, y: 2 * scale))
+            plus.addLine(to: CGPoint(x: 18 * scale, y: 8 * scale))
             context.stroke(
-                path,
+                plus,
                 with: .style(.foreground),
                 style: StrokeStyle(lineWidth: 1.8 * scale, lineCap: .round)
             )
         }
     }
 }
+
