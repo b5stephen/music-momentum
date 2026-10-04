@@ -87,7 +87,6 @@ struct SavedSongsView: View {
                                 isLoading: loadingID == song.songID,
                                 isCurrent: isCurrent,
                                 isPlaying: controller.isPlaying,
-                                chips: isBesidePractice ? .glass : .accent,
                                 onPlay: { practice(song) },
                                 onEditSpeed: { editing = song },
                                 onAddMarker: { openEditor(song) }
@@ -156,16 +155,23 @@ struct SavedSongsView: View {
                                 }
                             }
                         } label: {
-                            Label("Sort", systemImage: "arrow.up.arrow.down")
+                            // An `Image`, not a `Label`: the toolbar drops a
+                            // label's foreground style and draws it black.
+                            Image(systemName: "arrow.up.arrow.down")
+                                .foregroundStyle(Color.accentColor)
                         }
+                        .accessibilityLabel("Sort")
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         chooseSong()
                     } label: {
-                        Label("Add Song", systemImage: "plus")
+                        // Recoloured by hand, so it has to grey itself when disabled.
+                        Image(systemName: "plus")
+                            .foregroundStyle(controller.canUseMusic ? Color.accentColor : Color(.tertiaryLabel))
                     }
+                    .accessibilityLabel("Add Song")
                     .disabled(!controller.canUseMusic)
                 }
                 #if DEBUG
@@ -384,18 +390,9 @@ private struct SavedSongRow: View {
     /// Loaded in the practice screen, which on a wide iPad is right beside it.
     let isCurrent: Bool
     let isPlaying: Bool
-    let chips: ChipStyle
     let onPlay: () -> Void
     let onEditSpeed: () -> Void
     let onAddMarker: () -> Void
-
-    enum ChipStyle {
-        case accent
-        /// Beside the card: clear glass that takes on the cover's glow. Text
-        /// needs a concrete colour there: a hierarchical `.secondary` in a
-        /// borderless button resolves against the tint and comes out coral.
-        case glass
-    }
 
     @ScaledMetric(relativeTo: .subheadline) private var markGlyphSize: CGFloat = 16
 
@@ -434,10 +431,10 @@ private struct SavedSongRow: View {
                     Text("\(song.percent)%")
                         .font(.subheadline.weight(.semibold))
                         .monospacedDigit()
-                        .foregroundStyle(chips == .accent ? Color.accentText : Color.primary)
+                        .foregroundStyle(Color.primary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .chip(chips, in: .capsule)
+                        .glassEffect(.regular.interactive(), in: .capsule)
                 }
                 // A plain button in a `List` row would let the whole row trigger it.
                 .buttonStyle(.borderless)
@@ -447,9 +444,9 @@ private struct SavedSongRow: View {
                 Button(action: onAddMarker) {
                     MarkGlyph()
                         .frame(width: markGlyphSize, height: markGlyphSize)
-                        .foregroundStyle(chips == .accent ? Color.accentText : Color.primary)
+                        .foregroundStyle(Color.primary)
                         .padding(6)
-                        .chip(chips, in: .circle)
+                        .glassEffect(.regular.interactive(), in: .circle)
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel("Add marker")
@@ -479,18 +476,6 @@ private struct SavedSongRow: View {
             .fill(.quaternary)
             .frame(width: 48, height: 48)
             .overlay(content())
-    }
-}
-
-private extension View {
-    /// Glass is interactive, so the chip flexes under a finger the way the
-    /// toolbar's buttons do.
-    @ViewBuilder
-    func chip(_ style: SavedSongRow.ChipStyle, in shape: some Shape) -> some View {
-        switch style {
-        case .accent: background(Color.accentColor.opacity(0.12), in: shape)
-        case .glass: glassEffect(.regular.interactive(), in: shape)
-        }
     }
 }
 

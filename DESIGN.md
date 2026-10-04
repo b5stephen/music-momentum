@@ -25,7 +25,7 @@ On the website, each feature gets its own accent: coral for speed, amber for mar
 - **Coral means "on" or "act on this".** The running loop, a looping clip, a prompt to save, the speed you saved. Never decoration, or it stops meaning anything. Play/pause is the primary colour.
 - **Only one state shouts.** Solid coral is for looping and for graphics (the speed arc, a clip on the timeline). Everything else that's coral is a tint: `.tint` at 12–16% with `AccentText`. Settled things are `.quaternary` with secondary text.
 - **Fill carries state; glyph carries kind.** A dot is a point and `SpanGlyph` is a clip; the fill says whether it's idle, cued or looping. On Saved, idle pills are a one-pixel `.quaternary` hairline with no fill: a grey pill under every song outweighed the titles.
-- **Neutral controls stay neutral.** Nudge, cue, skip, sort and the like use system fills, not coral.
+- **Neutral controls stay neutral.** Nudge, cue, skip and the like use system fills, not coral. Toolbar glyphs that act on the screen (Saved's add and sort, a sheet's save tick) are `AccentColor` on the toolbar's own glass.
 - **Banners stay away from coral's hue.** Warnings are yellow; errors are neutral grey with a coral icon. No orange or red near the accent; they read as the same colour.
 - **Give text in buttons a concrete colour.** A hierarchical style like `.secondary` resolves against the button's tint and comes out a faded coral. `.bordered` turns grey once its text is recoloured, so tinted chips are drawn by hand.
 
@@ -35,7 +35,9 @@ With a song loaded, Practice is painted in the cover's own colours, the way Appl
 
 ## Wide iPad
 
-A landscape window 1000pt or wider drops the tab bar: Practice becomes a resizable card hovering over Saved, which runs the full width of the window behind it. It's one page, not a split: no divider, and the cover's colour glows on the page around the card. Saved's chips are clear Liquid Glass with primary text and no coral, so they take on that glow instead of clashing with it. Saved drops what the card already says: no large title, and a minimal empty state.
+A landscape window with room for Saved beside the narrowest card drops the tab bar: Practice becomes a resizable card hovering over Saved, which runs the full width of the window behind it. It's one page, not a split: no divider, and the cover's colour glows on the page around the card. Saved drops what the card already says: no large title, and a minimal empty state.
+
+Saved's speed and marker chips are clear Liquid Glass with primary text and no coral, on the phone as well as here, so beside the card they take on the glow instead of clashing with it.
 
 ## Type
 
