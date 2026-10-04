@@ -12,6 +12,7 @@ import SwiftUI
 /// A wide landscape window drops the tabs and floats Practice over Saved.
 struct RootTabView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @State private var controller = PlaybackController()
     @State private var tab: TabID = .practice
     @State private var practicePalette: ArtworkPalette?
@@ -56,15 +57,20 @@ struct RootTabView: View {
         TabView(selection: $tab) {
             Tab("Practice", systemImage: "guitars", value: .practice) {
                 PracticeView(controller: controller) { practicePalette = $0 }
+                    .environment(\.colorScheme, colorScheme)
             }
 
             Tab("Saved", systemImage: "bookmark", value: .saved) {
                 SavedSongsView(controller: controller) { tab = .practice }
+                    .environment(\.colorScheme, colorScheme)
             }
         }
         // Coral vanishes on a red or orange cover, so the selected tab takes
-        // the practice screen's text colour while it's showing.
+        // the practice screen's text colour while it's showing. That colour is
+        // always light, and the glass turns light over a bright cover, so the
+        // bar is held dark; each tab gets the real scheme back.
         .tint(tab == .practice ? practicePalette?.foreground : nil)
+        .environment(\.colorScheme, tab == .practice && practicePalette != nil ? .dark : colorScheme)
     }
 
     /// Landscape, with room for Saved beside the narrowest card.
