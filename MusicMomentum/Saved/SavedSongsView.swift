@@ -176,7 +176,7 @@ struct SavedSongsView: View {
                 }
                 #if DEBUG
                 ToolbarItem(placement: .topBarLeading) {
-                    DebugMenu()
+                    CloudKitSchemaMenu()
                 }
                 #endif
             }
