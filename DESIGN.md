@@ -1,80 +1,61 @@
 # Design
 
-The palette and visual language for the app and its website. The app's colours come from the asset catalog and the website's from `docs/styles.css`; this file explains them. When a change shifts the language described here, update this file in the same commit.
+The palette and visual language for the app and its website. The app's colours come from the asset catalog and the website's from `docs/styles.css`; this file explains them. Exact sizes and per-screen details live in the code.
 
 ## Palette
 
 | Name | Hex | Role |
 |---|---|---|
-| Coral | `#FF6640` | The accent. `AccentColor` in the asset catalog, the same sRGB `#FF6640` in light and dark, as on the website and in the designs. Keep it sRGB: Display P3 components with the same numbers render a redder, more saturated coral on an iPhone. |
-| On-accent | `#1A0A05` | Text and glyphs on a solid coral fill. `OnAccent` in the asset catalog; the website's text on coral buttons. |
-| Accent text | `#C43A12` light, `#FF6640` dark | Coral used as text on a plain background. `AccentText` in the asset catalog: coral itself is under 3:1 on white, so light mode darkens it. |
-| Amber | `#FFB23E` | Taken from the app icon's orange. Website only so far. |
-| Rose | `#FF4F8B` | Website only so far. |
-| Violet | `#9C8CFF` | Website only so far; the website uses it for iCloud sync. |
+| Coral | `#FF6640` | The accent. `AccentColor` in the asset catalog, the same sRGB `#FF6640` in light and dark, as on the website. Keep it sRGB: Display P3 components with the same numbers render a redder coral on an iPhone. |
+| On-accent | `#1A0A05` | Text and glyphs on a solid coral fill. `OnAccent` in the asset catalog. |
+| Accent text | `#C43A12` light, `#FF6640` dark | Coral used as text on a plain background. `AccentText` in the asset catalog. |
+| Amber | `#FFB23E` | Website only. |
+| Rose | `#FF4F8B` | Website only. |
+| Violet | `#9C8CFF` | Website only. |
 | Ground | `#0D0A0F` | Website background, a near-black plum. The app uses the system backgrounds. |
 | Surface / Raised | `#17121A` / `#231B24` | Website cards and raised panels. |
 | Line | `#2E2530` | Website borders and dividers. |
 | Text / Muted | `#F6EFEA` / `#B9ACB4` | Website body text and secondary text. |
 
-On the website, each feature gets its own accent: coral for speed, amber for markers, rose for loops and violet for sync. Colour comes from solid blocks and accents, never from gradient washes.
+On the website, each feature gets its own accent: coral for speed, amber for markers, rose for loops and violet for sync. Colour comes from solid blocks and accents, never gradient washes.
 
-## How the app uses colour
+## Principles
 
-- **One tint.** Coral is the only accent in the app, applied through `.tint`. Amber, rose and violet belong to the website and marketing. Amber was tried for markers and read as out of place beside coral; before bringing one in, give it a job the tint can't do, and record that job here.
-- **Coral means "on" or "act on this".** It marks the loop when it's running, a looping clip, the chip that prompts you to save, the speed you saved a song at, and the selected handle in the marker editor. Don't use it for decoration (icon tiles, nudge and cue buttons), or it stops meaning anything. Play/pause is the primary colour, not coral.
-- **Fill carries state; glyph carries kind.** A marker pill is idle in `.quaternary`, cued at `.tint` 12%, and looping in solid `.tint` with `OnAccent` text. A dot marks a point and `SpanGlyph` marks a clip, so the fill never has to explain what a marker is. The Mark button's `MarkGlyph` is that dot with a plus, so it reads as another of the pills beside it.
-- **Only one state shouts.** Looping is the one solid-tint state. Cued keeps the primary text colour and only hints through its fill and glyph.
-- **Chips and buttons:** a chip or button that prompts you to act, or a selected choice like the marker editor's Point/Clip switch, is `.tint` at 14% with `AccentText` text (drawn by hand: `.bordered` turns grey once its text is recoloured); a settled one is `.quaternary` with secondary text. There's no solid coral control apart from the loop: beside the tinted chips a solid fill reads as a different, brighter coral, and in light mode it outshouts every other screen. The system's solid confirm button is replaced by a plain toolbar button with a coral (`AccentColor`) tick, the bright coral a tinted toolbar button takes, which reads better on the glass than `AccentText`'s darker shade, so it takes the same toolbar glass as Close.
-- **Solid coral is for graphics and looping only:** the speed arc, the clip on the marker timeline and its handles, the looping pill and the loop button.
-- **Marker editor:** the clip and its handles are coral; the selected time sits in a `.tint` 16% panel with primary text rather than turning coral itself, so the big numerals stay legible in light mode. Its Playhead chip (a miniature of the strip's playhead glyph and the word) is the cell's colour with `AccentText`, so it stands off that panel. Nudge, cue, skip and play buttons are neutral, on `tertiarySystemFill`; back, play/pause and forward share one row in equal thirds, with the cue buttons beneath, each marked with the dot of the time it plays from. The playhead is a `.primary` line with a knob above the track, never coral, since it isn't part of the marker. When zoomed in, the track is drawn the length of the song and cut by the strip: rounded only at the song's real ends, and fading out at an edge with more to pan to. A playhead out of view becomes a small `.primary` arrow at the edge it's past. Below the track runs a ruler: `.secondary` marks at each labelled time, `.tertiary` minor marks between (tenths at the 5s zoom). While a handle or the playhead is dragged, its time shows in an inverted bubble (`label` fill, `systemBackground` text) above the strip, out from under the thumb; a handle snapped to the playhead adds "Playhead" to it, and a slowed drag (finger moved off the strip) adds its speed. Zoom is a neutral `.secondary` slider between magnifier glyphs, led by a `.quaternary` chip that names the span ("Whole song", "30s", "4.5s") and steps through Whole song, 30s and 5s when tapped.
-- **Saved list:** each song row ends with its speed pill and a Mark button, a circle with `MarkGlyph` (the practice screen's mark button in miniature), both in the same `.tint` 12% fill with `AccentText`; Mark sits outermost so it stays put as the percentage changes width. Markers are plain `.quaternary` pills on a line of their own beneath the song, drawn only when it has some, so songs without markers stay one compact row. The song loaded in Practice carries a `.secondary` waveform after its title, animating while it plays. Sort is hidden, not disabled, while the list is empty: a greyed glyph beside Add read as a second, broken add button.
-- **Round controls** (loop, mark) are 46pt circles: `.tint` fill with an `OnAccent` glyph when on, and `.quaternary` with a secondary glyph when off.
-- **Scrubber:** the played part is `.tint` at 45%, clips are `.primary` at 25%, and a looping clip is solid `.tint`, ringed in the background colour so the played fill can't swallow it.
-- **Speed wheel:** a flat `.quaternary` rim, no bevel or gradient, so it takes whatever foreground it sits on. On a bright cover it's smoked instead (see below).
-- **Banners stay away from coral's hue.** Warnings are yellow. Errors sit on neutral grey with a coral icon. Banner text is always the primary label colour, so only the icon and background carry colour. Don't use orange or red near the accent; they read as the same colour. The same goes for inline warnings: a song gone from the library gets a yellow triangle and secondary text, not red text.
+- **One tint.** Coral is the app's only accent. Amber, rose and violet stay on the website; bring one into the app only for a job the tint can't do.
+- **Coral means "on" or "act on this".** The running loop, a looping clip, a prompt to save, the speed you saved. Never decoration, or it stops meaning anything. Play/pause is the primary colour.
+- **Only one state shouts.** Solid coral is for looping and for graphics (the speed arc, a clip on the timeline). Everything else that's coral is a tint: `.tint` at 12–16% with `AccentText`. Settled things are `.quaternary` with secondary text.
+- **Fill carries state; glyph carries kind.** A dot is a point and `SpanGlyph` is a clip; the fill says whether it's idle, cued or looping. On Saved, idle pills are a one-pixel `.quaternary` hairline with no fill: a grey pill under every song outweighed the titles.
+- **Neutral controls stay neutral.** Nudge, cue, skip, sort and the like use system fills, not coral.
+- **Banners stay away from coral's hue.** Warnings are yellow; errors are neutral grey with a coral icon. No orange or red near the accent; they read as the same colour.
+- **Give text in buttons a concrete colour.** A hierarchical style like `.secondary` resolves against the button's tint and comes out a faded coral. `.bordered` turns grey once its text is recoloured, so tinted chips are drawn by hand.
 
-## Artwork colour on Practice
+## Artwork colour
 
-With a song loaded, the practice screen is painted in the cover's own colours, the way Apple Music's Now Playing is. `ArtworkPalette` averages the cover image, whole and in a 3×3 grid, and the screen draws those as a mesh gradient: the cover blurred into its colours. Library artwork's `musicKit://` URLs can't be fetched, so a library song is sampled from its catalog counterpart's cover. `Artwork.backgroundColor` stands in only while that loads, or when there's no cover to fetch, because it's a single colour and often the border: Count on Me's is cream where the cover is mostly gold.
+With a song loaded, Practice is painted in the cover's own colours, the way Apple Music's Now Playing is: the cover blurred into a mesh gradient, darkened, always with light text. Coral steps aside there, since it vanishes on a red or orange cover; "on" becomes a solid fill of the text colour. Covers without colours, and the screen with nothing loaded, keep the system background and coral. How the colours are tuned is recorded in `ArtworkPalette`.
 
-The ground is tuned against Apple Music on the same iPhone, in OKLCH. The aim is Apple's colour and depth, not an exact match:
+## Wide iPad
 
-- **The average, led by the colourful pixels.** Picking the single strongest hue turned Weather With You's cover sky blue and Sunshine of Your Love's pink; a plain average let Count on Me's cream road turn its gold yellow-green. Lightness is averaged as the pixels are stored (gamma-encoded); hue and chroma are weighted by each pixel's chroma. A cover's warm and cool parts still cancel: Weather With You comes out grey, as Apple's does.
-- **Bright and vivid.** Lightness drops by a step of 0.12, so a bright cover stays bright: Count on Me's gold sits at 0.78 against Apple's 0.77–0.82. Saturation goes up by a third relative to what sRGB allows. Pale and grey covers stop at 0.5, so light text still reads on them. Grey stays grey.
-- **Yellows turn towards orange,** or darkening them reads as olive, and the bottom of the screen turns them further, as Apple's gold deepens to amber.
-- **Nearly one colour.** Each mesh point keeps only a quarter of its region's own colour, and none is less colourful than the whole cover, so a cover's pale parts don't darken into grey patches.
-- **Brightest behind the title and dial,** the mesh's middle row lifted a little, then darkening from a third of the way down towards a very dark shade of the cover's own colour: black greys it.
-- **The mesh drifts while the song plays,** its inner points slowly wandering on unrelated periods, and holds still while it's paused or when Reduce Motion is on.
-- **Light text always:** near-white tinted with the cover's hue. The screen is always in dark appearance, so every hierarchical style and `.quaternary` fill becomes the light text at low opacity, which reads as glass on any ground. Never fills of a dark text colour on a light ground: that's what made the first version look muddy.
-- **Smoked glass on bright covers.** Where the ground is bright (Count on Me's gold), light glass washes out, so the chips and the speed wheel's rim take the ground's dark shadow colour at 24% instead. Darker grounds keep light glass.
-- **"On"** (loop button, looping pill, speed arc, Play) is a solid fill of the text colour with a darker shade of the ground on top.
-- **The selected tab** takes the text colour while Practice is showing, because coral vanishes on a red or orange cover.
-- **The cover itself is shown,** so it's plain where the colours come from. On a phone it's a 64pt thumbnail beside the title and artist, the three centred as a group with the chips beneath. Wide, it heads the player column, up to 180pt and dropped when the height runs out, and the title stands alone over the dial. Drawing the cover into the ground, faded from the top as Apple Music does, was tried and dropped: no fade looked right across every cover.
-
-Coral steps aside on this screen. Covers without colours, and the screen with nothing loaded, keep the system background and the coral tint. The first tuning was worked out on the Album Colour Study design canvas; the current one against Apple Music on a device.
-
-## iPad, wide
-
-A landscape window 1000pt or wider drops the tab bar: Practice becomes a card hovering over Saved, which runs the full width of the window behind it. Narrower or portrait windows keep the tabs.
-
-- **The card is the phone layout,** 440pt wide by default (the widest iPhone), 28pt from the screen's top, bottom and leading edges, with 40pt corners, a hairline white edge and a deep shadow. With nothing loaded it's `secondarySystemGroupedBackground`, so it stands off the page in both appearances.
-- **One page, not a split.** Saved sits on the plain system background up to the card, with no divider and no second background. The cover's centre colour glows on the page behind the card, blurred well past its edges: that, more than the shadow, makes it read as hovering.
-- **Resizable.** A `.tertiary` grabber in the gap beside the card drags it between 375pt and 640pt, never leaving Saved under 480pt; a double tap restores 440pt. The width is per device. Past 640pt the card would flip into Practice's two-column layout.
-- **Coral steps aside in Saved too.** Beside a cover-coloured card a column of coral chips clashes, so the rows' speed pills and Mark buttons go neutral (`.quaternary`, `.secondary` text). Only the loaded song's take the card's colour: the cover's centre colour at 30% with primary text, never as text, since the cover's colours are tuned for light text on a dark ground. Marker pills are already neutral and stay so; the card shows their cue and loop state. In the tab layout Saved is a screen of its own and keeps coral.
-- **Saved drops what the card already says:** no large title, and its empty state is the icon and one line, with no copy or button, since the card's own empty state offers Choose a Song.
+A landscape window 1000pt or wider drops the tab bar: Practice becomes a resizable card hovering over Saved, which runs the full width of the window behind it. It's one page, not a split: no divider, and the cover's colour glows on the page around the card. Saved's chips are clear Liquid Glass with primary text and no coral, so they take on that glow instead of clashing with it. Saved drops what the card already says: no large title, and a minimal empty state.
 
 ## Type
 
-- **App:** system type throughout. Use SF Pro Rounded, bold, for the speed readout, `.monospacedDigit()` for anything that ticks (times, percentages, clip lengths), and footnote medium for pills and chips. No custom fonts in the app.
-- **Website:** Bricolage Grotesque (700/800) for headings, Instrument Sans for body text and JetBrains Mono for eyebrows, numbers and placeholders.
+- **App:** system type. SF Pro Rounded bold for the speed readout, `.monospacedDigit()` for anything that ticks, footnote medium for pills and chips. No custom fonts.
+- **Website:** Bricolage Grotesque (700/800) for headings, Instrument Sans for body text, JetBrains Mono for eyebrows, numbers and placeholders.
 
 ## Contrast
 
-- Coral on black is about 7:1, so tinted text and icons on the dark background are fine.
-- Coral on white is also only about 2.9:1, so coral *text* on a plain background uses `AccentText`, which darkens to about 5.3:1 in light mode. Fills keep the bright coral in both modes.
-- White on coral is only about 2.9:1, under the 4.5:1 that small text needs. Text on a solid coral fill uses `OnAccent` (about 6.5:1 on the dark-mode coral), as the looping pill, the loop button when it's on, and the website's buttons do. On an artwork-coloured practice screen the same job falls to a darker shade of the ground. Don't put white on coral.
+- Coral is about 7:1 on black but 2.9:1 on white, so coral *text* uses `AccentText`, which darkens to about 5.3:1 in light mode. Fills keep the bright coral.
+- White on coral is 2.9:1, too faint for small text. Text on solid coral uses `OnAccent` (about 6.5:1). On an artwork-coloured screen the same job falls to a darker shade of the ground.
 - Touch targets are at least 44pt.
+
+## Tried and dropped
+
+- **Amber for markers:** read as out of place beside coral.
+- **A solid coral confirm button:** beside tinted chips it read as a different, brighter coral. Sheets use a plain toolbar tick in `AccentColor` instead.
+- **The cover drawn into Practice's background,** faded from the top: no fade looked right across every cover.
+- **The single colour MusicKit ships with artwork** as the ground: it's often the cover's border, not its average.
+- **Coral or grey chips beside the floating card:** coral clashed with the cover; grey read as disabled. Hence glass.
+- **Highlighting the loaded song in Saved** with a panel, coral or the cover's colour.
 
 ## Website
 
