@@ -67,10 +67,9 @@ struct RootTabView: View {
         .tint(tab == .practice ? practicePalette?.foreground : nil)
     }
 
-    /// Landscape, with room for Saved beside a phone-width card. Narrower
-    /// than this, the saved rows' marker pills start to wrap.
+    /// Landscape, with room for Saved beside the narrowest card.
     private nonisolated static func floats(_ size: CGSize) -> Bool {
-        size.width > size.height && size.width >= 1000
+        size.width > size.height && size.width >= FloatingLayout<EmptyView, EmptyView>.minWindowWidth
     }
 }
 
@@ -90,13 +89,14 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
 
     /// The widest iPhone's width, so the card is the phone layout at its roomiest.
     private static var defaultWidth: CGFloat { 440 }
-    private static var minWidth: CGFloat { 375 }
+    private nonisolated static var minWidth: CGFloat { 375 }
     /// Wider than tall would flip the card into Practice's two-column layout,
     /// and a card this wide is no longer the phone layout anyway.
     private static var maxWidth: CGFloat { 640 }
     /// Room the saved rows need before their marker pills start to crowd.
-    private static var minSavedWidth: CGFloat { 480 }
-    private static var margin: CGFloat { 28 }
+    private nonisolated static var minSavedWidth: CGFloat { 480 }
+    private nonisolated static var margin: CGFloat { 28 }
+    nonisolated static var minWindowWidth: CGFloat { minWidth + 2 * margin + minSavedWidth }
     private static var radius: CGFloat { 40 }
 
     private var cardWidth: CGFloat {
