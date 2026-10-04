@@ -12,8 +12,6 @@ struct SavedSongsView: View {
     /// Beside the floating practice card, which already names the screen's
     /// job and offers the way to pick a song.
     var isBesidePractice = false
-    /// The loaded song's cover colours, when the card beside is painted in them.
-    var practicePalette: ArtworkPalette?
     /// Stands in for `controller.selectedSong` in previews, since `Song` has
     /// no public initialiser.
     var previewCurrentID: String?
@@ -89,7 +87,7 @@ struct SavedSongsView: View {
                                 isLoading: loadingID == song.songID,
                                 isCurrent: isCurrent,
                                 isPlaying: controller.isPlaying,
-                                chips: chipStyle(isCurrent: isCurrent),
+                                chips: isBesidePractice ? .glass : .accent,
                                 onPlay: { practice(song) },
                                 onEditSpeed: { editing = song },
                                 onAddMarker: { openEditor(song) }
@@ -116,6 +114,7 @@ struct SavedSongsView: View {
                                     markers: markers,
                                     inset: trailingInset,
                                     leadingInset: SavedSongRow.titleInset,
+                                    outlinesIdle: true,
                                     // A tap edits here; loading the song is the row
                                     // above's job, and still a long press away.
                                     onTap: { openEditor(song, marker: $0) },
@@ -232,14 +231,6 @@ struct SavedSongsView: View {
             .fill(.separator)
             .frame(height: 0.5)
             .padding(.leading, SavedSongRow.titleInset)
-    }
-
-    /// Coral beside a cover-coloured card clashes, so there the chips go
-    /// neutral and only the loaded song's take the card's colour.
-    private func chipStyle(isCurrent: Bool) -> SavedSongRow.ChipStyle {
-        guard isBesidePractice else { return .accent }
-        if isCurrent, let practicePalette { return .cover(practicePalette.mesh[4]) }
-        return .neutral
     }
 
     // MARK: - Actions
@@ -399,27 +390,11 @@ private struct SavedSongRow: View {
     let onAddMarker: () -> Void
 
     enum ChipStyle {
-        case accent, neutral
-        /// Filled with the cover's colour, with primary text: the cover's own
-        /// colours are tuned for light text on a dark ground, so as text they
-        /// fail on a light page.
-        case cover(Color)
-
-        var fill: AnyShapeStyle {
-            switch self {
-            case .accent: AnyShapeStyle(.tint.opacity(0.12))
-            case .neutral: AnyShapeStyle(.quaternary)
-            case .cover(let color): AnyShapeStyle(color.opacity(0.3))
-            }
-        }
-
-        var text: AnyShapeStyle {
-            switch self {
-            case .accent: AnyShapeStyle(Color.accentText)
-            case .neutral: AnyShapeStyle(.secondary)
-            case .cover: AnyShapeStyle(.primary)
-            }
-        }
+        case accent
+        /// Beside the card: clear glass that takes on the cover's glow. Text
+        /// needs a concrete colour there: a hierarchical `.secondary` in a
+        /// borderless button resolves against the tint and comes out coral.
+        case glass
     }
 
     @ScaledMetric(relativeTo: .subheadline) private var markGlyphSize: CGFloat = 16
@@ -459,25 +434,24 @@ private struct SavedSongRow: View {
                     Text("\(song.percent)%")
                         .font(.subheadline.weight(.semibold))
                         .monospacedDigit()
-                        .foregroundStyle(chips.text)
+                        .foregroundStyle(chips == .accent ? Color.accentText : Color.primary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .chip(chips, in: .capsule)
                 }
                 // A plain button in a `List` row would let the whole row trigger it.
                 .buttonStyle(.borderless)
-                .buttonBorderShape(.capsule)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(chips.fill, in: .capsule)
                 .accessibilityLabel("Speed, \(song.percent) percent")
                 .accessibilityHint("Change the practice speed")
 
                 Button(action: onAddMarker) {
                     MarkGlyph()
                         .frame(width: markGlyphSize, height: markGlyphSize)
-                        .foregroundStyle(chips.text)
+                        .foregroundStyle(chips == .accent ? Color.accentText : Color.primary)
+                        .padding(6)
+                        .chip(chips, in: .circle)
                 }
                 .buttonStyle(.borderless)
-                .padding(6)
-                .background(chips.fill, in: .circle)
                 .accessibilityLabel("Add marker")
             }
         }
@@ -505,6 +479,18 @@ private struct SavedSongRow: View {
             .fill(.quaternary)
             .frame(width: 48, height: 48)
             .overlay(content())
+    }
+}
+
+private extension View {
+    /// Glass is interactive, so the chip flexes under a finger the way the
+    /// toolbar's buttons do.
+    @ViewBuilder
+    func chip(_ style: SavedSongRow.ChipStyle, in shape: some Shape) -> some View {
+        switch style {
+        case .accent: background(Color.accentColor.opacity(0.12), in: shape)
+        case .glass: glassEffect(.regular.interactive(), in: shape)
+        }
     }
 }
 
@@ -569,8 +555,20 @@ private struct SpeedEditorSheet: View {
 // MARK: - Previews
 
 #Preview("Saved songs") {
+    SavedSongsView(controller: PlaybackController()) {}
+        .modelContainer(previewContainer())
+}
+
+/// The wide iPad's Saved, with Little Wing loaded in the card beside it.
+#Preview("Beside the card", traits: .fixedLayout(width: 860, height: 700)) {
+    SavedSongsView(controller: PlaybackController(), isBesidePractice: true, previewCurrentID: "2") {}
+        .modelContainer(previewContainer())
+}
+
+@MainActor
+private func previewContainer() -> ModelContainer {
     let container = try! AppSchema.inMemoryContainer()
-    let context = ModelContext(container)
+    let context = container.mainContext
     SavedSong.save(
         songID: "1", title: "Blackbird", artistName: "The Beatles",
         artworkData: nil, speed: 0.75, in: context
@@ -585,9 +583,7 @@ private struct SpeedEditorSheet: View {
         songID: "3", title: "Nothing Else Matters", artistName: "Metallica",
         artworkData: nil, speed: 1.0, in: context
     )
-
-    return SavedSongsView(controller: PlaybackController()) {}
-        .modelContainer(container)
+    return container
 }
 
 #Preview("Empty") {

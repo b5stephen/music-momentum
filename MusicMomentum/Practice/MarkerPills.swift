@@ -15,6 +15,9 @@ struct MarkerPills: View {
     /// Content margins; the row still scrolls edge to edge.
     var inset: CGFloat = 32
     var leadingInset: CGFloat?
+    /// On a plain page a grey fill under every song outweighs the titles, so
+    /// Saved draws idle pills as a hairline instead.
+    var outlinesIdle = false
     var isLooping: (SongMarker) -> Bool = { _ in false }
     /// Playhead inside this clip while the loop is off.
     var isCued: (SongMarker) -> Bool = { _ in false }
@@ -30,6 +33,7 @@ struct MarkerPills: View {
     /// A pill's height.
     @ScaledMetric(relativeTo: .footnote) private var pillHeight: CGFloat = 32
     @Environment(\.onAccent) private var onAccent
+    @Environment(\.displayScale) private var displayScale
 
     private enum PillState {
         case idle, cued, looping
@@ -118,6 +122,11 @@ struct MarkerPills: View {
         .padding(.horizontal, 11)
         .padding(.vertical, 7)
         .background(fill(state), in: Capsule())
+        .overlay {
+            if outlinesIdle, state == .idle {
+                Capsule().strokeBorder(.quaternary, lineWidth: 1 / displayScale)
+            }
+        }
         .foregroundStyle(foreground(state))
     }
 
@@ -158,7 +167,7 @@ struct MarkerPills: View {
 
     private func fill(_ state: PillState) -> AnyShapeStyle {
         switch state {
-        case .idle: AnyShapeStyle(.quaternary)
+        case .idle: outlinesIdle ? AnyShapeStyle(.clear) : AnyShapeStyle(.quaternary)
         case .cued: AnyShapeStyle(.tint.opacity(0.12))
         case .looping: AnyShapeStyle(.tint)
         }

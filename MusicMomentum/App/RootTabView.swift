@@ -27,7 +27,7 @@ struct RootTabView: View {
                 FloatingLayout(palette: practicePalette) {
                     PracticeView(controller: controller, savedIsBeside: true) { practicePalette = $0 }
                 } saved: {
-                    SavedSongsView(controller: controller, isBesidePractice: true, practicePalette: practicePalette) {}
+                    SavedSongsView(controller: controller, isBesidePractice: true) {}
                 }
             } else {
                 tabs
@@ -229,7 +229,7 @@ private func floatingPreview(palette: ArtworkPalette?) -> some View {
     } saved: {
         SavedSongsView(
             controller: controller, isBesidePractice: true,
-            practicePalette: palette, previewCurrentID: palette.map { _ in "1" }
+            previewCurrentID: palette.map { _ in "1" }
         ) {}
     }
     .modelContainer(container)
