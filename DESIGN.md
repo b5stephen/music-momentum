@@ -58,6 +58,8 @@ Saved's speed and marker chips are clear Liquid Glass with primary text and no c
 - **The single colour MusicKit ships with artwork** as the ground: it's often the cover's border, not its average.
 - **Coral or grey chips beside the floating card:** coral clashed with the cover; grey read as disabled. Hence glass.
 - **Highlighting the loaded song in Saved** with a panel, coral or the cover's colour.
+- **A Mark pill pinned to the end of Practice's clip row:** it took a pill's width, leaving room for two and a half clips on a phone. Mark is a link on the caption line under the row instead.
+- **⏮ for restart:** a triangle-and-bar beside the skip buttons' circular arrows looked like a different set, and reads as "previous track". Restart uses `gobackward`, the skip arrow without a number.
 
 ## Website
 

@@ -19,6 +19,9 @@ struct MarkerPills: View {
     /// Saved draws idle pills as a hairline instead.
     var outlinesIdle = false
     var isLooping: (SongMarker) -> Bool = { _ in false }
+    /// With the loop on, a clip tap changes what's looping, so the clips that
+    /// could join it say so.
+    var isLoopOn = false
     /// Playhead inside this clip while the loop is off.
     var isCued: (SongMarker) -> Bool = { _ in false }
     var onTap: (SongMarker) -> Void
@@ -36,7 +39,7 @@ struct MarkerPills: View {
     @Environment(\.displayScale) private var displayScale
 
     private enum PillState {
-        case idle, cued, looping
+        case idle, cued, joinable, looping
     }
 
     var body: some View {
@@ -125,6 +128,10 @@ struct MarkerPills: View {
         .overlay {
             if outlinesIdle, state == .idle {
                 Capsule().strokeBorder(.quaternary, lineWidth: 1 / displayScale)
+            } else if state == .joinable {
+                // Dashed rather than coloured: on a cover the tint is the same
+                // near-white as the looping fill, so only the shape tells them apart.
+                Capsule().strokeBorder(.tint.opacity(0.7), style: StrokeStyle(lineWidth: 1.2, dash: [3, 3]))
             }
         }
         .foregroundStyle(foreground(state))
@@ -162,12 +169,13 @@ struct MarkerPills: View {
 
     private func state(of marker: SongMarker) -> PillState {
         if isLooping(marker) { return .looping }
+        if isLoopOn, marker.isClip { return .joinable }
         return isCued(marker) ? .cued : .idle
     }
 
     private func fill(_ state: PillState) -> AnyShapeStyle {
         switch state {
-        case .idle: outlinesIdle ? AnyShapeStyle(.clear) : AnyShapeStyle(.quaternary)
+        case .idle, .joinable: outlinesIdle ? AnyShapeStyle(.clear) : AnyShapeStyle(.quaternary)
         case .cued: AnyShapeStyle(.tint.opacity(0.12))
         case .looping: AnyShapeStyle(.tint)
         }
@@ -178,7 +186,7 @@ struct MarkerPills: View {
     /// 3:1, too faint for footnote text, so looping uses the dark on-accent colour.
     private func foreground(_ state: PillState) -> AnyShapeStyle {
         switch state {
-        case .idle, .cued: AnyShapeStyle(.primary)
+        case .idle, .cued, .joinable: AnyShapeStyle(.primary)
         case .looping: AnyShapeStyle(onAccent)
         }
     }
@@ -187,6 +195,7 @@ struct MarkerPills: View {
         let kind = marker.isClip ? "clip" : "marker"
         switch state {
         case .idle: return "\(marker.name), \(kind)"
+        case .joinable: return "\(marker.name), \(kind), not looping"
         case .cued: return "\(marker.name), \(kind), at the playhead"
         case .looping: return "\(marker.name), \(kind), looping"
         }
@@ -230,6 +239,13 @@ private extension View {
             isCued: { $0.name == "Verse riff" },
             onTap: { _ in }, onPlayLoop: { _ in }, onJump: { _ in },
             onEdit: { _ in }, onDelete: { _ in }
+        )
+
+        MarkerPills(
+            markers: song.sortedMarkers,
+            isLooping: { $0.name == "Solo" },
+            isLoopOn: true,
+            onTap: { _ in }
         )
 
         MarkerPills(markers: [], onTap: { _ in })

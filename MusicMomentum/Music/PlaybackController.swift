@@ -214,8 +214,10 @@ final class PlaybackController {
         isScrubbing = false
     }
 
+    /// Back to the top of what's looping: a chain's first clip, not the one
+    /// the playhead is in, so the whole run is played again.
     func restart() {
-        userSeek(to: 0)
+        userSeek(to: loop?.segments.first?.start ?? 0)
     }
 
     /// Called when the user reaches for the library, never on launch, so the

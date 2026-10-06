@@ -184,13 +184,7 @@ struct PracticeView: View {
 
         wheelGap
 
-        timeline
-            .frame(maxWidth: Self.roomyWidth)
-            .padding(.bottom, 34)
-
-        transportControls
-
-        loopCaptionLine
+        player
 
         // Past the wheel gaps' 30pt, spare height goes round the stack rather
         // than spreading the controls apart.
@@ -238,17 +232,7 @@ struct PracticeView: View {
                     cover(track.artwork, side: coverSide)
                         .padding(.bottom, Self.wideCoverGap)
                 }
-                VStack(spacing: 0) {
-                    timeline
-                        .padding(.bottom, 24)
-                    // Hung below rather than stacked: it's blank until a loop
-                    // runs, and its space would lift the column off centre.
-                    transportControls
-                        .overlay(alignment: .bottom) {
-                            loopCaptionLine
-                                .alignmentGuide(.bottom) { $0[.top] }
-                        }
-                }
+                player
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
                     widePlayerHeight = $0
                 }
@@ -260,17 +244,62 @@ struct PracticeView: View {
         .offset(y: tabBarInset / 2)
     }
 
-    // Always laid out so toggling the loop doesn't shift everything above it.
-    private var loopCaptionLine: some View {
-        Text(loopCaption ?? " ")
-            .font(.footnote.weight(.medium))
-            .foregroundStyle(textTint)
-            .lineLimit(1)
-            .opacity(loopCaption == nil ? 0 : 1)
-            .accessibilityHidden(loopCaption == nil)
-            .padding(.top, 14)
-            .padding(.horizontal, 24)
+    /// Playback, then what's being practised: the clips sit under the loop
+    /// button that reshapes them, with the caption saying what's looping.
+    /// Every row shares `playerMargin`, so the scrubber's ends, the first
+    /// pill and the outer buttons line up.
+    private var player: some View {
+        VStack(spacing: 0) {
+            PlaybackScrubber(
+                position: controller.playbackTime,
+                duration: controller.duration,
+                markers: scrubberMarkers,
+                onScrub: { _ in controller.isScrubbing = true },
+                onCommit: { controller.endScrub(at: $0) }
+            )
+            .padding(.horizontal, Self.playerMargin)
+            .padding(.bottom, 14)
+
+            transportControls
+                .padding(.bottom, 24)
+
+            // Always laid out, so switching between songs with and without
+            // markers doesn't shift the centred stack.
+            MarkerPills(
+                markers: savedSong?.sortedMarkers ?? [],
+                inset: Self.playerMargin,
+                isLooping: { controller.isLooping($0) },
+                isLoopOn: controller.isLoopOn,
+                isCued: { isCued($0) },
+                onTap: { tapped($0) },
+                onPlayLoop: { controller.playOnLoop($0) },
+                onJump: { controller.jump(to: $0) },
+                onEdit: { markerSheet = .edit($0) },
+                onDelete: { delete($0) }
+            )
+
+            // Mark shares the caption's line rather than taking a pill's
+            // width from the row, which only fitted two and a half clips.
+            HStack(spacing: 12) {
+                Text(loopCaption ?? " ")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(textTint)
+                    .lineLimit(1)
+                    .opacity(loopCaption == nil ? 0 : 1)
+                    .accessibilityHidden(loopCaption == nil)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                markButton
+            }
+            .padding(.horizontal, Self.playerMargin)
+        }
+        .frame(maxWidth: Self.playerWidth)
     }
+
+    private static let playerMargin: CGFloat = 32
+    /// Wide enough for a precise scrubber, narrow enough that the transport's
+    /// five buttons still read as one row.
+    private static let playerWidth: CGFloat = 500
 
     /// Wider than tall, and with room for the transport beside the wheel.
     private static func isWide(_ size: CGSize) -> Bool {
@@ -321,44 +350,24 @@ struct PracticeView: View {
         Self.isWide(size) ? Self.wideLeadingWidth(size.width) : nil
     }
 
-    @ViewBuilder
-    private var timeline: some View {
-        VStack(spacing: 10) {
-            PlaybackScrubber(
-                position: controller.playbackTime,
-                duration: controller.duration,
-                markers: scrubberMarkers,
-                onScrub: { _ in controller.isScrubbing = true },
-                onCommit: { controller.endScrub(at: $0) }
-            )
-            .padding(.horizontal, 32)
-
-            // Always laid out, so switching between songs with and without
-            // markers doesn't shift the centred stack.
-            MarkerPills(
-                markers: savedSong?.sortedMarkers ?? [],
-                isLooping: { controller.isLooping($0) },
-                isCued: { isCued($0) },
-                onTap: { tapped($0) },
-                onPlayLoop: { controller.playOnLoop($0) },
-                onJump: { controller.jump(to: $0) },
-                onEdit: { markerSheet = .edit($0) },
-                onDelete: { delete($0) }
-            )
-        }
-    }
-
     /// Five controls, not six: an odd number puts play/pause dead centre.
-    /// Restart was dropped — dragging to the start does the same job.
+    /// Marking moved under the pill row it adds to.
     private var transportControls: some View {
         HStack(spacing: 0) {
-            loopButton
-                .frame(maxWidth: .infinity)
+            transportButton(
+                "gobackward",
+                label: controller.isLoopOn ? "Restart loop" : "Restart"
+            ) {
+                controller.restart()
+            }
+
+            Spacer(minLength: 0)
 
             transportButton("gobackward.10", label: "Back 10 seconds") {
                 controller.skip(by: -10)
             }
-            .frame(maxWidth: .infinity)
+
+            Spacer(minLength: 0)
 
             Button {
                 controller.togglePlayPause()
@@ -368,54 +377,63 @@ struct PracticeView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(controller.isPlaying ? "Pause" : "Play")
-            .frame(maxWidth: .infinity)
+
+            Spacer(minLength: 0)
 
             transportButton("goforward.10", label: "Forward 10 seconds") {
                 controller.skip(by: 10)
             }
-            .frame(maxWidth: .infinity)
 
-            markButton
-                .frame(maxWidth: .infinity)
-        }
-        // Equal shares rather than a fixed gap keeps play/pause on the centre
-        // line at any width, and the ends on screen on a 390pt phone.
-        .frame(maxWidth: 430)
-        .padding(.horizontal, 12)
-    }
+            Spacer(minLength: 0)
 
-    private var loopButton: some View {
-        Button {
-            controller.toggleLoop()
-        } label: {
-            Image(systemName: "repeat")
-                .font(.system(size: 19, weight: .semibold))
-                .frame(width: 46, height: 46)
-                .background(
-                    controller.isLoopOn ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary),
-                    in: Circle()
-                )
-                .foregroundStyle(controller.isLoopOn ? AnyShapeStyle(onAccent) : AnyShapeStyle(.secondary))
+            loopButton
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Loop")
-        .accessibilityValue(loopDescription)
-        .accessibilityAddTraits(controller.isLoopOn ? .isSelected : [])
+        // Symmetric, so play/pause stays on the centre line. Inset by the
+        // touch area's slack so the glyphs, not their 44pt frames, meet the
+        // scrubber's ends.
+        .padding(.horizontal, Self.playerMargin - 10)
     }
 
     private var markButton: some View {
         Button {
             markerSheet = .new(start: controller.pauseForMarking())
         } label: {
-            MarkGlyph()
-                .frame(width: 22, height: 22)
-                .frame(width: 46, height: 46)
-                .background(.quaternary, in: Circle())
-                .foregroundStyle(.secondary)
+            Label {
+                Text("Mark")
+            } icon: {
+                MarkGlyph()
+                    .frame(width: 15, height: 15)
+            }
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(Color.primary)
+            .frame(minHeight: 44)
+            .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .fixedSize()
         .disabled(controller.duration == nil)
         .accessibilityLabel("Mark this point")
+    }
+
+    /// Plain like its neighbours until it's on, when it's the one control that
+    /// fills: looping is the state that shouts.
+    private var loopButton: some View {
+        Button {
+            controller.toggleLoop()
+        } label: {
+            Image(systemName: "repeat")
+                .font(.system(size: 20, weight: .semibold))
+                .frame(width: 44, height: 44)
+                .background {
+                    if controller.isLoopOn { Circle().fill(.tint) }
+                }
+                .foregroundStyle(controller.isLoopOn ? AnyShapeStyle(onAccent) : AnyShapeStyle(.primary))
+                .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Loop")
+        .accessibilityValue(loopDescription)
+        .accessibilityAddTraits(controller.isLoopOn ? .isSelected : [])
     }
 
     private var loopCaption: String? {
@@ -501,7 +519,7 @@ struct PracticeView: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 26))
+                .font(.system(size: 24))
                 .frame(width: 44, height: 44)
                 .contentShape(.rect)
         }
