@@ -291,6 +291,7 @@ struct PracticeView: View {
 
                 markButton
             }
+            .padding(.top, 8)
             .padding(.horizontal, Self.playerMargin)
         }
         .frame(maxWidth: Self.playerWidth)
@@ -330,7 +331,7 @@ struct PracticeView: View {
     /// Roughly everything on the loaded screen but the wheel. Subtracted from
     /// the height so on a short phone the wheel shrinks and the transport
     /// stays above the tab bar instead of scrolling under it.
-    private static let controlsHeight: CGFloat = 420
+    private static let controlsHeight: CGFloat = 428
 
     private func wheelDiameter(width: CGFloat) -> CGFloat {
         min(width >= Self.roomyWidth ? 320 : 260, max(160, width - 130))
