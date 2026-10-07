@@ -55,7 +55,6 @@ struct MarkerRangeEditor: View {
     private static let trackHeight: CGFloat = 8
     private static let handleSize: CGFloat = 20
     private static let playheadKnobSize: CGFloat = 12
-    private static let fadeWidth: CGFloat = 28
     private static let snapRadius: CGFloat = 10
     private static let bubbleHeight: CGFloat = 26
     private static let majorTickHeight: CGFloat = 8
@@ -202,7 +201,7 @@ struct MarkerRangeEditor: View {
                     ticks(width: width)
                 }
                 .frame(width: width, height: proxy.size.height, alignment: .topLeading)
-                .mask { edgeFade(width: width) }
+                .edgeFade(leading: windowStart > 0, trailing: windowStart + span < duration)
 
                 if window.contains(shownPlayhead) {
                     playheadLine(at: x(shownPlayhead, width: width))
@@ -249,22 +248,6 @@ struct MarkerRangeEditor: View {
             .clipShape(Capsule())
             .frame(width: x(duration, width: width) - songStart, height: Self.trackHeight)
             .offset(x: songStart, y: (Self.barHeight - Self.trackHeight) / 2)
-    }
-
-    private func edgeFade(width: CGFloat) -> some View {
-        let fade = min(0.5, Self.fadeWidth / max(width, 1))
-        let cutBefore = windowStart > 0
-        let cutAfter = windowStart + span < duration
-        return LinearGradient(
-            stops: [
-                .init(color: cutBefore ? .clear : .black, location: 0),
-                .init(color: .black, location: fade),
-                .init(color: .black, location: 1 - fade),
-                .init(color: cutAfter ? .clear : .black, location: 1),
-            ],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
     }
 
     /// Half a handle past the edge still shows, so dragging one out of view

@@ -35,6 +35,9 @@ struct MarkerPills: View {
     @ScaledMetric(relativeTo: .footnote) private var dotSize: CGFloat = 6
     /// A pill's height.
     @ScaledMetric(relativeTo: .footnote) private var pillHeight: CGFloat = 32
+    /// Which edges have pills scrolled past them, so the fade only hints at
+    /// more when there is more.
+    @State private var clipped: (leading: Bool, trailing: Bool) = (false, false)
     @Environment(\.onAccent) private var onAccent
     @Environment(\.displayScale) private var displayScale
 
@@ -57,6 +60,22 @@ struct MarkerPills: View {
         .scrollIndicators(.hidden)
         .contentMargins(.leading, leadingInset ?? inset, for: .scrollContent)
         .contentMargins(.trailing, inset, for: .scrollContent)
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            geometry.contentOffset.x > -geometry.contentInsets.leading + 1
+        } action: { _, isClipped in
+            clipped.leading = isClipped
+        }
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            geometry.contentOffset.x + geometry.containerSize.width
+                < geometry.contentSize.width + geometry.contentInsets.trailing - 1
+        } action: { _, isClipped in
+            clipped.trailing = isClipped
+        }
+        // Wider than the margin, or the cut-off pill reads as cropped
+        // rather than as carrying on.
+        .edgeFade(leading: clipped.leading, trailing: clipped.trailing, width: 56)
+        .animation(.easeOut(duration: 0.2), value: clipped.leading)
+        .animation(.easeOut(duration: 0.2), value: clipped.trailing)
     }
 
     /// The VoiceOver actions hang off here so both branches of `pillControl`
