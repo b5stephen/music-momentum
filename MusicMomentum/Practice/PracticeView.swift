@@ -23,14 +23,21 @@ struct PracticeView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.modelContext) private var modelContext
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Query private var savedSongs: [SavedSong]
     @State private var showPicker = false
     @State private var markerSheet: MarkerSheet?
+    /// The chips' height, which the compact change-song button matches.
+    @ScaledMetric(relativeTo: .footnote) private var chipHeight: CGFloat = 30
     /// The selected song's palette, kept so `track` doesn't rebuild it on
     /// every read: `Artwork.backgroundColor`'s, then the sampled cover's.
     @State private var palette: (songID: String, palette: ArtworkPalette?)?
+    /// Measured, so a long title that wraps is allowed for.
+    @State private var titleBlockHeight = PracticeLayout.Heights.standard.titleBlock
     /// Measured, so the wide layout's wheel takes exactly what the title leaves.
-    @State private var wideHeaderHeight: CGFloat = 110
+    @State private var wideHeaderHeight = PracticeLayout.Heights.standard.wideHeader
+    /// The size the screen last laid out at; see `isDragged(to:)`.
+    @State private var laidOutSize: CGSize?
     /// Measured, so the wide layout's cover takes exactly what the player leaves.
     @State private var widePlayerHeight: CGFloat = 200
 
@@ -82,15 +89,20 @@ struct PracticeView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     if let track {
-                        if Self.isWide(proxy.size) {
-                            loadedSongWide(
-                                track,
-                                size: proxy.size,
-                                tabBarInset: verticalSizeClass == .compact ? proxy.safeAreaInsets.bottom : 0
-                            )
-                        } else {
-                            loadedSong(track, size: proxy.size)
+                        let layout = PracticeLayout(size: proxy.size, heights: layoutHeights)
+                        Group {
+                            if layout.isWide {
+                                loadedSongWide(
+                                    track,
+                                    layout: layout,
+                                    size: proxy.size,
+                                    tabBarInset: verticalSizeClass == .compact ? proxy.safeAreaInsets.bottom : 0
+                                )
+                            } else {
+                                loadedSong(track, layout: layout, width: proxy.size.width)
+                            }
                         }
+                        .animation(isDragged(to: proxy.size) ? .snappy : nil, value: layout.isCompact)
                     } else if controller.isRestoringLastSong {
                         RestoringState(
                             diameter: arrivalDiameter(proxy.size),
@@ -107,6 +119,9 @@ struct PracticeView: View {
                 .padding(.top, track == nil ? 16 : Self.topPadding)
                 .padding(.bottom, 16)
                 .frame(maxWidth: .infinity, minHeight: proxy.size.height)
+            }
+            .onChange(of: proxy.size, initial: true) { _, size in
+                laidOutSize = size
             }
         }
         .modifier(ArtworkGround(palette: track?.palette, isPlaying: controller.isPlaying))
@@ -166,28 +181,39 @@ struct PracticeView: View {
 
     // MARK: - Practising
 
+    /// Whether the compact switch should animate: only while a window is
+    /// dragged across it, a few points a frame. The first layout and a
+    /// rotation jump straight there; animating them slid the wheel's hub in
+    /// from a size the screen never settled at.
+    private func isDragged(to size: CGSize) -> Bool {
+        guard let laidOutSize, laidOutSize != size else { return false }
+        return abs(laidOutSize.width - size.width) < 80 && abs(laidOutSize.height - size.height) < 80
+    }
+
     @ViewBuilder
-    private func loadedSong(_ track: Track, size: CGSize) -> some View {
+    private func loadedSong(_ track: Track, layout: PracticeLayout, width: CGFloat) -> some View {
         // Centred: left under the controls, a tall phone's spare height made
         // the screen look top-heavy.
         Spacer(minLength: 0)
 
-        nowPlaying(track)
+        if layout.isCompact {
+            compactNowPlaying(track, coverSide: layout.coverSide)
+        } else {
+            nowPlaying(track, coverSide: layout.coverSide, width: width)
+        }
 
-        wheelGap
+        Color.clear.frame(height: layout.wheelGap)
 
         SpeedWheelPicker(
             speed: $controller.playbackRate,
             savedSpeed: savedSong?.speed,
-            diameter: min(wheelDiameter(width: size.width), max(150, size.height - Self.controlsHeight))
+            diameter: layout.wheelDiameter
         )
 
-        wheelGap
+        Color.clear.frame(height: layout.wheelGap)
 
-        player
+        player(layout)
 
-        // Past the wheel gaps' 30pt, spare height goes round the stack rather
-        // than spreading the controls apart.
         Spacer(minLength: 0)
     }
 
@@ -198,21 +224,17 @@ struct PracticeView: View {
     /// edge, so the inset it reserves is empty beside it. The columns centre
     /// on the whole screen by dropping half of `tabBarInset`, and the player's
     /// cover gives up the height that costs it.
-    private func loadedSongWide(_ track: Track, size: CGSize, tabBarInset: CGFloat) -> some View {
-        let leading = Self.wideLeadingWidth(size.width)
-        let diameter = Self.wideWheelDiameter(
-            width: leading,
-            height: size.height - Self.verticalPadding - wideHeaderHeight - Self.wideHeaderGap
-        )
+    private func loadedSongWide(_ track: Track, layout: PracticeLayout, size: CGSize, tabBarInset: CGFloat) -> some View {
         // Centred, the player column reaches half its height below the
         // middle, which `tabBarInset` has dropped; the transport stays clear
         // of the tab bar.
-        let middle = Self.topPadding + (size.height - Self.verticalPadding) / 2 + tabBarInset / 2
-        let playerColumnHeight = min(size.height - Self.verticalPadding, 2 * (size.height - 8 - middle))
+        let verticalPadding = PracticeLayout.verticalPadding
+        let middle = Self.topPadding + (size.height - verticalPadding) / 2 + tabBarInset / 2
+        let playerColumnHeight = min(size.height - verticalPadding, 2 * (size.height - 8 - middle))
         let coverSide = min(180, playerColumnHeight - widePlayerHeight - Self.wideCoverGap)
         return HStack(spacing: 0) {
-            VStack(spacing: Self.wideHeaderGap) {
-                nowPlaying(track, showsCover: false)
+            VStack(spacing: PracticeLayout.wideHeaderGap) {
+                nowPlaying(track, coverSide: nil)
                     .lineLimit(2)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
                         wideHeaderHeight = $0
@@ -221,10 +243,10 @@ struct PracticeView: View {
                 SpeedWheelPicker(
                     speed: $controller.playbackRate,
                     savedSpeed: savedSong?.speed,
-                    diameter: diameter
+                    diameter: layout.wheelDiameter
                 )
             }
-            .frame(width: leading)
+            .frame(width: PracticeLayout.wideLeadingWidth(size.width))
 
             VStack(spacing: 0) {
                 // On a short landscape phone there's no room left for it.
@@ -232,7 +254,7 @@ struct PracticeView: View {
                     cover(track.artwork, side: coverSide)
                         .padding(.bottom, Self.wideCoverGap)
                 }
-                player
+                player(layout)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
                     widePlayerHeight = $0
                 }
@@ -248,7 +270,7 @@ struct PracticeView: View {
     /// button that reshapes them, with the caption saying what's looping.
     /// Every row shares `playerMargin`, so the scrubber's ends, the first
     /// pill and the outer buttons line up.
-    private var player: some View {
+    private func player(_ layout: PracticeLayout) -> some View {
         VStack(spacing: 0) {
             PlaybackScrubber(
                 position: controller.playbackTime,
@@ -258,43 +280,58 @@ struct PracticeView: View {
                 onCommit: { controller.endScrub(at: $0) }
             )
             .padding(.horizontal, Self.playerMargin)
-            .padding(.bottom, 14)
+            .padding(.bottom, layout.scrubberGap)
 
-            transportControls
-                .padding(.bottom, 24)
+            transportControls(layout)
+                .padding(.bottom, layout.transportGap)
 
-            // Always laid out, so switching between songs with and without
-            // markers doesn't shift the centred stack.
-            MarkerPills(
-                markers: savedSong?.sortedMarkers ?? [],
-                inset: Self.playerMargin,
-                isLooping: { controller.isLooping($0) },
-                isLoopOn: controller.isLoopOn,
-                isCued: { isCued($0) },
-                onTap: { tapped($0) },
-                onPlayLoop: { controller.playOnLoop($0) },
-                onJump: { controller.jump(to: $0) },
-                onEdit: { markerSheet = .edit($0) },
-                onDelete: { delete($0) }
-            )
+            if layout.isCompact {
+                // The caption's line is the height compact gives back; the
+                // loop button and the clips' fills still say what's looping.
+                HStack(spacing: 0) {
+                    markerPills(trailingInset: 8)
+                    markButton(showsTitle: false)
+                        .padding(.trailing, Self.playerMargin - 12)
+                }
+            } else {
+                markerPills(trailingInset: nil)
 
-            // Mark shares the caption's line rather than taking a pill's
-            // width from the row, which only fitted two and a half clips.
-            HStack(spacing: 12) {
-                Text(loopCaption ?? " ")
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(textTint)
-                    .lineLimit(1)
-                    .opacity(loopCaption == nil ? 0 : 1)
-                    .accessibilityHidden(loopCaption == nil)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                // Mark shares the caption's line rather than taking a pill's
+                // width from the row, which only fitted two and a half clips.
+                HStack(spacing: 12) {
+                    Text(loopCaption ?? " ")
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(textTint)
+                        .lineLimit(1)
+                        .opacity(loopCaption == nil ? 0 : 1)
+                        .accessibilityHidden(loopCaption == nil)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                markButton
+                    markButton(showsTitle: true)
+                }
+                .padding(.top, 8)
+                .padding(.horizontal, Self.playerMargin)
             }
-            .padding(.top, 8)
-            .padding(.horizontal, Self.playerMargin)
         }
         .frame(maxWidth: Self.playerWidth)
+    }
+
+    /// Always laid out, so switching between songs with and without markers
+    /// doesn't shift the centred stack.
+    private func markerPills(trailingInset: CGFloat?) -> some View {
+        MarkerPills(
+            markers: savedSong?.sortedMarkers ?? [],
+            inset: Self.playerMargin,
+            trailingInset: trailingInset,
+            isLooping: { controller.isLooping($0) },
+            isLoopOn: controller.isLoopOn,
+            isCued: { isCued($0) },
+            onTap: { tapped($0) },
+            onPlayLoop: { controller.playOnLoop($0) },
+            onJump: { controller.jump(to: $0) },
+            onEdit: { markerSheet = .edit($0) },
+            onDelete: { delete($0) }
+        )
     }
 
     private static let playerMargin: CGFloat = 32
@@ -302,64 +339,40 @@ struct PracticeView: View {
     /// five buttons still read as one row.
     private static let playerWidth: CGFloat = 500
 
-    /// Wider than tall, and with room for the transport beside the wheel.
-    private static func isWide(_ size: CGSize) -> Bool {
-        size.width > size.height && size.width >= 700
-    }
-
-    /// The top and bottom padding round the screen's content.
-    private static let verticalPadding: CGFloat = 22
     private static let topPadding: CGFloat = 6
-    private static let wideHeaderGap: CGFloat = 20
     private static let wideCoverGap: CGFloat = 16
-
-    /// Grows with the window up to what the wheel needs, and never takes so
-    /// much that the transport's five controls are squeezed.
-    private static func wideLeadingWidth(_ width: CGFloat) -> CGFloat {
-        min(380, width * 0.46)
-    }
-
-    private static func wideWheelDiameter(width: CGFloat, height: CGFloat) -> CGFloat {
-        max(150, min(Self.maxWheelDiameter, width - 48, height))
-    }
-
-    /// Gives up height on short phones before the screen has to scroll.
-    private var wheelGap: some View {
-        Spacer(minLength: 16).frame(maxHeight: 30)
-    }
-
-    /// Roughly everything on the loaded screen but the wheel. Subtracted from
-    /// the height so on a short phone the wheel shrinks and the transport
-    /// stays above the tab bar instead of scrolling under it.
-    private static let controlsHeight: CGFloat = 428
-
-    private func wheelDiameter(width: CGFloat) -> CGFloat {
-        min(width >= Self.roomyWidth ? Self.maxWheelDiameter : 260, max(160, width - 130))
-    }
-
-    /// Past a phone's width: the wheel grows to the wide layout's size, so
-    /// resizing an iPad window between the layouts doesn't resize the wheel.
-    private static let roomyWidth: CGFloat = 600
-
-    /// At 320 the dial dwarfed the controls on an iPad held upright.
-    private static let maxWheelDiameter: CGFloat = 280
 
     /// Wide, the silhouette sits where the wheel's column goes, beside the copy.
     private func arrivalDiameter(_ size: CGSize) -> CGFloat {
-        guard let leading = arrivalLeadingWidth(size) else { return wheelDiameter(width: size.width) }
-        return Self.wideWheelDiameter(width: leading, height: size.height - Self.verticalPadding - 32)
+        guard let leading = arrivalLeadingWidth(size) else {
+            return max(160, PracticeLayout.wheelCap(width: size.width))
+        }
+        return max(150, min(280, leading - 48, size.height - PracticeLayout.verticalPadding - 32))
     }
 
     private func arrivalLeadingWidth(_ size: CGSize) -> CGFloat? {
-        Self.isWide(size) ? Self.wideLeadingWidth(size.width) : nil
+        PracticeLayout.isWide(size) ? PracticeLayout.wideLeadingWidth(size.width) : nil
+    }
+
+    private var layoutHeights: PracticeLayout.Heights {
+        #if canImport(UIKit)
+        PracticeLayout.Heights(
+            dynamicTypeSize: dynamicTypeSize,
+            titleBlock: titleBlockHeight,
+            wideHeader: wideHeaderHeight
+        )
+        #else
+        PracticeLayout.Heights.standard
+        #endif
     }
 
     /// Five controls, not six: an odd number puts play/pause dead centre.
     /// Marking moved under the pill row it adds to.
-    private var transportControls: some View {
+    private func transportControls(_ layout: PracticeLayout) -> some View {
         HStack(spacing: 0) {
             transportButton(
                 "gobackward",
+                size: layout.transportGlyph,
                 label: controller.isLoopOn ? "Restart loop" : "Restart"
             ) {
                 controller.restart()
@@ -367,30 +380,23 @@ struct PracticeView: View {
 
             Spacer(minLength: 0)
 
-            transportButton("gobackward.10", label: "Back 10 seconds") {
+            transportButton("gobackward.10", size: layout.transportGlyph, label: "Back 10 seconds") {
                 controller.skip(by: -10)
             }
 
             Spacer(minLength: 0)
 
-            Button {
-                controller.togglePlayPause()
-            } label: {
-                Image(systemName: controller.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                    .font(.system(size: 68))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(controller.isPlaying ? "Pause" : "Play")
+            playButton(layout)
 
             Spacer(minLength: 0)
 
-            transportButton("goforward.10", label: "Forward 10 seconds") {
+            transportButton("goforward.10", size: layout.transportGlyph, label: "Forward 10 seconds") {
                 controller.skip(by: 10)
             }
 
             Spacer(minLength: 0)
 
-            loopButton
+            loopButton(layout)
         }
         // Symmetric, so play/pause stays on the centre line. Inset by the
         // touch area's slack so the glyphs, not their 44pt frames, meet the
@@ -398,19 +404,46 @@ struct PracticeView: View {
         .padding(.horizontal, Self.playerMargin - 10)
     }
 
-    private var markButton: some View {
+    /// Compact, a bare glyph: as a disc the size of the other buttons it
+    /// looked the same as the loop button switched on.
+    private func playButton(_ layout: PracticeLayout) -> some View {
+        Button {
+            controller.togglePlayPause()
+        } label: {
+            if layout.isCompact {
+                Image(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 28))
+                    .frame(width: 44, height: 44)
+                    .contentShape(.rect)
+            } else {
+                Image(systemName: controller.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                    .font(.system(size: layout.playSize))
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(controller.isPlaying ? "Pause" : "Play")
+    }
+
+    private func markButton(showsTitle: Bool) -> some View {
         Button {
             markerSheet = .new(start: controller.pauseForMarking())
         } label: {
-            Label {
-                Text("Mark")
-            } icon: {
-                MarkGlyph()
-                    .frame(width: 15, height: 15)
+            Group {
+                if showsTitle {
+                    Label {
+                        Text("Mark")
+                    } icon: {
+                        MarkGlyph()
+                            .frame(width: 15, height: 15)
+                    }
+                } else {
+                    MarkGlyph()
+                        .frame(width: 20, height: 20)
+                }
             }
             .font(.footnote.weight(.medium))
             .foregroundStyle(Color.primary)
-            .frame(minHeight: 44)
+            .frame(minWidth: 44, minHeight: 44)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -421,17 +454,20 @@ struct PracticeView: View {
 
     /// Plain like its neighbours until it's on, when it's the one control that
     /// fills: looping is the state that shouts.
-    private var loopButton: some View {
+    private func loopButton(_ layout: PracticeLayout) -> some View {
         Button {
             controller.toggleLoop()
         } label: {
             Image(systemName: "repeat")
-                .font(.system(size: 20, weight: .semibold))
-                .frame(width: 44, height: 44)
+                // Sized with its neighbours, not its fill: shrinking with the
+                // play button left it smaller than them whenever it was off.
+                .font(.system(size: layout.transportGlyph * 20 / 24, weight: .semibold))
+                .frame(width: layout.loopFill, height: layout.loopFill)
                 .background {
                     if controller.isLoopOn { Circle().fill(.tint) }
                 }
                 .foregroundStyle(controller.isLoopOn ? AnyShapeStyle(onAccent) : AnyShapeStyle(.primary))
+                .frame(width: 44, height: 44)
                 .contentShape(.circle)
         }
         .buttonStyle(.plain)
@@ -518,12 +554,13 @@ struct PracticeView: View {
 
     private func transportButton(
         _ systemImage: String,
+        size: CGFloat,
         label: String,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 24))
+                .font(.system(size: size))
                 .frame(width: 44, height: 44)
                 .contentShape(.rect)
         }
@@ -534,29 +571,67 @@ struct PracticeView: View {
     // MARK: - Header
 
     /// The cover shows where the screen's colours come from. Wide, it sits
-    /// over the player instead.
-    private func nowPlaying(_ track: Track, showsCover: Bool = true) -> some View {
+    /// over the player instead and `coverSide` is nil.
+    private func nowPlaying(_ track: Track, coverSide: CGFloat?, width: CGFloat = 0) -> some View {
         VStack(spacing: 12) {
             HStack(spacing: 14) {
-                if showsCover {
-                    cover(track.artwork, side: 64)
+                if let coverSide {
+                    cover(track.artwork, side: coverSide)
                 }
-
-                VStack(alignment: showsCover ? .leading : .center, spacing: 4) {
-                    Text(track.title)
-                        .font(.title2.bold())
-                    Text(track.artistName)
-                        .foregroundStyle(.secondary)
+                titleBlock(track, alignment: coverSide == nil ? .center : .leading)
+            }
+            .background(alignment: .topLeading) {
+                // Measured at the width the largest cover leaves, so the cover
+                // shrinking can't unwrap the title and feed back into the layout.
+                if coverSide != nil {
+                    titleBlock(track, alignment: .leading)
+                        .frame(width: max(0, width - 118), alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .hidden()
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                            titleBlockHeight = $0
+                        }
                 }
-                .multilineTextAlignment(showsCover ? .leading : .center)
             }
 
             HStack(spacing: 8) {
-                saveChip
-                changeSongChip
+                saveChip(isCompact: false)
+                changeSongChip(isCompact: false)
             }
         }
         .padding(.horizontal)
+    }
+
+    /// One line, with the chips beside the title saying only what they must.
+    private func compactNowPlaying(_ track: Track, coverSide: CGFloat) -> some View {
+        HStack(spacing: 12) {
+            cover(track.artwork, side: coverSide)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(track.title)
+                    .font(.headline)
+                Text(track.artistName)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            saveChip(isCompact: true)
+            changeSongChip(isCompact: true)
+        }
+        .padding(.horizontal, Self.playerMargin)
+        .frame(maxWidth: Self.playerWidth)
+    }
+
+    private func titleBlock(_ track: Track, alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 4) {
+            Text(track.title)
+                .font(.title2.bold())
+            Text(track.artistName)
+                .foregroundStyle(.secondary)
+        }
+        .multilineTextAlignment(alignment == .leading ? .leading : .center)
     }
 
     @ViewBuilder
@@ -575,38 +650,55 @@ struct PracticeView: View {
         }
     }
 
+    /// Compact, the chip keeps only the speed; the bookmark's fill and the
+    /// tint still say whether it's saved.
     @ViewBuilder
-    private var saveChip: some View {
+    private func saveChip(isCompact: Bool) -> some View {
         let percent = Int((controller.playbackRate * 100).rounded())
         let saved = savedSong
         let isCurrent = saved?.percent == percent
+        let title = isCurrent ? "Saved at \(percent)%"
+            : saved != nil ? "Update to \(percent)%"
+            : "Save at \(percent)%"
+        let label = chipLabel(
+            isCompact ? "\(percent)%" : title,
+            systemImage: saved == nil ? "bookmark" : "bookmark.fill",
+            isPrompting: !isCurrent
+        )
 
         // Settled, it's a label rather than a disabled button, which would
         // dim it below legible.
         if isCurrent {
-            chipLabel("Saved at \(percent)%", systemImage: "bookmark.fill", isPrompting: false)
+            label
+                .accessibilityLabel(title)
         } else {
             Button {
                 controller.saveCurrentSong()
             } label: {
-                if saved != nil {
-                    chipLabel("Update to \(percent)%", systemImage: "bookmark.fill", isPrompting: true)
-                } else {
-                    chipLabel("Save at \(percent)%", systemImage: "bookmark", isPrompting: true)
-                }
+                label
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(title)
         }
     }
 
-    private var changeSongChip: some View {
+    private func changeSongChip(isCompact: Bool) -> some View {
         Button {
             Task { showPicker = await controller.requestAuthorizationIfNeeded() }
         } label: {
-            chipLabel("Change song", systemImage: "arrow.left.arrow.right", isPrompting: false)
+            if isCompact {
+                Image(systemName: "arrow.left.arrow.right")
+                    .font(.footnote.weight(.medium))
+                    .frame(width: chipHeight, height: chipHeight)
+                    .background { ChipFill(isPrompting: false) }
+                    .foregroundStyle(.secondary)
+            } else {
+                chipLabel("Change song", systemImage: "arrow.left.arrow.right", isPrompting: false)
+            }
         }
         .buttonStyle(.plain)
         .disabled(!controller.canUseMusic)
+        .accessibilityLabel("Change song")
     }
 
     private func chipLabel(_ title: String, systemImage: String, isPrompting: Bool) -> some View {
@@ -981,13 +1073,36 @@ private struct DialSilhouette: View {
     loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)))
 }
 
+// Sizes where the layout gives way. Fixed layouts have no safe area, so
+// these are the space the screen gets, not whole devices.
+
+#Preview("Compact, iPhone SE", traits: .fixedLayout(width: 375, height: 580)) {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)), loopOn: true)
+}
+
+#Preview("Controls giving way", traits: .fixedLayout(width: 402, height: 660)) {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)))
+}
+
+#Preview("Compact, short window", traits: .fixedLayout(width: 500, height: 436)) {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.25, green: 0.25, blue: 0.25)), loopOn: true)
+}
+
+#Preview("Compact, landscape phone", traits: .fixedLayout(width: 750, height: 350)) {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)), loopOn: true)
+}
+
+#Preview("Roomy, iPad portrait", traits: .fixedLayout(width: 834, height: 1090)) {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)))
+}
+
 #Preview("Landscape, nothing loaded", traits: .landscapeLeft) {
     PracticeView(controller: PlaybackController())
         .modelContainer(try! AppSchema.inMemoryContainer())
 }
 
 @MainActor
-private func loadedPreview(palette: ArtworkPalette?) -> some View {
+private func loadedPreview(palette: ArtworkPalette?, loopOn: Bool = false) -> some View {
     let container = try! AppSchema.inMemoryContainer()
     let song = SavedSong.save(
         songID: "1", title: "Little Wing", artistName: "Jimi Hendrix",
@@ -998,6 +1113,7 @@ private func loadedPreview(palette: ArtworkPalette?) -> some View {
     SongMarker.add(to: song, name: "Verse 2", startTime: 150, endTime: nil, in: container.mainContext)
     let controller = PlaybackController()
     controller.playbackRate = 0.6
+    if loopOn { controller.toggleLoop() }
     return PracticeView(
         controller: controller,
         previewTrack: .init(id: "1", title: "Little Wing", artistName: "Jimi Hendrix", palette: palette)

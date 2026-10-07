@@ -15,6 +15,7 @@ struct MarkerPills: View {
     /// Content margins; the row still scrolls edge to edge.
     var inset: CGFloat = 32
     var leadingInset: CGFloat?
+    var trailingInset: CGFloat?
     /// On a plain page a grey fill under every song outweighs the titles, so
     /// Saved draws idle pills as a hairline instead.
     var outlinesIdle = false
@@ -59,7 +60,7 @@ struct MarkerPills: View {
         }
         .scrollIndicators(.hidden)
         .contentMargins(.leading, leadingInset ?? inset, for: .scrollContent)
-        .contentMargins(.trailing, inset, for: .scrollContent)
+        .contentMargins(.trailing, trailingInset ?? inset, for: .scrollContent)
         .onScrollGeometryChange(for: Bool.self) { geometry in
             geometry.contentOffset.x > -geometry.contentInsets.leading + 1
         } action: { _, isClipped in
