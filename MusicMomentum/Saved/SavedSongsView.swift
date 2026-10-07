@@ -103,9 +103,13 @@ struct SavedSongsView: View {
                                 if markers.isEmpty { separator }
                             }
                             .swipeActions(edge: .trailing) {
+                                // An `Image`, not a `Label`: the system adds the
+                                // title under the icon only once a row is tall
+                                // enough, so songs with and without markers differed.
                                 Button(role: .destructive) { delete(song) } label: {
-                                    Label("Delete", systemImage: "trash")
+                                    Image(systemName: "trash")
                                 }
+                                .accessibilityLabel("Delete")
                             }
 
                             if !markers.isEmpty {
