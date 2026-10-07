@@ -320,7 +320,7 @@ struct PracticeView: View {
     }
 
     private static func wideWheelDiameter(width: CGFloat, height: CGFloat) -> CGFloat {
-        max(150, min(320, width - 48, height))
+        max(150, min(Self.maxWheelDiameter, width - 48, height))
     }
 
     /// Gives up height on short phones before the screen has to scroll.
@@ -334,12 +334,15 @@ struct PracticeView: View {
     private static let controlsHeight: CGFloat = 428
 
     private func wheelDiameter(width: CGFloat) -> CGFloat {
-        min(width >= Self.roomyWidth ? 320 : 260, max(160, width - 130))
+        min(width >= Self.roomyWidth ? Self.maxWheelDiameter : 260, max(160, width - 130))
     }
 
     /// Past a phone's width: the wheel grows to the wide layout's size, so
     /// resizing an iPad window between the layouts doesn't resize the wheel.
     private static let roomyWidth: CGFloat = 600
+
+    /// At 320 the dial dwarfed the controls on an iPad held upright.
+    private static let maxWheelDiameter: CGFloat = 280
 
     /// Wide, the silhouette sits where the wheel's column goes, beside the copy.
     private func arrivalDiameter(_ size: CGSize) -> CGFloat {
