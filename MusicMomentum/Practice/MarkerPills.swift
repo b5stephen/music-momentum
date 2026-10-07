@@ -71,9 +71,9 @@ struct MarkerPills: View {
         } action: { _, isClipped in
             clipped.trailing = isClipped
         }
-        // Wider than the margin, or the cut-off pill reads as cropped
-        // rather than as carrying on.
-        .edgeFade(leading: clipped.leading, trailing: clipped.trailing, width: 56)
+        // Past the margin, or the cut-off pill reads as cropped rather than as
+        // carrying on; 56 started fading pills well clear of the edge.
+        .edgeFade(leading: clipped.leading, trailing: clipped.trailing, width: 40)
         .animation(.easeOut(duration: 0.2), value: clipped.leading)
         .animation(.easeOut(duration: 0.2), value: clipped.trailing)
     }
