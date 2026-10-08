@@ -684,7 +684,7 @@ struct PracticeView: View {
     private func titleBlock(_ track: Track, alignment: HorizontalAlignment) -> some View {
         VStack(alignment: alignment, spacing: 4) {
             Text(track.title)
-                .font(.title2.bold())
+                .font(.title3.bold())
             Text(track.artistName)
                 .foregroundStyle(.secondary)
         }
