@@ -120,6 +120,7 @@ struct PracticeView: View {
                 .padding(.bottom, PracticeLayout.bottomMargin)
                 .frame(maxWidth: .infinity, minHeight: proxy.size.height)
             }
+            .scrollBounceBehavior(.basedOnSize)
             .onChange(of: proxy.size, initial: true) { _, size in
                 laidOutSize = size
             }
