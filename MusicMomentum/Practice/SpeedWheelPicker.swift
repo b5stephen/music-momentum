@@ -334,6 +334,18 @@ struct SpeedWheelPicker: View {
     .padding()
 }
 
+// The compact short window's knob, just inside the small tier, and at the
+// readout's widest.
+#Preview("Small, 180pt") {
+    @Previewable @State var speed = 0.6
+    @Previewable @State var full = 1.0
+    VStack(spacing: 24) {
+        SpeedWheelPicker(speed: $speed, savedSpeed: 0.6, diameter: 180)
+        SpeedWheelPicker(speed: $full, diameter: 180)
+    }
+    .padding()
+}
+
 /// Approximates `ArtworkGround` on a dark cover: light text and tint.
 #Preview("On a cover") {
     @Previewable @State var speed = 0.7

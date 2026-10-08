@@ -67,7 +67,9 @@ nonisolated struct SpeedKnobGeometry: Equatable {
     /// A little bigger on a small knob so the readout keeps a legible size,
     /// but no bigger: at three quarters the pointer shrank to a stub.
     var capRadius: CGFloat { skirtRadius * (detail == .small ? 0.68 : 0.66) }
-    var readoutSize: CGFloat { max(30, capRadius * 0.72) }
+    /// Smaller against the cap on a small knob, where "100%" at full size
+    /// ran nearly edge to edge and crowded the cap's rim.
+    var readoutSize: CGFloat { max(28, capRadius * (detail == .small ? 0.6 : 0.72)) }
     var showsCaption: Bool { capRadius >= 55 }
 
     var tickStep: Int { detail == .full ? 5 : 10 }
