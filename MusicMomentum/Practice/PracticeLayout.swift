@@ -38,9 +38,8 @@ nonisolated struct PracticeLayout: Equatable {
     struct Heights: Equatable {
         /// Title and artist beside the cover.
         var titleBlock: CGFloat
-        /// Title, artist and chips above the wide layout's wheel.
+        /// Title, artist and buttons above the wide layout's wheel.
         var wideHeader: CGFloat
-        var chipRow: CGFloat
         var compactHeader: CGFloat
         var scrubber: CGFloat
         var pillRow: CGFloat
@@ -48,7 +47,7 @@ nonisolated struct PracticeLayout: Equatable {
         var captionRow: CGFloat
 
         static let standard = Heights(
-            titleBlock: 54, wideHeader: 110, chipRow: 30, compactHeader: 44,
+            titleBlock: 54, wideHeader: 110, compactHeader: 44,
             scrubber: 56, pillRow: 36, captionRow: 52
         )
     }
@@ -191,7 +190,7 @@ nonisolated struct PracticeLayout: Equatable {
     private func stackedHeight(_ heights: Heights) -> CGFloat {
         let header = isCompact
             ? heights.compactHeader
-            : max(coverSide, heights.titleBlock) + 12 + heights.chipRow
+            : max(coverSide, heights.titleBlock, 44)
         return Self.verticalPadding + header + 2 * wheelGap + wheelDiameter + playerHeight(heights)
     }
 
@@ -216,7 +215,6 @@ extension PracticeLayout.Heights {
         self.init(
             titleBlock: titleBlock,
             wideHeader: wideHeader,
-            chipRow: line(.footnote) + 12,
             compactHeader: max(44, line(.headline) + 2 + line(.subheadline)),
             // The labels tuck 4pt up under the bar's 44pt touch area.
             scrubber: 44 + line(.caption1) - 4,

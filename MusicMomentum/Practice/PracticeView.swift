@@ -27,8 +27,6 @@ struct PracticeView: View {
     @Query private var savedSongs: [SavedSong]
     @State private var showPicker = false
     @State private var markerSheet: MarkerSheet?
-    /// The chips' height, which the compact change-song button matches.
-    @ScaledMetric(relativeTo: .footnote) private var chipHeight: CGFloat = 30
     /// The selected song's palette, kept so `track` doesn't rebuild it on
     /// every read: `Artwork.backgroundColor`'s, then the sampled cover's.
     @State private var palette: (songID: String, palette: ArtworkPalette?)?
@@ -40,6 +38,8 @@ struct PracticeView: View {
     @State private var laidOutSize: CGSize?
     /// Measured, so the wide layout's cover takes exactly what the player leaves.
     @State private var widePlayerHeight: CGFloat = 200
+    /// Measured, so the title fades out just short of a save prompt growing over it.
+    @State private var headerButtonsWidth: CGFloat = 0
 
     /// Editing carries the marker's identity so switching straight from one
     /// marker to another rebuilds the sheet.
@@ -570,39 +570,46 @@ struct PracticeView: View {
 
     // MARK: - Header
 
+    private static let headerButtonSide: CGFloat = 44
+    private static let headerButtonGap: CGFloat = 8
+    private static let collapsedHeaderButtons = 2 * headerButtonSide + headerButtonGap
+    /// What the title always leaves beside it, so a save prompt growing over
+    /// it never reflows it.
+    private static let headerButtonsReserve = collapsedHeaderButtons + 10
+    private static let titleFadeLength: CGFloat = 24
+
     /// The cover shows where the screen's colours come from. Wide, it sits
     /// over the player instead and `coverSide` is nil.
+    @ViewBuilder
     private func nowPlaying(_ track: Track, coverSide: CGFloat?, width: CGFloat = 0) -> some View {
-        VStack(spacing: 12) {
+        if let coverSide {
             HStack(spacing: 14) {
-                if let coverSide {
-                    cover(track.artwork, side: coverSide)
-                }
-                titleBlock(track, alignment: coverSide == nil ? .center : .leading)
+                cover(track.artwork, side: coverSide)
+                titleBlock(track, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .background(alignment: .topLeading) {
                 // Measured at the width the largest cover leaves, so the cover
                 // shrinking can't unwrap the title and feed back into the layout.
-                if coverSide != nil {
-                    titleBlock(track, alignment: .leading)
-                        .frame(width: max(0, width - 118), alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .hidden()
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
-                            titleBlockHeight = $0
-                        }
-                }
+                titleBlock(track, alignment: .leading)
+                    .frame(width: max(0, width - 118 - Self.headerButtonsReserve), alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .hidden()
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                        titleBlockHeight = $0
+                    }
             }
-
-            HStack(spacing: 8) {
-                saveChip(isCompact: false)
-                changeSongChip(isCompact: false)
+            .modifier(HeaderButtonsBeside(reserve: Self.headerButtonsReserve, buttons: headerButtons, fade: titleFade))
+            .padding(.horizontal)
+        } else {
+            VStack(spacing: 12) {
+                titleBlock(track, alignment: .center)
+                headerButtons
             }
+            .padding(.horizontal)
         }
-        .padding(.horizontal)
     }
 
-    /// One line, with the chips beside the title saying only what they must.
     private func compactNowPlaying(_ track: Track, coverSide: CGFloat) -> some View {
         HStack(spacing: 12) {
             cover(track.artwork, side: coverSide)
@@ -616,12 +623,34 @@ struct PracticeView: View {
             }
             .lineLimit(1)
             .frame(maxWidth: .infinity, alignment: .leading)
-
-            saveChip(isCompact: true)
-            changeSongChip(isCompact: true)
         }
+        .modifier(HeaderButtonsBeside(reserve: Self.headerButtonsReserve, buttons: headerButtons, fade: titleFade))
         .padding(.horizontal, Self.playerMargin)
         .frame(maxWidth: Self.playerWidth)
+    }
+
+    /// Clear under the buttons, but only while the save prompt has grown past
+    /// the room the title always leaves; collapsed, the fade sits in that room.
+    private var titleFade: some View {
+        let expanded = headerButtonsWidth > Self.collapsedHeaderButtons + 1
+        return HStack(spacing: 0) {
+            Rectangle()
+            LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                .frame(width: Self.titleFadeLength)
+            Color.clear
+                .frame(width: expanded ? headerButtonsWidth + 4 : 0)
+        }
+        .animation(.bouncy(duration: 0.4), value: headerButtonsWidth)
+    }
+
+    private var headerButtons: some View {
+        HStack(spacing: Self.headerButtonGap) {
+            saveButton
+            changeSongButton
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: {
+            headerButtonsWidth = $0
+        }
     }
 
     private func titleBlock(_ track: Track, alignment: HorizontalAlignment) -> some View {
@@ -650,67 +679,62 @@ struct PracticeView: View {
         }
     }
 
-    /// Compact, the chip keeps only the speed; the bookmark's fill and the
-    /// tint still say whether it's saved.
-    @ViewBuilder
-    private func saveChip(isCompact: Bool) -> some View {
+    /// Settled, a filled bookmark; the saved speed itself is the dot on the
+    /// knob's scale. A different speed grows it into a prompt, which shrinks
+    /// back once saved. One view throughout, so the glass morphs rather than
+    /// cross-fading between two buttons.
+    private var saveButton: some View {
         let percent = Int((controller.playbackRate * 100).rounded())
         let saved = savedSong
         let isCurrent = saved?.percent == percent
         let title = isCurrent ? "Saved at \(percent)%"
-            : saved != nil ? "Update to \(percent)%"
+            : saved != nil ? "Update saved speed to \(percent)%"
             : "Save at \(percent)%"
-        let label = chipLabel(
-            isCompact ? "\(percent)%" : title,
-            systemImage: saved == nil ? "bookmark" : "bookmark.fill",
-            isPrompting: !isCurrent
-        )
 
+        return Button {
+            controller.saveCurrentSong()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: isCurrent ? "bookmark.fill" : "bookmark")
+                if !isCurrent {
+                    Text("Save \(percent)%")
+                        .monospacedDigit()
+                        .fixedSize()
+                        .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .leading)))
+                }
+            }
+            .font(.subheadline.weight(.semibold))
+            .padding(.horizontal, isCurrent ? 0 : 14)
+            .frame(minWidth: Self.headerButtonSide, minHeight: Self.headerButtonSide)
+            .foregroundStyle(isCurrent ? AnyShapeStyle(.primary) : AnyShapeStyle(textTint))
+            .modifier(HeaderGlass(prompt: isCurrent ? nil : textTint))
+            .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
         // Settled, it's a label rather than a disabled button, which would
         // dim it below legible.
-        if isCurrent {
-            label
-                .accessibilityLabel(title)
-        } else {
-            Button {
-                controller.saveCurrentSong()
-            } label: {
-                label
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(title)
-        }
+        .allowsHitTesting(!isCurrent)
+        .accessibilityLabel(title)
+        .accessibilityRemoveTraits(isCurrent ? .isButton : [])
+        .animation(.bouncy(duration: 0.4), value: isCurrent)
     }
 
-    private func changeSongChip(isCompact: Bool) -> some View {
+    private var changeSongButton: some View {
         Button {
             Task { showPicker = await controller.requestAuthorizationIfNeeded() }
         } label: {
-            if isCompact {
-                Image(systemName: "arrow.left.arrow.right")
-                    .font(.footnote.weight(.medium))
-                    .frame(width: chipHeight, height: chipHeight)
-                    .background { ChipFill(isPrompting: false) }
-                    .foregroundStyle(.secondary)
-            } else {
-                chipLabel("Change song", systemImage: "arrow.left.arrow.right", isPrompting: false)
-            }
+            Image(systemName: "arrow.left.arrow.right")
+                .font(.subheadline.weight(.semibold))
+                .frame(width: Self.headerButtonSide, height: Self.headerButtonSide)
+                .modifier(HeaderGlass(prompt: nil))
+                .contentShape(.circle)
         }
         .buttonStyle(.plain)
         .disabled(!controller.canUseMusic)
         .accessibilityLabel("Change song")
     }
 
-    private func chipLabel(_ title: String, systemImage: String, isPrompting: Bool) -> some View {
-        Label(title, systemImage: systemImage)
-            .font(.footnote.weight(.medium))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background { ChipFill(isPrompting: isPrompting) }
-            .foregroundStyle(isPrompting ? AnyShapeStyle(textTint) : AnyShapeStyle(.secondary))
-    }
-
-    /// Reads the `@Query` results rather than fetching, so the chip restyles
+    /// Reads the `@Query` results rather than fetching, so the save button restyles
     /// the moment the store changes — including from the Saved tab.
     private var savedSong: SavedSong? {
         guard let songID = track?.id else { return nil }
@@ -846,7 +870,7 @@ private struct ArrivalState: View {
             .multilineTextAlignment(.center)
             .padding(.horizontal, 40)
 
-            // Tinted rather than solid, so it's the same coral as the chips and
+            // Tinted rather than solid, so it's the same coral as the save prompt and
             // speed pills: a solid fill reads as a brighter, other colour. Drawn
             // by hand because `.bordered` turns grey once its text is recoloured.
             Button(action: action) {
@@ -950,18 +974,35 @@ private final class DriftClock {
     }
 }
 
-/// A chip's capsule: tinted when it prompts, light glass when settled, and
-/// smoked either way on a bright cover.
-private struct ChipFill: View {
-    var isPrompting: Bool
+/// The header's buttons over the title's trailing edge, with the title
+/// masked so it fades out under them instead of showing through the glass.
+private struct HeaderButtonsBeside<Buttons: View, Fade: View>: ViewModifier {
+    var reserve: CGFloat
+    var buttons: Buttons
+    var fade: Fade
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.trailing, reserve)
+            .mask(fade)
+            .overlay(alignment: .trailing) { buttons }
+    }
+}
+
+/// Glass for the header's buttons: tinted when it prompts, and smoked either
+/// way on a bright cover, where clear glass under light text washes out.
+private struct HeaderGlass: ViewModifier {
+    var prompt: Color?
     @Environment(\.smokedFill) private var smokedFill
 
-    var body: some View {
-        if let smokedFill {
-            Capsule().fill(smokedFill)
-        } else {
-            Capsule().fill(isPrompting ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary))
-        }
+    func body(content: Content) -> some View {
+        content.glassEffect(glass.interactive(), in: .capsule)
+    }
+
+    private var glass: Glass {
+        if let smokedFill { return .regular.tint(smokedFill) }
+        if let prompt { return .regular.tint(prompt.opacity(0.2)) }
+        return .regular
     }
 }
 
@@ -1073,7 +1114,7 @@ private struct DialSilhouette: View {
 // Sizes where the layout gives way. Fixed layouts have no safe area, so
 // these are the space the screen gets, not whole devices.
 
-#Preview("Compact, iPhone SE", traits: .fixedLayout(width: 375, height: 580)) {
+#Preview("iPhone SE", traits: .fixedLayout(width: 375, height: 580)) {
     loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)), loopOn: true)
 }
 
@@ -1098,22 +1139,42 @@ private struct DialSilhouette: View {
         .modelContainer(try! AppSchema.inMemoryContainer())
 }
 
+// The save prompt grown over the title, which fades rather than reflowing.
+#Preview("Speed changed, long title") {
+    loadedPreview(
+        palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)),
+        title: "Don't Dream It's Over (2010 Remaster)",
+        artistName: "Crowded House",
+        rate: 0.72
+    )
+}
+
+#Preview("Speed changed, no cover colours") {
+    loadedPreview(palette: nil, rate: 0.72)
+}
+
 @MainActor
-private func loadedPreview(palette: ArtworkPalette?, loopOn: Bool = false) -> some View {
+private func loadedPreview(
+    palette: ArtworkPalette?,
+    title: String = "Little Wing",
+    artistName: String = "Jimi Hendrix",
+    rate: Double = 0.6,
+    loopOn: Bool = false
+) -> some View {
     let container = try! AppSchema.inMemoryContainer()
     let song = SavedSong.save(
-        songID: "1", title: "Little Wing", artistName: "Jimi Hendrix",
+        songID: "1", title: title, artistName: artistName,
         artworkData: nil, speed: 0.6, in: container.mainContext
     )
     SongMarker.add(to: song, name: "Intro", startTime: 0, endTime: 22, in: container.mainContext)
     SongMarker.add(to: song, name: "Solo", startTime: 96, endTime: 112, in: container.mainContext)
     SongMarker.add(to: song, name: "Verse 2", startTime: 150, endTime: nil, in: container.mainContext)
     let controller = PlaybackController()
-    controller.playbackRate = 0.6
+    controller.playbackRate = rate
     if loopOn { controller.toggleLoop() }
     return PracticeView(
         controller: controller,
-        previewTrack: .init(id: "1", title: "Little Wing", artistName: "Jimi Hendrix", palette: palette)
+        previewTrack: .init(id: "1", title: title, artistName: artistName, palette: palette)
     )
     .modelContainer(container)
 }

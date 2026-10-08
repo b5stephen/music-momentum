@@ -23,9 +23,16 @@ struct PracticeLayoutTests {
         #expect(phone.playSize == 68)
     }
 
-    @Test("A short phone goes compact rather than shrinking the wheel")
-    func shortPhone() {
-        let short = layout(375, 580)
+    @Test("An iPhone SE fits the phone layout with a full wheel")
+    func iPhoneSE() {
+        let se = layout(375, 580)
+        #expect(!se.isCompact)
+        #expect(se.wheelDiameter == PracticeLayout.wheelCap(width: 375))
+    }
+
+    @Test("A shorter window goes compact rather than shrinking the wheel")
+    func shortWindow() {
+        let short = layout(375, 530)
         #expect(short.isCompact)
         #expect(short.wheelDiameter == PracticeLayout.wheelCap(width: 375))
     }
