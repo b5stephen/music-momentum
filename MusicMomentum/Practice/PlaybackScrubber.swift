@@ -40,8 +40,8 @@ struct PlaybackScrubber: View {
     }
 
     var body: some View {
-        // The bar's 44pt is touch area around a 6pt track, so the labels tuck
-        // up under the track rather than under the touch area.
+        // The bar's 44pt is touch area around the lane and the track, so the
+        // labels tuck up under the track rather than under the touch area.
         VStack(spacing: -4) {
             bar
             labels
@@ -56,21 +56,36 @@ struct PlaybackScrubber: View {
         }
     }
 
+    private static let laneHeight: CGFloat = 8
+    private static let laneGap: CGFloat = 4
+    /// The track's height while a finger is down; it sits in a slot this
+    /// tall either way, so growing doesn't nudge the lane above it.
+    private static let draggingTrackHeight: CGFloat = 12
+
+    /// Markers get a lane of their own above the track. Drawn on the track
+    /// they fought the played fill: a clip at track height read as buffering,
+    /// and a looping one needed a halo to survive being played past.
     private var bar: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
-            let height: CGFloat = isDragging ? 10 : 6
+            let trackHeight: CGFloat = isDragging ? Self.draggingTrackHeight : 6
 
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(.quaternary)
-                Capsule()
-                    .fill(.tint.opacity(0.45))
-                    .frame(width: max(height, width * fraction))
-                markerOverlay(width: width, height: height)
-                playhead(width: width, height: height)
+            VStack(spacing: Self.laneGap) {
+                markerLane(width: width)
+                    .frame(height: Self.laneHeight)
+
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(.primary.opacity(0.18))
+                    Capsule()
+                        .fill(.primary)
+                        .frame(width: max(trackHeight, width * fraction))
+                        .opacity(duration == nil ? 0 : 1)
+                }
+                .frame(height: trackHeight)
+                .frame(height: Self.draggingTrackHeight)
             }
-            .frame(height: height)
+            .overlay(alignment: .leading) { playhead(width: width) }
             .frame(maxHeight: .infinity)
             .contentShape(.rect)
             .gesture(dragGesture(width: width))
@@ -80,56 +95,44 @@ struct PlaybackScrubber: View {
         .disabled(duration == nil)
     }
 
-    /// Looping bands are ringed in the background colour so the played fill,
-    /// in the same tint, can't swallow them.
+    /// The looping clip is solid; the rest are translucent, as the pills'
+    /// fills are.
     @ViewBuilder
-    private func markerOverlay(width: CGFloat, height: CGFloat) -> some View {
+    private func markerLane(width: CGFloat) -> some View {
         if let duration, duration > 0 {
-            ForEach(markers) { marker in
-                let x = width * min(max(marker.start / duration, 0), 1)
-                if let end = marker.end {
-                    let span = width * min(max((end - marker.start) / duration, 0), 1)
-                    if marker.isLooping {
-                        ZStack {
-                            Capsule()
-                                .fill(.background)
-                                .frame(width: max(2, span) + 4, height: 18)
-                            Capsule()
-                                .fill(.tint)
-                                .frame(width: max(2, span), height: 14)
-                        }
-                        .offset(x: x)
-                    } else {
+            ZStack(alignment: .leading) {
+                ForEach(markers) { marker in
+                    let x = width * min(max(marker.start / duration, 0), 1)
+                    if let end = marker.end {
+                        let span = width * min(max((end - marker.start) / duration, 0), 1)
                         Capsule()
-                            .fill(.primary.opacity(0.25))
-                            .frame(width: max(2, span), height: height)
-                            .offset(x: x)
+                            .fill(marker.isLooping ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary.opacity(0.35)))
+                            .frame(width: max(Self.laneHeight, span), height: Self.laneHeight)
+                            .offset(x: min(x, width - max(Self.laneHeight, span)))
+                    } else {
+                        Circle()
+                            .fill(.primary.opacity(0.6))
+                            .frame(width: 6, height: 6)
+                            .offset(x: min(max(0, x - 3), width - 6))
                     }
-                } else {
-                    Capsule()
-                        .fill(.primary.opacity(0.45))
-                        .frame(width: 2, height: height)
-                        .offset(x: max(0, x - 1))
                 }
             }
+            .frame(width: width, alignment: .leading)
             .allowsHitTesting(false)
+        } else {
+            Color.clear
         }
     }
 
-    /// Hollow so it stays visible on top of a lit loop band.
-    private func playhead(width: CGFloat, height: CGFloat) -> some View {
+    /// A hairline through the lane and the track, so you can see where you
+    /// are against a clip.
+    private func playhead(width: CGFloat) -> some View {
         Capsule()
-            .fill(.background)
-            .overlay(Capsule().strokeBorder(.primary.opacity(0.25), lineWidth: 1.5))
-            .frame(width: 6, height: max(14, height + 8))
-            .offset(x: min(max(0, width * fraction - 3), max(0, width - 6)))
+            .fill(.primary.opacity(0.8))
+            .frame(width: 1.5, height: Self.laneHeight + Self.laneGap + Self.draggingTrackHeight + 4)
+            .offset(x: min(max(0, width * fraction - 0.75), max(0, width - 1.5)))
             .allowsHitTesting(false)
             .opacity(duration == nil ? 0 : 1)
-    }
-
-    private func fraction(of marker: Marker) -> Double {
-        guard let duration, duration > 0 else { return 0 }
-        return min(max(marker.start / duration, 0), 1)
     }
 
     private func dragGesture(width: CGFloat) -> some Gesture {
