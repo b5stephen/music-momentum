@@ -67,16 +67,20 @@ struct SpeedWheelPicker: View {
         return ZStack {
             // Swapped rather than redrawn, so a window dragged across a
             // detail threshold cross-fades the numbers instead of popping them.
-            scale(geometry)
-                .id(geometry.detail)
-                .transition(.opacity)
+            // Animated here alone: across the whole knob it also animated the
+            // readout's new size, which its numeric transition draws as a blur.
+            ZStack {
+                scale(geometry)
+                    .id(geometry.detail)
+                    .transition(.opacity)
+            }
+            .animation(.easeInOut(duration: 0.2), value: geometry.detail)
             skirt(geometry)
             markings(geometry)
                 .rotationEffect(SpeedKnobGeometry.angle(for: ringPercent) - .degrees(270))
                 .animation(isDragging ? nil : .snappy(duration: 0.35), value: ringPercent)
             cap(geometry)
         }
-        .animation(.easeInOut(duration: 0.2), value: geometry.detail)
     }
 
     /// Printed on the panel, so it stays still while the knob turns.
