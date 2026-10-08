@@ -512,6 +512,7 @@ private struct SpeedEditorSheet: View {
                 GeometryReader { proxy in
                     SpeedWheelPicker(
                         speed: $speed,
+                        savedSpeed: song.speed,
                         diameter: min(min(260, max(160, proxy.size.width - 130)), proxy.size.height)
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
