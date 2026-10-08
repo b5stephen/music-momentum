@@ -8,12 +8,13 @@ import SwiftUI
 import UIKit
 #endif
 
-/// A rotary wheel for practice speed, one haptic detent per percent. The
-/// wheel itself never clamps — it keeps turning under the finger at either
-/// limit — only the value and the arc around the rim do.
+/// An amp-style knob for practice speed, one haptic detent per percent.
+/// Where it points is the speed: it stops dead at either limit, and the
+/// scale around it lights up to the pointer.
 struct SpeedWheelPicker: View {
     @Binding var speed: Double
     @Environment(\.smokedFill) private var smokedFill
+    @Environment(\.colorScheme) private var colorScheme
 
     /// A double tap toggles between this and full speed; with none, it only
     /// ever goes to full speed.
@@ -21,18 +22,12 @@ struct SpeedWheelPicker: View {
 
     var diameter: CGFloat = 260
 
-    /// Integers so tick generation and snapping never drift on float arithmetic.
-    private let minPercent = 30
-    private let maxPercent = 100
+    @ScaledMetric(relativeTo: .caption2) private var labelSize: CGFloat = 11
 
-    private let degreesPerPercent: Double = 4
-
-    /// Unbounded, unlike the value.
-    @State private var wheelAngle: Double = 0
-    /// Live, unrounded value during a drag. Clamped on every update so
-    /// reversing out of a limit responds immediately.
+    /// Live, unrounded value during a drag. Clamped on every update, so
+    /// turning past a stop is dropped and reversing responds immediately.
     @State private var dragPercent: Double?
-    /// `nil` while the finger is inside the hub, where the angle is unstable.
+    /// `nil` while the finger is inside the cap, where the angle is unstable.
     @State private var lastTouchAngle: Double?
 
     #if canImport(UIKit)
@@ -40,113 +35,169 @@ struct SpeedWheelPicker: View {
     private let limit = UIImpactFeedbackGenerator(style: .medium)
     #endif
 
+    private var geometry: SpeedKnobGeometry {
+        SpeedKnobGeometry(diameter: diameter, labelSize: labelSize)
+    }
+
     var body: some View {
-        VStack(spacing: 16) {
-            wheel
-                .frame(width: diameter, height: diameter)
-                .contentShape(.circle)
-                .gesture(rotationGesture)
-                // The drag gesture has `minimumDistance: 0`, so a plain
-                // `.onTapGesture` never fires. The drag a double tap also
-                // triggers moves no distance and commits the value unchanged.
-                .simultaneousGesture(TapGesture(count: 2).onEnded { toggleFullSpeed() })
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Playback speed")
-        .accessibilityValue("\(displayPercent) percent")
-        .accessibilityAdjustableAction { direction in
-            switch direction {
-            case .increment: commit(Double(displayPercent + 1))
-            case .decrement: commit(Double(displayPercent - 1))
-            @unknown default: break
+        knob
+            .frame(width: diameter, height: diameter)
+            .contentShape(.circle)
+            .gesture(rotationGesture)
+            // The drag gesture has `minimumDistance: 0`, so a plain
+            // `.onTapGesture` never fires. The drag a double tap also
+            // triggers moves no distance and commits the value unchanged.
+            .simultaneousGesture(TapGesture(count: 2).onEnded { toggleFullSpeed() })
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Playback speed")
+            .accessibilityValue("\(displayPercent) percent")
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment: commit(Double(displayPercent + 1))
+                case .decrement: commit(Double(displayPercent - 1))
+                @unknown default: break
+                }
             }
+    }
+
+    // MARK: - Knob
+
+    private var knob: some View {
+        let geometry = geometry
+        return ZStack {
+            // Swapped rather than redrawn, so a window dragged across a
+            // detail threshold cross-fades the numbers instead of popping them.
+            scale(geometry)
+                .id(geometry.detail)
+                .transition(.opacity)
+            skirt(geometry)
+            markings(geometry)
+                .rotationEffect(SpeedKnobGeometry.angle(for: ringPercent) - .degrees(270))
+                .animation(isDragging ? nil : .snappy(duration: 0.35), value: ringPercent)
+            cap(geometry)
         }
+        .animation(.easeInOut(duration: 0.2), value: geometry.detail)
     }
 
-    // MARK: - Wheel
-
-    private var wheel: some View {
-        ZStack {
-            rim
-            gauge
-            teeth
-                .rotationEffect(.degrees(wheelAngle))
-            hub
-        }
-    }
-
-    /// Hierarchical rather than a system fill, so it takes the cover's
-    /// colour on the practice screen.
-    private var rim: some View {
-        Circle().fill(smokedFill.map(AnyShapeStyle.init) ?? AnyShapeStyle(.quaternary))
-    }
-
-    private var gauge: some View {
-        Canvas { context, size in
-            let center = CGPoint(x: size.width / 2, y: size.height / 2)
-            let radius = size.width / 2 - inset
-
-            context.stroke(
-                arc(center: center, radius: radius, to: Double(maxPercent)),
-                with: .style(HierarchicalShapeStyle.primary.opacity(0.12)),
-                style: StrokeStyle(lineWidth: 6 * scale, lineCap: .round)
-            )
-            context.stroke(
-                arc(center: center, radius: radius, to: ringPercent),
-                with: .style(.tint),
-                style: StrokeStyle(lineWidth: 6 * scale, lineCap: .round)
-            )
-        }
-        .animation(isDragging ? nil : .snappy(duration: 0.35), value: ringPercent)
-    }
-
-    private var teeth: some View {
-        Canvas { context, size in
-            let center = CGPoint(x: size.width / 2, y: size.height / 2)
-            let outer = size.width / 2 - inset - 16 * scale
-            let count = Int(360 / degreesPerPercent)
-
-            for index in 0..<count {
-                let isMajor = index % 5 == 0
-                let angle = Angle.degrees(Double(index) * degreesPerPercent)
+    /// Printed on the panel, so it stays still while the knob turns.
+    private func scale(_ geometry: SpeedKnobGeometry) -> some View {
+        let lit = displayPercent
+        let saved = savedSpeed.map { clamp(Int(($0 * 100).rounded())) }
+        return Canvas { context, size in
+            let centre = CGPoint(x: size.width / 2, y: size.height / 2)
+            for percent in stride(from: SpeedKnobGeometry.minPercent, through: SpeedKnobGeometry.maxPercent, by: geometry.tickStep) {
+                let isMajor = percent.isMultiple(of: 10)
+                let isLit = percent <= lit
+                let angle = SpeedKnobGeometry.angle(for: Double(percent))
                 var path = Path()
-                path.move(to: point(from: center, radius: outer, angle: angle))
-                path.addLine(to: point(from: center, radius: outer - (isMajor ? 14 : 8) * scale, angle: angle))
+                path.move(to: SpeedKnobGeometry.point(from: centre, radius: geometry.tickInnerRadius, angle: angle))
+                path.addLine(to: SpeedKnobGeometry.point(
+                    from: centre,
+                    radius: geometry.tickInnerRadius + geometry.tickLength(major: isMajor),
+                    angle: angle
+                ))
                 context.stroke(
                     path,
-                    with: .style(HierarchicalShapeStyle.primary.opacity(isMajor ? 0.35 : 0.18)),
-                    style: StrokeStyle(lineWidth: isMajor ? 2 : 1.5, lineCap: .round)
+                    with: isLit ? .style(.tint) : .style(HierarchicalShapeStyle.primary.opacity(0.25)),
+                    style: StrokeStyle(lineWidth: isMajor ? 2.6 : 1.8, lineCap: .round)
+                )
+
+                if geometry.isLabelled(percent) {
+                    let label = Text("\(percent)")
+                        .font(.system(size: geometry.labelSize, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(HierarchicalShapeStyle.primary.opacity(isLit ? 0.9 : 0.45))
+                    context.draw(
+                        label,
+                        at: SpeedKnobGeometry.point(from: centre, radius: geometry.labelRadius(major: isMajor), angle: angle)
+                    )
+                }
+            }
+
+            if let saved {
+                let dot = SpeedKnobGeometry.point(
+                    from: centre,
+                    radius: geometry.savedDotRadius,
+                    angle: SpeedKnobGeometry.angle(for: Double(saved))
+                )
+                let side: CGFloat = geometry.detail == .small ? 4.4 : 5.2
+                context.fill(
+                    Path(ellipseIn: CGRect(x: dot.x - side / 2, y: dot.y - side / 2, width: side, height: side)),
+                    with: .style(HierarchicalShapeStyle.primary)
                 )
             }
         }
     }
 
-    private var hub: some View {
-        ZStack {
-            Circle()
-                .fill(.background)
-                .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
-                .overlay(Circle().strokeBorder(.separator, lineWidth: 0.5))
+    /// A circle, so the glass never needs to turn; only the markings on it do.
+    /// Smoked on a bright cover, where clear glass would leave the light
+    /// markings on a light ground.
+    private func skirt(_ geometry: SpeedKnobGeometry) -> some View {
+        Circle()
+            .fill(.clear)
+            .frame(width: geometry.skirtRadius * 2, height: geometry.skirtRadius * 2)
+            .glassEffect(smokedFill.map { Glass.regular.tint($0) } ?? .regular, in: .circle)
+    }
 
-            VStack(spacing: 2) {
-                Text("SPEED")
-                    .font(.system(size: 10 * scale, weight: .semibold, design: .rounded))
-                    .kerning(1.6)
-                    .foregroundStyle(.secondary)
+    /// Drawn pointing up; the caller turns them to the value.
+    private func markings(_ geometry: SpeedKnobGeometry) -> some View {
+        Canvas { context, size in
+            let centre = CGPoint(x: size.width / 2, y: size.height / 2)
+            let skirt = geometry.skirtRadius
+            let knurlDepth: CGFloat = geometry.detail == .full ? 10 : 7
+
+            for index in 0..<geometry.knurlCount {
+                let angle = Angle.degrees(Double(index) * 360 / Double(geometry.knurlCount))
+                var path = Path()
+                path.move(to: SpeedKnobGeometry.point(from: centre, radius: skirt - 1.5, angle: angle))
+                path.addLine(to: SpeedKnobGeometry.point(from: centre, radius: skirt - knurlDepth, angle: angle))
+                context.stroke(path, with: .style(HierarchicalShapeStyle.primary.opacity(0.18)), lineWidth: 1.1)
+            }
+
+            var pointer = Path()
+            pointer.move(to: CGPoint(x: centre.x, y: centre.y - skirt + 4))
+            pointer.addLine(to: CGPoint(x: centre.x, y: centre.y - geometry.capRadius - 4))
+            context.stroke(
+                pointer,
+                with: .style(HierarchicalShapeStyle.primary),
+                style: StrokeStyle(lineWidth: geometry.pointerWidth, lineCap: .round)
+            )
+        }
+        .frame(width: geometry.skirtRadius * 2, height: geometry.skirtRadius * 2)
+        .allowsHitTesting(false)
+    }
+
+    /// Still while the skirt turns, unlike a real knob's: a turning number
+    /// can't be read, and the exact percent matters more than realism.
+    private func cap(_ geometry: SpeedKnobGeometry) -> some View {
+        let side = geometry.capRadius * 2
+        let size = geometry.readoutSize
+        return ZStack {
+            Circle()
+                .fill(.black.opacity(colorScheme == .dark ? 0.28 : 0.05))
+                .overlay(Circle().strokeBorder(.primary.opacity(0.14), lineWidth: 1))
+
+            VStack(spacing: 0) {
+                if geometry.showsCaption {
+                    Text("SPEED")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .kerning(1.6)
+                        .foregroundStyle(.secondary)
+                }
 
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
                     Text("\(displayPercent)")
-                        .font(.system(size: 52 * scale, weight: .bold, design: .rounded))
+                        .font(.system(size: size, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .contentTransition(.numericText())
                     Text("%")
-                        .font(.system(size: 22 * scale, weight: .semibold, design: .rounded))
+                        .font(.system(size: size * 0.42, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
                 .animation(.snappy(duration: 0.15), value: displayPercent)
             }
         }
-        .frame(width: diameter * 0.58, height: diameter * 0.58)
+        .frame(width: side, height: side)
         .allowsHitTesting(false)
     }
 
@@ -159,7 +210,7 @@ struct SpeedWheelPicker: View {
                 let dx = value.location.x - centre.x
                 let dy = value.location.y - centre.y
 
-                guard hypot(dx, dy) > diameter * 0.22 else {
+                guard hypot(dx, dy) > diameter * 0.18 else {
                     lastTouchAngle = nil
                     return
                 }
@@ -179,8 +230,7 @@ struct SpeedWheelPicker: View {
 
                 lastTouchAngle = angle
                 let delta = shortestDelta(from: previous, to: angle)
-                wheelAngle += delta
-                update(by: delta / degreesPerPercent)
+                update(by: delta / SpeedKnobGeometry.degreesPerPercent)
             }
             .onEnded { _ in
                 lastTouchAngle = nil
@@ -207,47 +257,18 @@ struct SpeedWheelPicker: View {
         dragPercent.map { clamp(Int($0.rounded())) } ?? currentPercent
     }
 
-    /// Unrounded, so the arc grows smoothly rather than stepping.
+    /// Unrounded, so the knob turns smoothly rather than stepping.
     private var ringPercent: Double { dragPercent ?? Double(currentPercent) }
 
-    /// Every size inside the wheel is drawn for a 260pt dial and scales with
-    /// it, so a short phone's smaller wheel keeps its proportions.
-    private var scale: CGFloat { diameter / 260 }
-    private var inset: CGFloat { 12 * scale }
-
-    /// Screen angles run 0° at 3 o'clock, clockwise, so the gap is centred on 90°.
-    private var sweep: Double { 284 }
-    private var startAngle: Double { 90 + (360 - sweep) / 2 }
-
-    private func arc(center: CGPoint, radius: CGFloat, to percent: Double) -> Path {
-        var path = Path()
-        let travelled = (percent - Double(minPercent)) / Double(maxPercent - minPercent) * sweep
-        path.addArc(
-            center: center,
-            radius: radius,
-            startAngle: .degrees(startAngle),
-            endAngle: .degrees(startAngle + travelled),
-            clockwise: false
-        )
-        return path
-    }
-
-    private func point(from centre: CGPoint, radius: CGFloat, angle: Angle) -> CGPoint {
-        CGPoint(
-            x: centre.x + radius * cos(angle.radians),
-            y: centre.y + radius * sin(angle.radians)
-        )
-    }
-
     private func clamp(_ percent: Int) -> Int {
-        min(max(percent, minPercent), maxPercent)
+        min(max(percent, SpeedKnobGeometry.minPercent), SpeedKnobGeometry.maxPercent)
     }
 
     /// Clicks once per whole percent crossed and once, harder, on reaching a
-    /// limit; past that the wheel turns in silence.
+    /// stop; past that the finger turns nothing.
     private func update(by amount: Double) {
         let previous = dragPercent ?? Double(currentPercent)
-        let clamped = min(max(previous + amount, Double(minPercent)), Double(maxPercent))
+        let clamped = min(max(previous + amount, Double(SpeedKnobGeometry.minPercent)), Double(SpeedKnobGeometry.maxPercent))
         let before = displayPercent
         dragPercent = clamped
 
@@ -263,7 +284,7 @@ struct SpeedWheelPicker: View {
     }
 
     private func isAtLimit(_ percent: Double) -> Bool {
-        percent <= Double(minPercent) || percent >= Double(maxPercent)
+        percent <= Double(SpeedKnobGeometry.minPercent) || percent >= Double(SpeedKnobGeometry.maxPercent)
     }
 
     private func commit(_ raw: Double) {
@@ -282,8 +303,8 @@ struct SpeedWheelPicker: View {
         let target: Int
         if let savedPercent, currentPercent != savedPercent {
             target = savedPercent
-        } else if currentPercent != maxPercent {
-            target = maxPercent
+        } else if currentPercent != SpeedKnobGeometry.maxPercent {
+            target = SpeedKnobGeometry.maxPercent
         } else {
             return
         }
@@ -295,8 +316,38 @@ struct SpeedWheelPicker: View {
     }
 }
 
-#Preview {
-    @Previewable @State var speed = 0.75
+#Preview("Phone") {
+    @Previewable @State var speed = 0.7
     SpeedWheelPicker(speed: $speed, savedSpeed: 0.8)
         .padding()
+}
+
+#Preview("Sizes") {
+    @Previewable @State var speed = 0.7
+    VStack(spacing: 24) {
+        SpeedWheelPicker(speed: $speed, savedSpeed: 0.8, diameter: 300)
+        HStack(alignment: .bottom, spacing: 16) {
+            SpeedWheelPicker(speed: $speed, savedSpeed: 0.8, diameter: 210)
+            SpeedWheelPicker(speed: $speed, savedSpeed: 0.8, diameter: 150)
+        }
+    }
+    .padding()
+}
+
+/// Approximates `ArtworkGround` on a dark cover: light text and tint.
+#Preview("On a cover") {
+    @Previewable @State var speed = 0.7
+    VStack(spacing: 24) {
+        SpeedWheelPicker(speed: $speed, savedSpeed: 0.8, diameter: 260)
+        HStack(alignment: .bottom, spacing: 16) {
+            SpeedWheelPicker(speed: $speed, savedSpeed: 0.8, diameter: 210)
+            SpeedWheelPicker(speed: $speed, savedSpeed: 0.8, diameter: 150)
+        }
+    }
+    .padding()
+    .foregroundStyle(.white)
+    .tint(.white)
+    .environment(\.colorScheme, .dark)
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(LinearGradient(colors: [Color(red: 0.2, green: 0.26, blue: 0.3), Color(red: 0.25, green: 0.27, blue: 0.28)], startPoint: .top, endPoint: .bottom))
 }

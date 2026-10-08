@@ -1004,33 +1004,37 @@ private struct RestoringState: View {
     }
 }
 
-/// The speed wheel's rim and teeth with a glyph where the number would be.
+/// The speed knob's scale and skirt with a glyph where the number would be.
 private struct DialSilhouette: View {
     var diameter: CGFloat
     var systemImage: String
 
     var body: some View {
+        let geometry = SpeedKnobGeometry(diameter: diameter)
         ZStack {
-            Circle()
-                .strokeBorder(.quaternary, lineWidth: 6)
-                .padding(9)
-
             Canvas { context, size in
                 let centre = CGPoint(x: size.width / 2, y: size.height / 2)
-                let outer = size.width / 2 - 28
-                for index in 0..<90 {
-                    let isMajor = index % 5 == 0
-                    let angle = Angle.degrees(Double(index) * 4)
+                for percent in stride(from: SpeedKnobGeometry.minPercent, through: SpeedKnobGeometry.maxPercent, by: geometry.tickStep) {
+                    let isMajor = percent.isMultiple(of: 10)
+                    let angle = SpeedKnobGeometry.angle(for: Double(percent))
                     var path = Path()
-                    path.move(to: point(from: centre, radius: outer, angle: angle))
-                    path.addLine(to: point(from: centre, radius: outer - (isMajor ? 14 : 8), angle: angle))
+                    path.move(to: SpeedKnobGeometry.point(from: centre, radius: geometry.tickInnerRadius, angle: angle))
+                    path.addLine(to: SpeedKnobGeometry.point(
+                        from: centre,
+                        radius: geometry.tickInnerRadius + geometry.tickLength(major: isMajor),
+                        angle: angle
+                    ))
                     context.stroke(
                         path,
                         with: .color(.primary.opacity(0.12)),
-                        style: StrokeStyle(lineWidth: isMajor ? 2 : 1.5, lineCap: .round)
+                        style: StrokeStyle(lineWidth: isMajor ? 2.6 : 1.8, lineCap: .round)
                     )
                 }
             }
+
+            Circle()
+                .strokeBorder(.quaternary, lineWidth: 1.5)
+                .frame(width: geometry.skirtRadius * 2, height: geometry.skirtRadius * 2)
 
             Image(systemName: systemImage)
                 .font(.system(size: diameter * 0.2, weight: .light))
@@ -1038,13 +1042,6 @@ private struct DialSilhouette: View {
         }
         .frame(width: diameter, height: diameter)
         .accessibilityHidden(true)
-    }
-
-    private func point(from centre: CGPoint, radius: CGFloat, angle: Angle) -> CGPoint {
-        CGPoint(
-            x: centre.x + radius * cos(angle.radians),
-            y: centre.y + radius * sin(angle.radians)
-        )
     }
 }
 
