@@ -85,11 +85,12 @@ struct PlaybackScrubber: View {
                 .frame(height: trackHeight)
                 .frame(height: Self.draggingTrackHeight)
             }
-            .overlay(alignment: .leading) { playhead(width: width) }
+            .overlay(alignment: .topLeading) { playhead(width: width, trackHeight: trackHeight) }
             .frame(maxHeight: .infinity)
             .contentShape(.rect)
             .gesture(dragGesture(width: width))
             .animation(.snappy(duration: 0.2), value: isDragging)
+            .animation(.snappy(duration: 0.2), value: markers.isEmpty)
         }
         .frame(height: 44)
         .disabled(duration == nil)
@@ -125,14 +126,17 @@ struct PlaybackScrubber: View {
     }
 
     /// A hairline through the lane and the track, so you can see where you
-    /// are against a clip.
-    private func playhead(width: CGFloat) -> some View {
-        Capsule()
+    /// are against a clip. Without markers it's hidden: crossing an empty
+    /// lane, it sat high above the track and the bar looked off-centre.
+    private func playhead(width: CGFloat, trackHeight: CGFloat) -> some View {
+        let overhang: CGFloat = 2
+        let trackBottom = Self.laneHeight + Self.laneGap + (Self.draggingTrackHeight + trackHeight) / 2
+        return Capsule()
             .fill(.primary.opacity(0.8))
-            .frame(width: 1.5, height: Self.laneHeight + Self.laneGap + Self.draggingTrackHeight + 4)
-            .offset(x: min(max(0, width * fraction - 0.75), max(0, width - 1.5)))
+            .frame(width: 1.5, height: trackBottom + 2 * overhang)
+            .offset(x: min(max(0, width * fraction - 0.75), max(0, width - 1.5)), y: -overhang)
             .allowsHitTesting(false)
-            .opacity(duration == nil ? 0 : 1)
+            .opacity(duration == nil || markers.isEmpty ? 0 : 1)
     }
 
     private func dragGesture(width: CGFloat) -> some Gesture {
@@ -182,6 +186,11 @@ struct PlaybackScrubber: View {
             ? "\(Int(seconds.rounded()))s"
             : timeLabel(seconds)
     }
+}
+
+#Preview("No markers") {
+    PlaybackScrubber(position: 71, duration: 245) { _ in }
+        .padding(.horizontal, 32)
 }
 
 #Preview("A few markers") {
