@@ -24,7 +24,7 @@ On the website, each feature gets its own accent: coral for speed, amber for mar
 - **One tint.** Coral is the app's only accent. Amber, rose and violet stay on the website; bring one into the app only for a job the tint can't do.
 - **Coral means "on" or "act on this".** The running loop, a looping clip, a prompt to save, the speed you saved. Never decoration, or it stops meaning anything. Play/pause is the primary colour.
 - **Only one state shouts.** Solid coral is for looping and for graphics (the speed knob's lit scale, the looping clip on the timeline). Everything else that's coral is a tint: `.tint` at 12–16% with `AccentText`. Settled things are `.quaternary` with secondary text.
-- **Fill carries state; glyph carries kind.** A dot is a point and `SpanGlyph` is a clip; the fill says whether it's idle, cued or looping. On Saved, idle pills are a one-pixel `.quaternary` hairline with no fill: a grey pill under every song outweighed the titles.
+- **Fill carries state; glyph carries kind.** A dot is a point and a short bar (`SpanGlyph`) is a clip, as they're drawn in the timeline's marker lane; the fill says whether it's idle, cued or looping. On Saved, idle pills are a one-pixel `.quaternary` hairline with no fill: a grey pill under every song outweighed the titles.
 - **Neutral controls stay neutral.** Nudge, cue, skip and the like use system fills, not coral. Toolbar glyphs that act on the screen (Saved's add and sort, a sheet's save tick) are `AccentColor` on the toolbar's own glass.
 - **Banners stay away from coral's hue.** Warnings are yellow; errors are neutral grey with a coral icon. No orange or red near the accent; they read as the same colour.
 - **Give text in buttons a concrete colour.** A hierarchical style like `.secondary` resolves against the button's tint and comes out a faded coral. `.bordered` turns grey once its text is recoloured, so tinted chips are drawn by hand.
@@ -67,6 +67,7 @@ Practice's save and change-song buttons are glass too, so they take on the cover
 - **Grey save and change-song chips under the title:** they read as disabled, and "Saved at 70%" repeated the number the knob shows. The saved speed is a dot on the knob's scale instead.
 - **A save prompt that pushed the title aside** reflowed it mid-drag, and **one floating over the title** smeared the letters through its glass. The title keeps room for two circles and fades out under the prompt.
 - **Markers drawn on the timeline's track:** a clip at track height read as buffering, and a looping one needed a halo to survive the played fill. They have a lane of their own above it.
+- **A ⊢ bracket for clips:** it read as a span, but nothing on the timeline looked like it once clips were drawn there as bars. The pills and the lane now use the same shapes.
 - **⏮ for restart:** a triangle-and-bar beside the skip buttons' circular arrows looked like a different set, and reads as "previous track". Restart uses `gobackward`, the skip arrow without a number.
 
 ## Website
