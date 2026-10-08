@@ -104,6 +104,7 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
     private nonisolated static var margin: CGFloat { 28 }
     nonisolated static var minWindowWidth: CGFloat { minWidth + 2 * margin + minSavedWidth }
     private static var radius: CGFloat { 40 }
+    private static var contentInset: CGFloat { 8 }
 
     private var cardWidth: CGFloat {
         clamped(liveWidth ?? savedWidth)
@@ -123,6 +124,9 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
                 .padding(.leading, cardWidth + 2 * Self.margin)
 
             practice
+                // Stands in for a phone's status bar and tab bar, so the
+                // header sits as far from the card's top as from its side.
+                .safeAreaPadding(.vertical, Self.contentInset)
                 .background(Color(.secondarySystemGroupedBackground))
                 .clipShape(.rect(cornerRadius: Self.radius))
                 .overlay {
@@ -203,7 +207,11 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
         .modelContainer(try! AppSchema.inMemoryContainer())
 }
 
-#Preview("Floating", traits: .fixedLayout(width: 1376, height: 1032)) {
+#Preview("Floating, 11-inch", traits: .fixedLayout(width: 1180, height: 820)) {
+    floatingPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.88, green: 0.64, blue: 0.05)))
+}
+
+#Preview("Floating, 13-inch", traits: .fixedLayout(width: 1376, height: 1032)) {
     floatingPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.88, green: 0.64, blue: 0.05)))
 }
 

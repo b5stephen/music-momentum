@@ -68,6 +68,8 @@ Practice's save and change-song buttons are glass too, so they take on the cover
 - **A save prompt that pushed the title aside** reflowed it mid-drag, and **one floating over the title** smeared the letters through its glass. The title keeps room for two circles and fades out under the prompt.
 - **Markers drawn on the timeline's track:** a clip at track height read as buffering, and a looping one needed a halo to survive the played fill. They have a lane of their own above it.
 - **A ⊢ bracket for clips:** it read as a span, but nothing on the timeline looked like it once clips were drawn there as bars. The pills and the lane now use the same shapes.
+- **Practice's stack centred on the screen:** the cover's distance from the top changed with every screen height, and slid about 50pt while a floating card was dragged wider. **Pinning the title and the controls to the edges and giving all spare height to the gap under the title** left a tall card lopsided. The title and the controls hold the edges, the wheel sits midway between them, and only a screen taller than a phone centres the stack.
+- **Moving Practice's cover in to 32pt** so its corner would be concentric with the floating card's left a short title wrapping on a 375pt screen. It's 24pt in with a rounder 16pt corner, and every row shares that margin.
 - **⏮ for restart:** a triangle-and-bar beside the skip buttons' circular arrows looked like a different set, and reads as "previous track". Restart uses `gobackward`, the skip arrow without a number.
 
 ## Website

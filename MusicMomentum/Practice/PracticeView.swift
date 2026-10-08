@@ -83,13 +83,13 @@ struct PracticeView: View {
     private var onAccent: Color { track?.palette?.background ?? .onAccent }
 
     var body: some View {
-        // Spacers absorb spare height around everything; the screen only
-        // scrolls once they've given it all back.
+        // Spacers absorb spare height; the screen only scrolls once they've
+        // given it all back.
         GeometryReader { proxy in
+            let layout = PracticeLayout(size: proxy.size, heights: layoutHeights)
             ScrollView {
                 VStack(spacing: 0) {
                     if let track {
-                        let layout = PracticeLayout(size: proxy.size, heights: layoutHeights)
                         Group {
                             if layout.isWide {
                                 loadedSongWide(
@@ -116,8 +116,8 @@ struct PracticeView: View {
 
                     messages
                 }
-                .padding(.top, track == nil ? 16 : Self.topPadding)
-                .padding(.bottom, 16)
+                .padding(.top, track == nil ? 16 : layout.isWide ? Self.wideTopPadding : layout.topMargin)
+                .padding(.bottom, PracticeLayout.bottomMargin)
                 .frame(maxWidth: .infinity, minHeight: proxy.size.height)
             }
             .onChange(of: proxy.size, initial: true) { _, size in
@@ -190,31 +190,41 @@ struct PracticeView: View {
         return abs(laidOutSize.width - size.width) < 80 && abs(laidOutSize.height - size.height) < 80
     }
 
-    @ViewBuilder
     private func loadedSong(_ track: Track, layout: PracticeLayout, width: CGFloat) -> some View {
-        // Centred: left under the controls, a tall phone's spare height made
-        // the screen look top-heavy.
-        Spacer(minLength: 0)
+        // The wheel's frame is about 23pt emptier below its scale than above
+        // it, and the scrubber's bar sits 20pt down its touch area, so equal
+        // gaps looked bigger under the wheel. Spacers share spare height
+        // equally whatever their minimums, so the difference is a fixed block.
+        let lift = min(43, 2 * layout.wheelGap)
+        return VStack(spacing: 0) {
+            if layout.isCompact {
+                compactNowPlaying(track, coverSide: layout.coverSide)
+            } else {
+                nowPlaying(track, coverSide: layout.coverSide, width: width)
+            }
 
-        if layout.isCompact {
-            compactNowPlaying(track, coverSide: layout.coverSide)
-        } else {
-            nowPlaying(track, coverSide: layout.coverSide, width: width)
+            // Spare height goes either side of the wheel, so the header and
+            // the player hold their edges while a floating card is dragged
+            // wider and its wheel grows. Centring the whole stack slid the
+            // cover 50pt up the card; giving it all to the gap under the
+            // title left a tall card lopsided.
+            Spacer(minLength: layout.wheelGap - lift / 2)
+            Color.clear.frame(height: lift)
+
+            SpeedWheelPicker(
+                speed: $controller.playbackRate,
+                savedSpeed: savedSong?.speed,
+                diameter: layout.wheelDiameter
+            )
+
+            Spacer(minLength: layout.wheelGap - lift / 2)
+
+            player(layout)
         }
-
-        Color.clear.frame(height: layout.wheelGap)
-
-        SpeedWheelPicker(
-            speed: $controller.playbackRate,
-            savedSpeed: savedSong?.speed,
-            diameter: layout.wheelDiameter
-        )
-
-        Color.clear.frame(height: layout.wheelGap)
-
-        player(layout)
-
-        Spacer(minLength: 0)
+        // Past a phone's height the gaps would only drift apart, as they did
+        // on an iPad upright, so the stack centres instead. A fixed height
+        // keeps it still while a card is dragged wider.
+        .frame(maxHeight: PracticeLayout.maxStackedHeight)
     }
 
     /// Landscape phones and wide iPad windows: the song and its speed on the
@@ -229,7 +239,7 @@ struct PracticeView: View {
         // middle, which `tabBarInset` has dropped; the transport stays clear
         // of the tab bar.
         let verticalPadding = PracticeLayout.verticalPadding
-        let middle = Self.topPadding + (size.height - verticalPadding) / 2 + tabBarInset / 2
+        let middle = Self.wideTopPadding + (size.height - verticalPadding) / 2 + tabBarInset / 2
         let playerColumnHeight = min(size.height - verticalPadding, 2 * (size.height - 8 - middle))
         let coverSide = min(180, playerColumnHeight - widePlayerHeight - Self.wideCoverGap)
         return HStack(spacing: 0) {
@@ -268,8 +278,8 @@ struct PracticeView: View {
 
     /// Playback, then what's being practised: the clips sit under the loop
     /// button that reshapes them, with the caption saying what's looping.
-    /// Every row shares `playerMargin`, so the scrubber's ends, the first
-    /// pill and the outer buttons line up.
+    /// Every row shares `sideMargin` with the header, so the cover, the
+    /// scrubber's ends, the first pill and the outer buttons line up.
     private func player(_ layout: PracticeLayout) -> some View {
         VStack(spacing: 0) {
             PlaybackScrubber(
@@ -279,7 +289,7 @@ struct PracticeView: View {
                 onScrub: { _ in controller.isScrubbing = true },
                 onCommit: { controller.endScrub(at: $0) }
             )
-            .padding(.horizontal, Self.playerMargin)
+            .padding(.horizontal, Self.sideMargin)
             .padding(.bottom, layout.scrubberGap)
 
             transportControls(layout)
@@ -291,7 +301,7 @@ struct PracticeView: View {
                 HStack(spacing: 0) {
                     markerPills(trailingInset: 8)
                     markButton(showsTitle: false)
-                        .padding(.trailing, Self.playerMargin - 12)
+                        .padding(.trailing, Self.sideMargin - 12)
                 }
             } else {
                 markerPills(trailingInset: nil)
@@ -310,7 +320,7 @@ struct PracticeView: View {
                     markButton(showsTitle: true)
                 }
                 .padding(.top, 8)
-                .padding(.horizontal, Self.playerMargin)
+                .padding(.horizontal, Self.sideMargin)
             }
         }
         .frame(maxWidth: Self.playerWidth)
@@ -321,7 +331,7 @@ struct PracticeView: View {
     private func markerPills(trailingInset: CGFloat?) -> some View {
         MarkerPills(
             markers: savedSong?.sortedMarkers ?? [],
-            inset: Self.playerMargin,
+            inset: Self.sideMargin,
             trailingInset: trailingInset,
             isLooping: { controller.isLooping($0) },
             isLoopOn: controller.isLoopOn,
@@ -334,12 +344,12 @@ struct PracticeView: View {
         )
     }
 
-    private static let playerMargin: CGFloat = 32
+    private static let sideMargin: CGFloat = 24
     /// Wide enough for a precise scrubber, narrow enough that the transport's
     /// five buttons still read as one row.
     private static let playerWidth: CGFloat = 500
 
-    private static let topPadding: CGFloat = 6
+    private static let wideTopPadding: CGFloat = 6
     private static let wideCoverGap: CGFloat = 16
 
     /// Wide, the silhouette sits where the wheel's column goes, beside the copy.
@@ -401,7 +411,7 @@ struct PracticeView: View {
         // Symmetric, so play/pause stays on the centre line. Inset by the
         // touch area's slack so the glyphs, not their 44pt frames, meet the
         // scrubber's ends.
-        .padding(.horizontal, Self.playerMargin - 10)
+        .padding(.horizontal, Self.sideMargin - 10)
     }
 
     /// Compact, a bare glyph: as a disc the size of the other buttons it
@@ -584,7 +594,7 @@ struct PracticeView: View {
     private func nowPlaying(_ track: Track, coverSide: CGFloat?, width: CGFloat = 0) -> some View {
         if let coverSide {
             HStack(spacing: 14) {
-                cover(track.artwork, side: coverSide)
+                cover(track.artwork, side: coverSide, radius: coverSide / 4)
                 titleBlock(track, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -592,7 +602,10 @@ struct PracticeView: View {
                 // Measured at the width the largest cover leaves, so the cover
                 // shrinking can't unwrap the title and feed back into the layout.
                 titleBlock(track, alignment: .leading)
-                    .frame(width: max(0, width - 118 - Self.headerButtonsReserve), alignment: .leading)
+                    .frame(
+                        width: max(0, min(width, Self.playerWidth) - 2 * Self.sideMargin - 72 - 14 - Self.headerButtonsReserve),
+                        alignment: .leading
+                    )
                     .fixedSize(horizontal: false, vertical: true)
                     .hidden()
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
@@ -600,7 +613,12 @@ struct PracticeView: View {
                     }
             }
             .modifier(HeaderButtonsBeside(reserve: Self.headerButtonsReserve, buttons: headerButtons, fade: titleFade))
-            .padding(.horizontal)
+            // A floating card's corner is 40pt round; less this inset, that's
+            // the cover's 16, so the two curves are concentric. At 32pt and a
+            // sharper corner, a title as short as "Count on Me" wrapped on a
+            // 375pt screen.
+            .padding(.horizontal, Self.sideMargin)
+            .frame(maxWidth: Self.playerWidth)
         } else {
             VStack(spacing: 12) {
                 titleBlock(track, alignment: .center)
@@ -622,10 +640,11 @@ struct PracticeView: View {
                     .foregroundStyle(.secondary)
             }
             .lineLimit(1)
+            .dynamicTypeSize(...PracticeLayout.headerTypeLimit)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .modifier(HeaderButtonsBeside(reserve: Self.headerButtonsReserve, buttons: headerButtons, fade: titleFade))
-        .padding(.horizontal, Self.playerMargin)
+        .padding(.horizontal, Self.sideMargin)
         .frame(maxWidth: Self.playerWidth)
     }
 
@@ -648,6 +667,7 @@ struct PracticeView: View {
             saveButton
             changeSongButton
         }
+        .dynamicTypeSize(...PracticeLayout.headerTypeLimit)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: {
             headerButtonsWidth = $0
         }
@@ -661,11 +681,12 @@ struct PracticeView: View {
                 .foregroundStyle(.secondary)
         }
         .multilineTextAlignment(alignment == .leading ? .leading : .center)
+        .dynamicTypeSize(...PracticeLayout.headerTypeLimit)
     }
 
     @ViewBuilder
-    private func cover(_ artwork: Artwork?, side: CGFloat) -> some View {
-        let radius = side / 8
+    private func cover(_ artwork: Artwork?, side: CGFloat, radius: CGFloat? = nil) -> some View {
+        let radius = radius ?? side / 8
         if let artwork {
             ArtworkImage(artwork, width: side, height: side)
                 .clipShape(.rect(cornerRadius: radius))

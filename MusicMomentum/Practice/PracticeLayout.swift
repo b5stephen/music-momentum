@@ -29,6 +29,11 @@ nonisolated struct PracticeLayout: Equatable {
     /// The loop button's fill when it's on. Its touch area stays 44pt.
     var loopFill: CGFloat
     var coverSide: CGFloat
+    /// Stacked, the header holds this from the top and the player holds
+    /// `bottomMargin` from the bottom, and the gaps round the wheel take
+    /// what's spare. Centring the stack put the cover anywhere from 6 to 80pt
+    /// down a phone. It closes with the gaps, so only a short screen moves it.
+    var topMargin: CGFloat
     var wheelGap: CGFloat
     var scrubberGap: CGFloat
     var transportGap: CGFloat
@@ -61,9 +66,18 @@ nonisolated struct PracticeLayout: Equatable {
         size.width > size.height && size.width >= 700
     }
 
-    /// The top and bottom padding round the screen's content.
+    /// The top and bottom padding round the wide layout's columns, which
+    /// centre in the window.
     static let verticalPadding: CGFloat = 22
+    /// Stacked, the bottom of the player's distance from the bottom edge.
+    static let bottomMargin: CGFloat = 16
+    /// A little over the tallest iPhone's screen once its bars are taken off.
+    static let maxStackedHeight: CGFloat = 860
     static let wideHeaderGap: CGFloat = 20
+    /// The header stops growing here: any larger and a title wraps over
+    /// several lines and pushes the wheel down, and the buttons' glyphs
+    /// spill out of their 44pt glass.
+    static let headerTypeLimit = DynamicTypeSize.xxxLarge
 
     /// Grows with the window up to what the wheel needs, and never takes so
     /// much that the transport's five controls are squeezed.
@@ -152,6 +166,7 @@ nonisolated struct PracticeLayout: Equatable {
         let play =         at([76,     68,    68,   54,       54,    54])
         let glyph =        at([26,     24,    24,   22,       22,    22])
         let cover =        at([72,     64,    64,   48,       48,    48])
+        topMargin =        at([16,     16,    6,    6,        6,     6])
         wheelGap =         at([40,     30,    14,   14,       14,    14])
         transportGap =     at([28,     24,    16,   16,       16,    16])
         scrubberGap =      at([16,     14,    10,   10,       10,    10])
@@ -191,7 +206,7 @@ nonisolated struct PracticeLayout: Equatable {
         let header = isCompact
             ? heights.compactHeader
             : max(coverSide, heights.titleBlock, 44)
-        return Self.verticalPadding + header + 2 * wheelGap + wheelDiameter + playerHeight(heights)
+        return topMargin + Self.bottomMargin + header + 2 * wheelGap + wheelDiameter + playerHeight(heights)
     }
 
     private func playerHeight(_ heights: Heights) -> CGFloat {
@@ -208,14 +223,17 @@ extension PracticeLayout.Heights {
     @MainActor
     init(dynamicTypeSize: DynamicTypeSize, titleBlock: CGFloat, wideHeader: CGFloat) {
         let traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(dynamicTypeSize))
-        func line(_ style: UIFont.TextStyle) -> CGFloat {
+        let titleTraits = UITraitCollection(
+            preferredContentSizeCategory: UIContentSizeCategory(min(dynamicTypeSize, PracticeLayout.headerTypeLimit))
+        )
+        func line(_ style: UIFont.TextStyle, _ traits: UITraitCollection = traits) -> CGFloat {
             UIFont.preferredFont(forTextStyle: style, compatibleWith: traits).lineHeight.rounded(.up)
         }
         let footnote = UIFontMetrics(forTextStyle: .footnote)
         self.init(
             titleBlock: titleBlock,
             wideHeader: wideHeader,
-            compactHeader: max(44, line(.headline) + 2 + line(.subheadline)),
+            compactHeader: max(44, line(.headline, titleTraits) + 2 + line(.subheadline, titleTraits)),
             // The labels tuck 4pt up under the bar's 44pt touch area.
             scrubber: 44 + line(.caption1) - 4,
             pillRow: footnote.scaledValue(for: 32, compatibleWith: traits) + 4,
