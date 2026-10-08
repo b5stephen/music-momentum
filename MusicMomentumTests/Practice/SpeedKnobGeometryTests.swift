@@ -27,30 +27,40 @@ struct SpeedKnobGeometryTests {
     func onTick() {
         #expect(full.detail == .full)
         for percent in stride(from: 30, through: 100, by: 5) {
-            #expect(full.tickPercent(at: tap(full, at: Double(percent))) == percent)
+            #expect(full.tapPercent(at: tap(full, at: Double(percent))) == percent)
         }
     }
 
     @Test("A tap between ticks lands on the nearer one")
     func betweenTicks() {
-        #expect(full.tickPercent(at: tap(full, at: 72)) == 70)
-        #expect(full.tickPercent(at: tap(full, at: 73)) == 75)
+        #expect(full.tapPercent(at: tap(full, at: 72)) == 70)
+        #expect(full.tapPercent(at: tap(full, at: 73)) == 75)
     }
 
     @Test("A small knob only lands on the ticks it draws")
     func smallKnob() {
         #expect(small.detail == .small)
-        #expect(small.tickPercent(at: tap(small, at: 75)) != 75)
-        #expect(small.tickPercent(at: tap(small, at: 74)) == 70)
-        #expect(small.tickPercent(at: tap(small, at: 76)) == 80)
+        #expect(small.tapPercent(at: tap(small, at: 75)) != 75)
+        #expect(small.tapPercent(at: tap(small, at: 74)) == 70)
+        #expect(small.tapPercent(at: tap(small, at: 76)) == 80)
     }
 
     @Test("A tap just past a stop lands on it, deep in the gap on nothing")
     func gap() {
-        #expect(full.tickPercent(at: tap(full, at: 101)) == 100)
-        #expect(full.tickPercent(at: tap(full, at: 29)) == 30)
+        #expect(full.tapPercent(at: tap(full, at: 101)) == 100)
+        #expect(full.tapPercent(at: tap(full, at: 29)) == 30)
         let bottom = CGPoint(x: full.radius, y: full.radius + full.tickInnerRadius)
-        #expect(full.tickPercent(at: bottom) == nil)
+        #expect(full.tapPercent(at: bottom) == nil)
+    }
+
+    @Test("The saved dot takes taps between ticks, and the ticks keep the rest")
+    func savedDot() {
+        #expect(full.tapPercent(at: tap(full, at: 72), saved: 72) == 72)
+        #expect(full.tapPercent(at: tap(full, at: 71.2), saved: 72) == 72)
+        #expect(full.tapPercent(at: tap(full, at: 70.8), saved: 72) == 70)
+        #expect(full.tapPercent(at: tap(full, at: 74), saved: 72) == 75)
+        #expect(small.tapPercent(at: tap(small, at: 77), saved: 75) == 75)
+        #expect(small.tapPercent(at: tap(small, at: 72), saved: 75) == 70)
     }
 
     @Test("Only the scale ring takes taps, not the skirt or cap")
@@ -60,7 +70,7 @@ struct SpeedKnobGeometryTests {
             radius: full.skirtRadius - 2,
             angle: SpeedKnobGeometry.angle(for: 70)
         )
-        #expect(full.tickPercent(at: onSkirt) == nil)
-        #expect(full.tickPercent(at: CGPoint(x: full.radius, y: full.radius)) == nil)
+        #expect(full.tapPercent(at: onSkirt) == nil)
+        #expect(full.tapPercent(at: CGPoint(x: full.radius, y: full.radius)) == nil)
     }
 }

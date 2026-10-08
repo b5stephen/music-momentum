@@ -11,14 +11,15 @@ import UIKit
 /// An amp-style knob for practice speed, one haptic detent per percent.
 /// Where it points is the speed: it stops dead at either limit, and the
 /// scale around it lights up to the pointer. A tap on one of the scale's
-/// ticks jumps straight to it.
+/// ticks, or on the saved speed's dot, jumps straight to it.
 struct SpeedWheelPicker: View {
     @Binding var speed: Double
     @Environment(\.smokedFill) private var smokedFill
     @Environment(\.colorScheme) private var colorScheme
 
     /// A double tap toggles between this and full speed; with none, it only
-    /// ever goes to full speed.
+    /// ever goes to full speed. Away from it, a glyph under the readout
+    /// offers the way back to anyone who doesn't know about the double tap.
     var savedSpeed: Double? = nil
 
     var diameter: CGFloat = 260
@@ -63,6 +64,16 @@ struct SpeedWheelPicker: View {
                 @unknown default: break
                 }
             }
+            // Over the knob rather than in the cap, so its taps never reach
+            // the rotation gesture.
+            .overlay {
+                if let savedPercent, currentPercent != savedPercent {
+                    resetGlyph(to: savedPercent, size: geometry.resetGlyphSize)
+                        .offset(y: geometry.resetGlyphDrop)
+                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                }
+            }
+            .animation(.snappy(duration: 0.25), value: savedPercent.map { $0 == currentPercent })
     }
 
     // MARK: - Knob
@@ -91,7 +102,7 @@ struct SpeedWheelPicker: View {
     /// Printed on the panel, so it stays still while the knob turns.
     private func scale(_ geometry: SpeedKnobGeometry) -> some View {
         let lit = displayPercent
-        let saved = savedSpeed.map { clamp(Int(($0 * 100).rounded())) }
+        let saved = savedPercent
         return Canvas { context, size in
             let centre = CGPoint(x: size.width / 2, y: size.height / 2)
             for percent in stride(from: SpeedKnobGeometry.minPercent, through: SpeedKnobGeometry.maxPercent, by: geometry.tickStep) {
@@ -210,6 +221,22 @@ struct SpeedWheelPicker: View {
         .allowsHitTesting(false)
     }
 
+    /// Bare, so it reads as part of the readout rather than a control
+    /// hanging off the knob.
+    private func resetGlyph(to percent: Int, size: CGFloat) -> some View {
+        Button {
+            jump(to: percent)
+        } label: {
+            Image(systemName: "arrow.uturn.backward")
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(Color.primary.opacity(0.7))
+                .frame(width: 44, height: 44)
+                .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Back to saved speed, \(percent) percent")
+    }
+
     // MARK: - Gesture
 
     private var rotationGesture: some Gesture {
@@ -249,7 +276,7 @@ struct SpeedWheelPicker: View {
                     && hypot(value.translation.width, value.translation.height) < 10
                 lastTouchAngle = nil
                 touchDownPercent = nil
-                if isTap, let target = geometry.tickPercent(at: value.startLocation) {
+                if isTap, let target = geometry.tapPercent(at: value.startLocation, saved: savedPercent) {
                     jump(to: target)
                 } else if let dragPercent {
                     commit(dragPercent)
@@ -271,6 +298,8 @@ struct SpeedWheelPicker: View {
     private var isDragging: Bool { dragPercent != nil }
 
     private var currentPercent: Int { clamp(Int((speed * 100).rounded())) }
+
+    private var savedPercent: Int? { savedSpeed.map { clamp(Int(($0 * 100).rounded())) } }
 
     private var displayPercent: Int {
         dragPercent.map { clamp(Int($0.rounded())) } ?? currentPercent
@@ -318,7 +347,6 @@ struct SpeedWheelPicker: View {
     /// Heads for the saved speed unless already there, in which case full
     /// speed; with nothing saved, full speed is the only destination.
     private func toggleFullSpeed() {
-        let savedPercent = savedSpeed.map { clamp(Int(($0 * 100).rounded())) }
         let target: Int
         if let savedPercent, currentPercent != savedPercent {
             target = savedPercent
@@ -358,14 +386,14 @@ struct SpeedWheelPicker: View {
     .padding()
 }
 
-// The compact short window's knob, just inside the small tier, and at the
-// readout's widest.
+// The compact short window's knob, just inside the small tier, on its saved
+// speed and at the readout's widest, away from it.
 #Preview("Small, 180pt") {
     @Previewable @State var speed = 0.6
     @Previewable @State var full = 1.0
     VStack(spacing: 24) {
         SpeedWheelPicker(speed: $speed, savedSpeed: 0.6, diameter: 180)
-        SpeedWheelPicker(speed: $full, diameter: 180)
+        SpeedWheelPicker(speed: $full, savedSpeed: 0.6, diameter: 180)
     }
     .padding()
 }

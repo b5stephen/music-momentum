@@ -105,11 +105,17 @@ nonisolated struct SpeedKnobGeometry: Equatable {
 
     var pointerWidth: CGFloat { max(4, diameter * 0.018) }
 
-    /// The drawn tick a tap at `location` in the knob's frame lands on. Only
-    /// the scale ring counts, and only within half a tick's spacing, so a
-    /// smaller knob with fewer ticks has fewer places to land and a tap deep
-    /// in the gap between the stops lands nowhere.
-    func tickPercent(at location: CGPoint) -> Int? {
+    /// How far below the centre the back-to-saved glyph sits: under the
+    /// readout, clear of the cap's rim.
+    var resetGlyphDrop: CGFloat { capRadius * 0.62 }
+    var resetGlyphSize: CGFloat { max(13, readoutSize * 0.38) }
+
+    /// Where a tap at `location` in the knob's frame lands: the nearest drawn
+    /// tick, or the saved speed's dot, which needn't sit on one. Only the
+    /// scale ring counts, and only within half a tick's spacing, so a smaller
+    /// knob with fewer ticks has fewer places to land and a tap deep in the
+    /// gap between the stops lands nowhere.
+    func tapPercent(at location: CGPoint, saved: Int? = nil) -> Int? {
         let dx = location.x - radius
         let dy = location.y - radius
         let distance = hypot(dx, dy)
@@ -117,7 +123,8 @@ nonisolated struct SpeedKnobGeometry: Equatable {
 
         let angle = atan2(dy, dx) * 180 / .pi
         let tolerance = Double(tickStep) * Self.degreesPerPercent / 2
-        return stride(from: Self.minPercent, through: Self.maxPercent, by: tickStep)
+        let ticks = stride(from: Self.minPercent, through: Self.maxPercent, by: tickStep)
+        return (Array(ticks) + [saved].compactMap { $0 })
             .map { percent in
                 (percent, abs((angle - Self.angle(for: Double(percent)).degrees).remainder(dividingBy: 360)))
             }

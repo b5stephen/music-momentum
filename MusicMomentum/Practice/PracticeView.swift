@@ -1140,11 +1140,12 @@ private struct DialSilhouette: View {
     loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)))
 }
 
-// Sizes where the layout gives way. Fixed layouts have no safe area, so
-// these are the space the screen gets, not whole devices.
+// Sizes where the layout gives way, off the saved speed so the wheel's way back
+// is showing. Fixed layouts have no safe area, so these are the space the
+// screen gets, not whole devices.
 
 #Preview("iPhone SE", traits: .fixedLayout(width: 375, height: 580)) {
-    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)), loopOn: true)
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)), rate: 0.72, loopOn: true)
 }
 
 #Preview("Controls giving way", traits: .fixedLayout(width: 402, height: 660)) {
@@ -1152,11 +1153,11 @@ private struct DialSilhouette: View {
 }
 
 #Preview("Compact, short window", traits: .fixedLayout(width: 500, height: 436)) {
-    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.25, green: 0.25, blue: 0.25)), loopOn: true)
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.25, green: 0.25, blue: 0.25)), rate: 0.72, loopOn: true)
 }
 
 #Preview("Compact, landscape phone", traits: .fixedLayout(width: 750, height: 350)) {
-    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)), loopOn: true)
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)), rate: 0.72, loopOn: true)
 }
 
 #Preview("Roomy, iPad portrait", traits: .fixedLayout(width: 834, height: 1090)) {
