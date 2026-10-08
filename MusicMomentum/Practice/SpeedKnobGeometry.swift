@@ -105,6 +105,27 @@ nonisolated struct SpeedKnobGeometry: Equatable {
 
     var pointerWidth: CGFloat { max(4, diameter * 0.018) }
 
+    /// The drawn tick a tap at `location` in the knob's frame lands on. Only
+    /// the scale ring counts, and only within half a tick's spacing, so a
+    /// smaller knob with fewer ticks has fewer places to land and a tap deep
+    /// in the gap between the stops lands nowhere.
+    func tickPercent(at location: CGPoint) -> Int? {
+        let dx = location.x - radius
+        let dy = location.y - radius
+        let distance = hypot(dx, dy)
+        guard distance >= skirtRadius, distance <= radius else { return nil }
+
+        let angle = atan2(dy, dx) * 180 / .pi
+        let tolerance = Double(tickStep) * Self.degreesPerPercent / 2
+        return stride(from: Self.minPercent, through: Self.maxPercent, by: tickStep)
+            .map { percent in
+                (percent, abs((angle - Self.angle(for: Double(percent)).degrees).remainder(dividingBy: 360)))
+            }
+            .filter { $0.1 <= tolerance }
+            .min { $0.1 < $1.1 }?
+            .0
+    }
+
     static func angle(for percent: Double) -> Angle {
         .degrees(startAngle + (percent - Double(minPercent)) * degreesPerPercent)
     }

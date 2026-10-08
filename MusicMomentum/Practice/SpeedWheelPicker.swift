@@ -10,7 +10,8 @@ import UIKit
 
 /// An amp-style knob for practice speed, one haptic detent per percent.
 /// Where it points is the speed: it stops dead at either limit, and the
-/// scale around it lights up to the pointer.
+/// scale around it lights up to the pointer. A tap on one of the scale's
+/// ticks jumps straight to it.
 struct SpeedWheelPicker: View {
     @Binding var speed: Double
     @Environment(\.smokedFill) private var smokedFill
@@ -29,6 +30,10 @@ struct SpeedWheelPicker: View {
     @State private var dragPercent: Double?
     /// `nil` while the finger is inside the cap, where the angle is unstable.
     @State private var lastTouchAngle: Double?
+    /// What the readout showed at touch-down, so a touch that ends where it
+    /// began counts as a tap, while a one-percent nudge, which can move less
+    /// than a tap's slop on a small knob, doesn't.
+    @State private var touchDownPercent: Int?
 
     #if canImport(UIKit)
     private let tick = UIImpactFeedbackGenerator(style: .rigid)
@@ -225,6 +230,7 @@ struct SpeedWheelPicker: View {
                 guard let previous = lastTouchAngle else {
                     lastTouchAngle = angle
                     if dragPercent == nil { dragPercent = Double(currentPercent) }
+                    if touchDownPercent == nil { touchDownPercent = currentPercent }
                     #if canImport(UIKit)
                     tick.prepare()
                     limit.prepare()
@@ -236,9 +242,18 @@ struct SpeedWheelPicker: View {
                 let delta = shortestDelta(from: previous, to: angle)
                 update(by: delta / SpeedKnobGeometry.degreesPerPercent)
             }
-            .onEnded { _ in
+            // The tap is read here rather than by its own gesture, which could
+            // end before this one and have its jump undone by the commit.
+            .onEnded { value in
+                let isTap = touchDownPercent == displayPercent
+                    && hypot(value.translation.width, value.translation.height) < 10
                 lastTouchAngle = nil
-                if let dragPercent { commit(dragPercent) }
+                touchDownPercent = nil
+                if isTap, let target = geometry.tickPercent(at: value.startLocation) {
+                    jump(to: target)
+                } else if let dragPercent {
+                    commit(dragPercent)
+                }
                 dragPercent = nil
             }
     }
@@ -312,11 +327,16 @@ struct SpeedWheelPicker: View {
         } else {
             return
         }
+        jump(to: target)
+    }
+
+    private func jump(to percent: Int) {
         dragPercent = nil
+        guard percent != currentPercent else { return }
         #if canImport(UIKit)
         limit.impactOccurred()
         #endif
-        speed = Double(target) / 100
+        speed = Double(percent) / 100
     }
 }
 
