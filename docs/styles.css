@@ -298,8 +298,6 @@ p { margin: 0; }
 .pill em { font-style: normal; opacity: 0.6; font-variant-numeric: tabular-nums; }
 .pill.looping { background: var(--accent); color: var(--on-accent); }
 .pill.looping .span { opacity: 0.8; }
-.pill.cued { background: color-mix(in srgb, var(--accent) 14%, transparent); }
-.pill.cued .span { color: var(--accent); opacity: 0.8; }
 .mark-btn { flex: none; width: 23px; height: 23px; border-radius: 50%; display: grid; place-items: center; background: var(--fill); color: var(--sec); }
 .mark-btn svg { width: 12px; height: 12px; }
 

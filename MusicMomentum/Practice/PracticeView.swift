@@ -342,7 +342,6 @@ struct PracticeView: View {
             trailingInset: trailingInset,
             isLooping: { controller.isLooping($0) },
             isLoopOn: controller.isLoopOn,
-            isCued: { isCued($0) },
             onTap: { tapped($0) },
             onPlayLoop: { controller.playOnLoop($0) },
             onJump: { controller.jump(to: $0) },
@@ -529,12 +528,6 @@ struct PracticeView: View {
         } else {
             controller.jump(to: marker)
         }
-    }
-
-    /// Playhead inside this clip with the loop off.
-    private func isCued(_ marker: SongMarker) -> Bool {
-        guard !controller.isLoopOn, let end = marker.endTime else { return false }
-        return controller.playbackTime >= marker.startTime && controller.playbackTime < end
     }
 
     private func marker(for id: AnyHashable) -> SongMarker? {

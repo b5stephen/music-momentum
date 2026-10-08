@@ -23,8 +23,6 @@ struct MarkerPills: View {
     /// With the loop on, a clip tap changes what's looping, so the clips that
     /// could join it say so.
     var isLoopOn = false
-    /// Playhead inside this clip while the loop is off.
-    var isCued: (SongMarker) -> Bool = { _ in false }
     var onTap: (SongMarker) -> Void
     var onPlayLoop: ((SongMarker) -> Void)?
     /// The saved list's jump loads the song and changes tab, so it says so.
@@ -43,7 +41,7 @@ struct MarkerPills: View {
     @Environment(\.displayScale) private var displayScale
 
     private enum PillState {
-        case idle, cued, joinable, looping
+        case idle, joinable, looping
     }
 
     var body: some View {
@@ -131,7 +129,6 @@ struct MarkerPills: View {
 
         return HStack(spacing: 5) {
             glyph(marker)
-                .foregroundStyle(state == .cued ? AnyShapeStyle(.tint) : foreground(state))
                 .opacity(state == .idle ? 0.55 : 0.8)
             Text(marker.name)
                 .font(.footnote.weight(.medium))
@@ -189,24 +186,21 @@ struct MarkerPills: View {
 
     private func state(of marker: SongMarker) -> PillState {
         if isLooping(marker) { return .looping }
-        if isLoopOn, marker.isClip { return .joinable }
-        return isCued(marker) ? .cued : .idle
+        return isLoopOn && marker.isClip ? .joinable : .idle
     }
 
     private func fill(_ state: PillState) -> AnyShapeStyle {
         switch state {
         case .idle, .joinable: outlinesIdle ? AnyShapeStyle(.clear) : AnyShapeStyle(.quaternary)
-        case .cued: AnyShapeStyle(.tint.opacity(0.12))
         case .looping: AnyShapeStyle(.tint)
         }
     }
 
-    /// Cued keeps the primary text so only the fill and glyph hint at it;
-    /// looping is the one state that shouts. White on the coral tint is under
-    /// 3:1, too faint for footnote text, so looping uses the dark on-accent colour.
+    /// White on the coral tint is under 3:1, too faint for footnote text, so
+    /// looping uses the dark on-accent colour.
     private func foreground(_ state: PillState) -> AnyShapeStyle {
         switch state {
-        case .idle, .cued, .joinable: AnyShapeStyle(.primary)
+        case .idle, .joinable: AnyShapeStyle(.primary)
         case .looping: AnyShapeStyle(onAccent)
         }
     }
@@ -216,7 +210,6 @@ struct MarkerPills: View {
         switch state {
         case .idle: return "\(marker.name), \(kind)"
         case .joinable: return "\(marker.name), \(kind), not looping"
-        case .cued: return "\(marker.name), \(kind), at the playhead"
         case .looping: return "\(marker.name), \(kind), looping"
         }
     }
@@ -257,7 +250,6 @@ private extension View {
         MarkerPills(
             markers: song.sortedMarkers,
             isLooping: { $0.name == "Solo" },
-            isCued: { $0.name == "Verse riff" },
             onTap: { _ in }, onPlayLoop: { _ in }, onJump: { _ in },
             onEdit: { _ in }, onDelete: { _ in }
         )
