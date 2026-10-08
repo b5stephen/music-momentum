@@ -203,11 +203,12 @@ struct PracticeView: View {
                 nowPlaying(track, coverSide: layout.coverSide, width: width)
             }
 
-            // Spare height goes either side of the wheel, so the header and
-            // the player hold their edges while a floating card is dragged
-            // wider and its wheel grows. Centring the whole stack slid the
-            // cover 50pt up the card; giving it all to the gap under the
-            // title left a tall card lopsided.
+            // Spare height goes either side of the wheel and under the
+            // player, so the header holds its edge while a floating card is
+            // dragged wider and its wheel grows. Centring the whole stack
+            // slid the cover 50pt up the card; giving it all to the gap under
+            // the title left a tall card lopsided; held to the bottom edge,
+            // the player made an iPhone Air look bottom-heavy.
             Spacer(minLength: layout.wheelGap - lift / 2)
             Color.clear.frame(height: lift)
 
@@ -220,6 +221,10 @@ struct PracticeView: View {
             Spacer(minLength: layout.wheelGap - lift / 2)
 
             player(layout)
+
+            // Last, so on a screen with nothing spare the gaps above take
+            // their minimums before this takes anything.
+            Spacer(minLength: 0)
         }
         // Past a phone's height the gaps would only drift apart, as they did
         // on an iPad upright, so the stack centres instead. A fixed height
