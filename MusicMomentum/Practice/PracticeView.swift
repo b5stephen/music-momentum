@@ -86,7 +86,11 @@ struct PracticeView: View {
         // Spacers absorb spare height; the screen only scrolls once they've
         // given it all back.
         GeometryReader { proxy in
-            let layout = PracticeLayout(size: proxy.size, heights: layoutHeights)
+            let controlsClearance = windowControlsClearance(proxy)
+            let layout = PracticeLayout(
+                size: CGSize(width: proxy.size.width, height: proxy.size.height - controlsClearance),
+                heights: layoutHeights
+            )
             ScrollView {
                 VStack(spacing: 0) {
                     if let track {
@@ -116,7 +120,7 @@ struct PracticeView: View {
 
                     messages
                 }
-                .padding(.top, track == nil ? 16 : layout.isWide ? Self.wideTopPadding : layout.topMargin)
+                .padding(.top, track == nil ? 16 : layout.isWide ? Self.wideTopPadding : layout.topMargin + controlsClearance)
                 .padding(.bottom, PracticeLayout.bottomMargin)
                 .frame(maxWidth: .infinity, minHeight: proxy.size.height)
             }
@@ -189,6 +193,18 @@ struct PracticeView: View {
     private func isDragged(to size: CGSize) -> Bool {
         guard let laidOutSize, laidOutSize != size else { return false }
         return abs(laidOutSize.width - size.width) < 80 && abs(laidOutSize.height - size.height) < 80
+    }
+
+    /// How far the stacked header drops to clear a window's controls, which
+    /// iPadOS puts over the top-leading corner, where the cover sits. Not a
+    /// safe area: the screen gets them only when it reaches that corner.
+    private func windowControlsClearance(_ proxy: GeometryProxy) -> CGFloat {
+        let controls = proxy.containerCornerInsets.topLeading
+        guard controls.height > 0, track != nil,
+              !PracticeLayout(size: proxy.size, heights: layoutHeights).isWide
+        else { return 0 }
+        let coverLeading = (proxy.size.width - min(proxy.size.width, Self.playerWidth)) / 2 + Self.sideMargin
+        return controls.width > coverLeading ? controls.height : 0
     }
 
     private func loadedSong(_ track: Track, layout: PracticeLayout, width: CGFloat) -> some View {

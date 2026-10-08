@@ -92,6 +92,8 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
     @State private var dragStartWidth: CGFloat?
     @State private var liveWidth: CGFloat?
     @State private var windowWidth: CGFloat = 1376
+    /// iPadOS's window controls, which sit over the card's top-leading corner.
+    @State private var windowControlsHeight: CGFloat = 0
 
     /// The widest iPhone's width, so the card is the phone layout at its roomiest.
     private static var defaultWidth: CGFloat { 440 }
@@ -140,9 +142,13 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
                 )
                 .frame(width: cardWidth)
                 .padding(Self.margin)
+                .padding(.top, max(0, windowControlsHeight + Self.contentInset - Self.margin))
                 // The status bar and home indicator are shorter than the
                 // margin, so the card can measure from the screen's edges.
                 .ignoresSafeArea(edges: .vertical)
+                .onGeometryChange(for: CGFloat.self) { $0.containerCornerInsets.topLeading.height } action: {
+                    windowControlsHeight = $0
+                }
 
             resizeHandle
                 .offset(x: Self.margin + cardWidth)
