@@ -245,6 +245,7 @@ private extension View {
             markers: song.sortedMarkers.map {
                 .init(
                     id: $0.persistentModelID,
+                    name: $0.name,
                     start: $0.startTime,
                     end: $0.endTime,
                     isLooping: $0.name == "Solo"

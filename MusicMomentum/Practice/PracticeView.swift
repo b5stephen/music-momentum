@@ -292,6 +292,7 @@ struct PracticeView: View {
                 position: controller.playbackTime,
                 duration: controller.duration,
                 markers: scrubberMarkers,
+                pointNameDuration: 3 * controller.playbackRate,
                 onScrub: { _ in controller.isScrubbing = true },
                 onCommit: { controller.endScrub(at: $0) }
             )
@@ -544,6 +545,7 @@ struct PracticeView: View {
         (savedSong?.sortedMarkers ?? []).map {
             .init(
                 id: $0.persistentModelID,
+                name: $0.name,
                 start: $0.startTime,
                 end: $0.endTime,
                 isLooping: controller.isLooping($0)

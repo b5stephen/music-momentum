@@ -15,11 +15,14 @@ struct PlaybackScrubber: View {
     /// Inert when `nil`.
     let duration: TimeInterval?
     var markers: [Marker] = []
+    /// Song time a point's name stays up after the playhead crosses it.
+    var pointNameDuration: TimeInterval = 3
     var onScrub: (TimeInterval) -> Void = { _ in }
     var onCommit: (TimeInterval) -> Void
 
-    struct Marker: Identifiable {
+    nonisolated struct Marker: Identifiable {
         let id: AnyHashable
+        var name: String = ""
         let start: TimeInterval
         let end: TimeInterval?
         var isLooping: Bool = false
@@ -48,7 +51,7 @@ struct PlaybackScrubber: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Playback position")
-        .accessibilityValue(Text(Self.timeLabel(displayedPosition)))
+        .accessibilityValue(Text([Self.timeLabel(displayedPosition), sectionName].compactMap(\.self).joined(separator: ", ")))
         .accessibilityAdjustableAction { direction in
             guard duration != nil else { return }
             let step: TimeInterval = direction == .increment ? 5 : -5
@@ -159,6 +162,15 @@ struct PlaybackScrubber: View {
             }
     }
 
+    private var sectionName: String? {
+        duration == nil ? nil : Self.sectionName(
+            at: displayedPosition, in: markers, pointNameDuration: pointNameDuration
+        )
+    }
+
+    /// The section's name sits between the times rather than riding the
+    /// playhead: a moving label pulls the eye off the instrument, and while
+    /// dragging this one says where you'd land.
     private var labels: some View {
         HStack {
             Text(Self.timeLabel(displayedPosition))
@@ -167,8 +179,32 @@ struct PlaybackScrubber: View {
                 Text("-" + Self.timeLabel(max(0, duration - displayedPosition)))
             }
         }
+        .overlay {
+            if let sectionName {
+                Text(sectionName)
+                    .lineLimit(1)
+                    .padding(.horizontal, 60)
+                    .id(sectionName)
+                    .transition(.opacity)
+            }
+        }
+        .animation(isDragging ? .easeOut(duration: 0.15) : .easeInOut(duration: 0.6), value: sectionName)
         .font(.caption.monospacedDigit())
         .foregroundStyle(.secondary)
+    }
+
+    /// A point's name for `pointNameDuration` after it, then the clip the
+    /// position is in. Where markers overlap, the latest start wins.
+    nonisolated static func sectionName(
+        at position: TimeInterval,
+        in markers: [Marker],
+        pointNameDuration: TimeInterval
+    ) -> String? {
+        func latest(where matches: (Marker) -> Bool) -> String? {
+            markers.filter { !$0.name.isEmpty && matches($0) }.max { $0.start < $1.start }?.name
+        }
+        return latest { $0.end == nil && (0..<pointNameDuration).contains(position - $0.start) }
+            ?? latest { marker in marker.end.map { (marker.start..<$0).contains(position) } ?? false }
     }
 
     /// `m:ss`, or `h:mm:ss` when needed.
@@ -188,6 +224,18 @@ struct PlaybackScrubber: View {
     }
 }
 
+#Preview("Just past a point") {
+    PlaybackScrubber(
+        position: 41,
+        duration: 245,
+        markers: [
+            .init(id: "verse", name: "Verse 2", start: 40, end: nil),
+            .init(id: "solo", name: "Solo", start: 96, end: 128, isLooping: true)
+        ]
+    ) { _ in }
+        .padding(.horizontal, 32)
+}
+
 #Preview("No markers") {
     PlaybackScrubber(position: 71, duration: 245) { _ in }
         .padding(.horizontal, 32)
@@ -198,10 +246,10 @@ struct PlaybackScrubber: View {
         position: 71,
         duration: 245,
         markers: [
-            .init(id: "intro", start: 4, end: nil),
-            .init(id: "verse", start: 40, end: 71),
-            .init(id: "solo", start: 96, end: 128, isLooping: true),
-            .init(id: "outro", start: 238, end: nil)
+            .init(id: "intro", name: "Intro", start: 4, end: nil),
+            .init(id: "verse", name: "Verse riff", start: 40, end: 71),
+            .init(id: "solo", name: "Solo", start: 96, end: 128, isLooping: true),
+            .init(id: "outro", name: "Outro", start: 238, end: nil)
         ]
     ) { _ in }
         .padding(.horizontal, 32)
@@ -213,10 +261,10 @@ struct PlaybackScrubber: View {
         position: 190,
         duration: 245,
         markers: [
-            .init(id: "intro", start: 4, end: nil),
-            .init(id: "verse", start: 40, end: 71),
-            .init(id: "solo", start: 96, end: 128, isLooping: true),
-            .init(id: "outro", start: 238, end: nil)
+            .init(id: "intro", name: "Intro", start: 4, end: nil),
+            .init(id: "verse", name: "Verse riff", start: 40, end: 71),
+            .init(id: "solo", name: "Solo", start: 96, end: 128, isLooping: true),
+            .init(id: "outro", name: "Outro", start: 238, end: nil)
         ]
     ) { _ in }
         .padding(.horizontal, 32)
@@ -224,11 +272,12 @@ struct PlaybackScrubber: View {
 
 #Preview("A songful of markers") {
     PlaybackScrubber(
-        position: 110,
+        position: 120,
         duration: 245,
         markers: (0..<8).map {
             .init(
                 id: $0,
+                name: "Section \($0 + 1) with a name long enough to truncate",
                 start: TimeInterval($0) * 28 + 4,
                 end: $0.isMultiple(of: 2) ? TimeInterval($0) * 28 + 22 : nil,
                 isLooping: $0 == 4
