@@ -246,7 +246,7 @@ struct PracticeView: View {
         // of the tab bar.
         let verticalPadding = PracticeLayout.verticalPadding
         let middle = Self.wideTopPadding + (size.height - verticalPadding) / 2 + tabBarInset / 2
-        let playerColumnHeight = min(size.height - verticalPadding, 2 * (size.height - 8 - middle))
+        let playerColumnHeight = min(size.height - verticalPadding, 2 * (size.height - 8 - middle)) - PracticeLayout.roundingSlack
         let coverSide = min(180, playerColumnHeight - widePlayerHeight - Self.wideCoverGap)
         return HStack(spacing: 0) {
             VStack(spacing: PracticeLayout.wideHeaderGap) {

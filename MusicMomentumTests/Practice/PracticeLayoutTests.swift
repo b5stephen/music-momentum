@@ -66,6 +66,16 @@ struct PracticeLayoutTests {
         }
     }
 
+    @Test("A window the layout fills leaves room for pixel rounding")
+    func leavesSlack() {
+        for width: CGFloat in [375, 402, 500, 640] {
+            for height in stride(from: CGFloat(600), through: 1000, by: 0.5) {
+                let stacked = layout(width, height)
+                #expect(stacked.stackedHeight(.standard) <= height - PracticeLayout.roundingSlack, "\(width)×\(height)")
+            }
+        }
+    }
+
     @Test("The wheel never drops below its floor", arguments: [
         (375.0, 300.0), (700.0, 300.0), (1000.0, 320.0),
     ])

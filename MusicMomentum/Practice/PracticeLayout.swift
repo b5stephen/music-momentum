@@ -69,6 +69,10 @@ nonisolated struct PracticeLayout: Equatable {
     /// The top and bottom padding round the wide layout's columns, which
     /// centre in the window.
     static let verticalPadding: CGFloat = 22
+    /// Height a solved layout leaves spare. SwiftUI rounds each fractional
+    /// size to the pixel grid, so a layout solved to fill a window exactly
+    /// came out a fraction of a point too tall, and the screen scrolled.
+    static let roundingSlack: CGFloat = 2
     /// Stacked, the bottom of the player's distance from the bottom edge.
     static let bottomMargin: CGFloat = 16
     /// A little over the tallest iPhone's screen once its bars are taken off.
@@ -114,7 +118,7 @@ nonisolated struct PracticeLayout: Equatable {
         let roomy = max(cap, min(size.width - 130, roomyWheel))
         // Phone widths stay at the phone layout however tall they are.
         let reach = min(unit((size.width - 440) / 160), unit((roomy - 260) / 40))
-        let fits = { (layout: Self) in layout.stackedHeight(heights) <= size.height }
+        let fits = { (layout: Self) in layout.stackedHeight(heights) <= size.height - roundingSlack }
 
         let full = solve(from: -reach, cap: cap, roomy: roomy, isWide: false, isCompact: false, fits: fits)
         guard full.stage > compactStage else { return full.layout }
@@ -127,7 +131,7 @@ nonisolated struct PracticeLayout: Equatable {
         let column = wideLeadingWidth(size.width) - 48
         let cap = min(column, 280)
         let roomy = min(column, roomyWheel)
-        let available = size.height - verticalPadding
+        let available = size.height - verticalPadding - roundingSlack
         let fits = { (layout: Self) in
             heights.wideHeader + wideHeaderGap + layout.wheelDiameter <= available
                 && layout.playerHeight(heights) <= available
@@ -202,7 +206,7 @@ nonisolated struct PracticeLayout: Equatable {
 
     // MARK: - Heights
 
-    private func stackedHeight(_ heights: Heights) -> CGFloat {
+    func stackedHeight(_ heights: Heights) -> CGFloat {
         let header = isCompact
             ? heights.compactHeader
             : max(coverSide, heights.titleBlock, 44)
