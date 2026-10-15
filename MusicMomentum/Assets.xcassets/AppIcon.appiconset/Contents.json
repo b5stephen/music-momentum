@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "IMG_2914.jpg",
+      "filename" : "Momentum-iOS-Default-1024@1x.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -13,6 +13,7 @@
           "value" : "dark"
         }
       ],
+      "filename" : "Momentum-iOS-Dark-1024@1x.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -24,6 +25,7 @@
           "value" : "tinted"
         }
       ],
+      "filename" : "Momentum-iOS-ClearLight-1024@1x.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
