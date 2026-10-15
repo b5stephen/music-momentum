@@ -241,7 +241,7 @@ extension PracticeLayout.Heights {
             // The labels tuck 4pt up under the bar's 44pt touch area.
             scrubber: 44 + line(.caption1) - 4,
             pillRow: footnote.scaledValue(for: 32, compatibleWith: traits) + 4,
-            captionRow: 8 + max(44, line(.footnote))
+            captionRow: 8 + max(44, line(.subheadline) + 16)
         )
     }
 }

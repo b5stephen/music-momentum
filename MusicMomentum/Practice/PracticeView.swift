@@ -324,7 +324,7 @@ struct PracticeView: View {
                 HStack(spacing: 0) {
                     markerPills(trailingInset: 8)
                     markButton(showsTitle: false)
-                        .padding(.trailing, Self.sideMargin - 12)
+                        .padding(.trailing, Self.sideMargin - (44 - Self.markGlassSide) / 2)
                 }
             } else {
                 markerPills(trailingInset: nil)
@@ -466,15 +466,20 @@ struct PracticeView: View {
                         Text("Mark")
                     } icon: {
                         MarkGlyph()
-                            .frame(width: 15, height: 15)
+                            .frame(width: 17, height: 17)
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .frame(minHeight: Self.markGlassSide)
                 } else {
                     MarkGlyph()
                         .frame(width: 20, height: 20)
+                        .frame(width: Self.markGlassSide, height: Self.markGlassSide)
                 }
             }
-            .font(.footnote.weight(.medium))
+            .font(.subheadline.weight(.semibold))
             .foregroundStyle(Color.primary)
+            .modifier(ButtonGlass(prompt: nil))
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(.rect)
         }
@@ -483,6 +488,10 @@ struct PracticeView: View {
         .disabled(controller.duration == nil)
         .accessibilityLabel("Mark this point")
     }
+
+    /// Shorter than the header's 44pt glass so it doesn't tower over the
+    /// pills; the touch area stays 44pt.
+    private static let markGlassSide: CGFloat = 36
 
     /// Plain like its neighbours until it's on, when it's the one control that
     /// fills: looping is the state that shouts.
@@ -745,7 +754,7 @@ struct PracticeView: View {
             .padding(.horizontal, isCurrent ? 0 : 14)
             .frame(minWidth: Self.headerButtonSide, minHeight: Self.headerButtonSide)
             .foregroundStyle(isCurrent ? AnyShapeStyle(.primary) : AnyShapeStyle(textTint))
-            .modifier(HeaderGlass(prompt: isCurrent ? nil : textTint))
+            .modifier(ButtonGlass(prompt: isCurrent ? nil : textTint))
             .contentShape(.capsule)
         }
         .buttonStyle(.plain)
@@ -764,7 +773,7 @@ struct PracticeView: View {
             Image(systemName: "arrow.left.arrow.right")
                 .font(.subheadline.weight(.semibold))
                 .frame(width: Self.headerButtonSide, height: Self.headerButtonSide)
-                .modifier(HeaderGlass(prompt: nil))
+                .modifier(ButtonGlass(prompt: nil))
                 .contentShape(.circle)
         }
         .buttonStyle(.plain)
@@ -1027,9 +1036,9 @@ private struct HeaderButtonsBeside<Buttons: View, Fade: View>: ViewModifier {
     }
 }
 
-/// Glass for the header's buttons: tinted when it prompts, and smoked either
+/// Glass for Practice's buttons: tinted when it prompts, and smoked either
 /// way on a bright cover, where clear glass under light text washes out.
-private struct HeaderGlass: ViewModifier {
+private struct ButtonGlass: ViewModifier {
     var prompt: Color?
     @Environment(\.smokedFill) private var smokedFill
 

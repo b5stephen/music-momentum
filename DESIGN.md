@@ -39,7 +39,7 @@ A landscape window with room for Saved beside the narrowest card drops the tab b
 
 Saved's speed and marker chips are clear Liquid Glass with primary text and no coral, on the phone as well as here, so beside the card they take on the glow instead of clashing with it.
 
-Practice's save and change-song buttons are glass too, so they take on the cover like the knob does. The save prompt is the same glass tinted, never a solid fill.
+Practice's save, change-song and Mark buttons are glass too, so they take on the cover like the knob does. Mark was bare text on the caption line until people didn't see it as a button. The save prompt is the same glass tinted, never a solid fill.
 
 ## Type
 
