@@ -481,7 +481,7 @@ struct PracticeView: View {
             }
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(Color.primary)
-            .modifier(ButtonGlass(prompt: nil))
+            .modifier(ButtonGlass())
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(.rect)
         }
@@ -755,8 +755,7 @@ struct PracticeView: View {
             .font(.subheadline.weight(.semibold))
             .padding(.horizontal, isCurrent ? 0 : 14)
             .frame(minWidth: Self.headerButtonSide, minHeight: Self.headerButtonSide)
-            .foregroundStyle(isCurrent ? AnyShapeStyle(.primary) : AnyShapeStyle(textTint))
-            .modifier(ButtonGlass(prompt: isCurrent ? nil : textTint, isLabel: isCurrent))
+            .modifier(ButtonGlass(isLabel: isCurrent))
             .contentShape(.capsule)
         }
         .buttonStyle(.plain)
@@ -775,7 +774,7 @@ struct PracticeView: View {
             Image(systemName: "arrow.left.arrow.right")
                 .font(.subheadline.weight(.semibold))
                 .frame(width: Self.headerButtonSide, height: Self.headerButtonSide)
-                .modifier(ButtonGlass(prompt: nil))
+                .modifier(ButtonGlass())
                 .contentShape(.circle)
         }
         .buttonStyle(.plain)
@@ -1039,11 +1038,10 @@ private struct HeaderButtonsBeside<Buttons: View, Fade: View>: ViewModifier {
     }
 }
 
-/// Glass for Practice's buttons: tinted when it prompts, and smoked either
-/// way on a bright cover, where clear glass under light text washes out.
-/// None on a label, which in the same glass as Change Song read as a button.
+/// Glass for Practice's buttons, smoked on a bright cover, where clear glass
+/// under light text washes out. None on a label, which in the same glass as
+/// Change Song read as a button.
 private struct ButtonGlass: ViewModifier {
-    var prompt: Color?
     var isLabel = false
     @Environment(\.smokedFill) private var smokedFill
 
@@ -1054,7 +1052,6 @@ private struct ButtonGlass: ViewModifier {
     private var glass: Glass {
         if isLabel { return .identity }
         if let smokedFill { return .regular.tint(smokedFill) }
-        if let prompt { return .regular.tint(prompt.opacity(0.2)) }
         return .regular
     }
 }

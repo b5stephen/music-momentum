@@ -22,7 +22,7 @@ On the website, each feature gets its own accent: coral for speed, amber for mar
 ## Principles
 
 - **One tint.** Coral is the app's only accent. Amber, rose and violet stay on the website; bring one into the app only for a job the tint can't do.
-- **Coral means "on" or "act on this".** The running loop, a looping clip, a prompt to save, the speed you saved. Never decoration, or it stops meaning anything. Play/pause is the primary colour.
+- **Coral means "on" or "act on this".** The running loop, a looping clip, the speed you saved. Never decoration, or it stops meaning anything. Play/pause is the primary colour.
 - **Only one state shouts.** Solid coral is for looping and for graphics (the speed knob's lit scale, the looping clip on the timeline). Everything else that's coral is a tint: `.tint` at 12–16% with `AccentText`. Settled things are `.quaternary` with secondary text.
 - **Fill carries state; glyph carries kind.** A dot is a point and a short bar (`SpanGlyph`) is a clip, as they're drawn in the timeline's marker lane; the fill says whether it's idle or looping. On Saved, idle pills are a one-pixel `.quaternary` hairline with no fill: a grey pill under every song outweighed the titles.
 - **Neutral controls stay neutral.** Nudge, cue, skip and the like use system fills, not coral. Toolbar glyphs that act on the screen (Saved's add and sort, a sheet's save tick) are `AccentColor` on the toolbar's own glass.
@@ -39,7 +39,7 @@ A landscape window with room for Saved beside the narrowest card drops the tab b
 
 Saved's speed and marker chips are clear Liquid Glass with primary text and no coral, on the phone as well as here, so beside the card they take on the glow instead of clashing with it.
 
-Practice's save, change-song and Mark buttons are glass too, so they take on the cover like the knob does. Mark was bare text on the caption line until people didn't see it as a button. The save prompt is the same glass tinted, never a solid fill. Once the speed is saved, the bookmark loses its glass: it says the song is saved, and in the same glass as Change Song it looked like a button.
+Practice's save, change-song and Mark buttons are glass too, so they take on the cover like the knob does. Mark was bare text on the caption line until people didn't see it as a button. The save prompt is the same glass in the same colour as Change Song: tinted coral beside it, the pair read as two unrelated controls. Once the speed is saved, the bookmark loses its glass: it says the song is saved, and in the same glass as Change Song it looked like a button.
 
 ## Type
 
@@ -66,6 +66,7 @@ Practice's save, change-song and Mark buttons are glass too, so they take on the
 - **A speed wheel that spun past its limits,** with an arc around the rim reporting the value and a plate, teeth and hub in three greys: the greys muddied each other on a dark cover, and the saved speed appeared nowhere on it. It's an amp knob now: it points at the speed and stops dead at each end.
 - **A glass "↺ 80%" chip in the speed knob's bottom gap** to lead back to the saved speed: it read as a control hanging off the knob, and on the small knob, whose ring is shallower than the chip, its glass merged into the skirt's rim. The way back is a bare ↺ under the readout instead; the saved dot already says where it goes.
 - **Grey save and change-song chips under the title:** they read as disabled, and "Saved at 70%" repeated the number the knob shows. The saved speed is a dot on the knob's scale instead.
+- **A coral-tinted save prompt** on glass tinted to match: beside the neutral Change Song it looked like the two buttons came from different screens.
 - **A glass bookmark once the speed was saved:** beside Change Song it looked just as tappable, though tapping it did nothing.
 - **A save prompt that pushed the title aside** reflowed it mid-drag, and **one floating over the title** smeared the letters through its glass. The title keeps room for two circles and fades out under the prompt.
 - **Markers drawn on the timeline's track:** a clip at track height read as buffering, and a looping one needed a halo to survive the played fill. They have a lane of their own above it.
