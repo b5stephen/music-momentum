@@ -10,6 +10,8 @@ import UIKit
 
 /// Position bar with the markers drawn on it. Only commits a seek on release
 /// — one per gesture, not sixty — so the audio doesn't stutter while dragging.
+/// A quick tap on a marker in the lane jumps to its start; moving or holding
+/// there scrubs as anywhere else.
 struct PlaybackScrubber: View {
     let position: TimeInterval
     /// Inert when `nil`.
@@ -33,6 +35,9 @@ struct PlaybackScrubber: View {
     /// What the bar draws while a finger is down, so the thumb never snaps
     /// back to a stale playhead before the player catches up.
     @State private var dragPosition: TimeInterval?
+    /// A touch that landed on a marker, not yet a tap or a scrub.
+    @State private var pendingMarker: Marker?
+    @State private var holdTask: Task<Void, Never>?
 
     private var isDragging: Bool { dragPosition != nil }
     private var displayedPosition: TimeInterval { dragPosition ?? position }
@@ -64,6 +69,8 @@ struct PlaybackScrubber: View {
     /// The track's height while a finger is down; it sits in a slot this
     /// tall either way, so growing doesn't nudge the lane above it.
     private static let draggingTrackHeight: CGFloat = 12
+    private static let tapSlop: CGFloat = 6
+    private static let holdDelay: Duration = .milliseconds(300)
 
     /// Markers get a lane of their own above the track. Drawn on the track
     /// they fought the played fill: a clip at track height read as buffering,
@@ -72,6 +79,9 @@ struct PlaybackScrubber: View {
         GeometryReader { proxy in
             let width = proxy.size.width
             let trackHeight: CGFloat = isDragging ? Self.draggingTrackHeight : 6
+            // Above the track's slot is the lane's; the track below always scrubs.
+            let laneBottom = (proxy.size.height - Self.laneHeight - Self.laneGap - Self.draggingTrackHeight) / 2
+                + Self.laneHeight + Self.laneGap / 2
 
             VStack(spacing: Self.laneGap) {
                 markerLane(width: width)
@@ -91,7 +101,7 @@ struct PlaybackScrubber: View {
             .overlay(alignment: .topLeading) { playhead(width: width, trackHeight: trackHeight) }
             .frame(maxHeight: .infinity)
             .contentShape(.rect)
-            .gesture(dragGesture(width: width))
+            .gesture(dragGesture(width: width, laneBottom: laneBottom))
             .animation(.snappy(duration: 0.2), value: isDragging)
             .animation(.snappy(duration: 0.2), value: markers.isEmpty)
         }
@@ -142,24 +152,80 @@ struct PlaybackScrubber: View {
             .opacity(duration == nil || markers.isEmpty ? 0 : 1)
     }
 
-    private func dragGesture(width: CGFloat) -> some Gesture {
+    private func dragGesture(width: CGFloat, laneBottom: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
                 guard let duration, duration > 0, width > 0 else { return }
-                if dragPosition == nil {
-                    #if canImport(UIKit)
-                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                    #endif
+                if dragPosition == nil, pendingMarker == nil {
+                    if value.startLocation.y < laneBottom,
+                       let marker = Self.marker(at: value.startLocation.x, width: width, duration: duration, in: markers) {
+                        pendingMarker = marker
+                        holdTask = Task {
+                            try? await Task.sleep(for: Self.holdDelay)
+                            guard !Task.isCancelled, pendingMarker != nil else { return }
+                            pendingMarker = nil
+                            scrub(to: value.startLocation.x, width: width, duration: duration)
+                        }
+                        return
+                    }
+                } else if pendingMarker != nil {
+                    guard hypot(value.translation.width, value.translation.height) > Self.tapSlop else { return }
+                    pendingMarker = nil
+                    holdTask?.cancel()
                 }
-                let time = duration * min(max(value.location.x / width, 0), 1)
-                dragPosition = time
-                onScrub(time)
+                scrub(to: value.location.x, width: width, duration: duration)
             }
             .onEnded { _ in
+                holdTask?.cancel()
+                if let marker = pendingMarker {
+                    pendingMarker = nil
+                    #if canImport(UIKit)
+                    UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+                    #endif
+                    onCommit(marker.start)
+                    return
+                }
                 guard let time = dragPosition else { return }
                 dragPosition = nil
                 onCommit(time)
             }
+    }
+
+    private func scrub(to x: CGFloat, width: CGFloat, duration: TimeInterval) {
+        if dragPosition == nil {
+            #if canImport(UIKit)
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            #endif
+        }
+        let time = duration * min(max(x / width, 0), 1)
+        dragPosition = time
+        onScrub(time)
+    }
+
+    /// The marker a tap at `x` in the lane jumps to. Targets are widened to a
+    /// fingertip; a point beats the clip it sits in, the nearest point wins,
+    /// and overlapping clips go to the latest start, as `sectionName` does.
+    nonisolated static func marker(
+        at x: CGFloat,
+        width: CGFloat,
+        duration: TimeInterval,
+        in markers: [Marker],
+        targetWidth: CGFloat = 22
+    ) -> Marker? {
+        guard duration > 0, width > 0 else { return nil }
+        func offset(_ time: TimeInterval) -> CGFloat { width * min(max(time / duration, 0), 1) }
+        func distance(_ marker: Marker) -> CGFloat { abs(offset(marker.start) - x) }
+
+        if let point = markers.filter({ !$0.isClip && distance($0) <= targetWidth / 2 }).min(by: { distance($0) < distance($1) }) {
+            return point
+        }
+        return markers.filter { marker in
+            guard let end = marker.end else { return false }
+            let (lower, upper) = (offset(marker.start), offset(end))
+            let pad = max(0, (targetWidth - (upper - lower)) / 2)
+            return (lower - pad...upper + pad).contains(x)
+        }
+        .max { $0.start < $1.start }
     }
 
     private var sectionName: String? {
