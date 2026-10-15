@@ -39,7 +39,7 @@ A landscape window with room for Saved beside the narrowest card drops the tab b
 
 Saved's speed and marker chips are clear Liquid Glass with primary text and no coral, on the phone as well as here, so beside the card they take on the glow instead of clashing with it.
 
-Practice's save, change-song and Mark buttons are glass too, so they take on the cover like the knob does. Mark was bare text on the caption line until people didn't see it as a button. The save prompt is the same glass tinted, never a solid fill.
+Practice's save, change-song and Mark buttons are glass too, so they take on the cover like the knob does. Mark was bare text on the caption line until people didn't see it as a button. The save prompt is the same glass tinted, never a solid fill. Once the speed is saved, the bookmark loses its glass: it says the song is saved, and in the same glass as Change Song it looked like a button.
 
 ## Type
 
@@ -66,6 +66,7 @@ Practice's save, change-song and Mark buttons are glass too, so they take on the
 - **A speed wheel that spun past its limits,** with an arc around the rim reporting the value and a plate, teeth and hub in three greys: the greys muddied each other on a dark cover, and the saved speed appeared nowhere on it. It's an amp knob now: it points at the speed and stops dead at each end.
 - **A glass "↺ 80%" chip in the speed knob's bottom gap** to lead back to the saved speed: it read as a control hanging off the knob, and on the small knob, whose ring is shallower than the chip, its glass merged into the skirt's rim. The way back is a bare ↺ under the readout instead; the saved dot already says where it goes.
 - **Grey save and change-song chips under the title:** they read as disabled, and "Saved at 70%" repeated the number the knob shows. The saved speed is a dot on the knob's scale instead.
+- **A glass bookmark once the speed was saved:** beside Change Song it looked just as tappable, though tapping it did nothing.
 - **A save prompt that pushed the title aside** reflowed it mid-drag, and **one floating over the title** smeared the letters through its glass. The title keeps room for two circles and fades out under the prompt.
 - **Markers drawn on the timeline's track:** a clip at track height read as buffering, and a looping one needed a halo to survive the played fill. They have a lane of their own above it.
 - **A playhead line on a song without markers:** crossing the empty lane, it sat high above the track and the bar looked off-centre; a short tick centred on the track read as a notch. Until there's a marker to measure against, the end of the fill marks the position.

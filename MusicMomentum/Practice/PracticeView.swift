@@ -103,7 +103,7 @@ struct PracticeView: View {
                                     tabBarInset: verticalSizeClass == .compact ? proxy.safeAreaInsets.bottom : 0
                                 )
                             } else {
-                                loadedSong(track, layout: layout, width: proxy.size.width)
+                                loadedSong(track, layout: layout, width: proxy.size.width, buttonsLift: controlsClearance)
                             }
                         }
                         .animation(isDragged(to: proxy.size) ? .snappy : nil, value: layout.isCompact)
@@ -198,6 +198,8 @@ struct PracticeView: View {
     /// How far the stacked header drops to clear a window's controls, which
     /// iPadOS puts over the top-leading corner, where the cover sits. Not a
     /// safe area: the screen gets them only when it reaches that corner.
+    /// The header buttons sit at the trailing end, clear of them, so they're
+    /// lifted back to the top.
     private func windowControlsClearance(_ proxy: GeometryProxy) -> CGFloat {
         let controls = proxy.containerCornerInsets.topLeading
         guard controls.height > 0, track != nil,
@@ -207,7 +209,7 @@ struct PracticeView: View {
         return controls.width > coverLeading ? controls.height : 0
     }
 
-    private func loadedSong(_ track: Track, layout: PracticeLayout, width: CGFloat) -> some View {
+    private func loadedSong(_ track: Track, layout: PracticeLayout, width: CGFloat, buttonsLift: CGFloat) -> some View {
         // The wheel's frame is about 23pt emptier below its scale than above
         // it, and the scrubber's bar sits 20pt down its touch area, so equal
         // gaps looked bigger under the wheel. Spacers share spare height
@@ -215,9 +217,9 @@ struct PracticeView: View {
         let lift = min(43, 2 * layout.wheelGap)
         return VStack(spacing: 0) {
             if layout.isCompact {
-                compactNowPlaying(track, coverSide: layout.coverSide)
+                compactNowPlaying(track, coverSide: layout.coverSide, buttonsLift: buttonsLift)
             } else {
-                nowPlaying(track, coverSide: layout.coverSide, width: width)
+                nowPlaying(track, coverSide: layout.coverSide, width: width, buttonsLift: buttonsLift)
             }
 
             // Spare height goes either side of the wheel and under the
@@ -617,7 +619,7 @@ struct PracticeView: View {
     /// The cover shows where the screen's colours come from. Wide, it sits
     /// over the player instead and `coverSide` is nil.
     @ViewBuilder
-    private func nowPlaying(_ track: Track, coverSide: CGFloat?, width: CGFloat = 0) -> some View {
+    private func nowPlaying(_ track: Track, coverSide: CGFloat?, width: CGFloat = 0, buttonsLift: CGFloat = 0) -> some View {
         if let coverSide {
             HStack(spacing: 14) {
                 cover(track.artwork, side: coverSide, radius: coverSide / 4)
@@ -638,7 +640,7 @@ struct PracticeView: View {
                         titleBlockHeight = $0
                     }
             }
-            .modifier(HeaderButtonsBeside(reserve: Self.headerButtonsReserve, buttons: headerButtons, fade: titleFade))
+            .modifier(HeaderButtonsBeside(reserve: Self.headerButtonsReserve, lift: buttonsLift, buttons: headerButtons, fade: titleFade))
             // A floating card's corner is 40pt round; less this inset, that's
             // the cover's 16, so the two curves are concentric. At 32pt and a
             // sharper corner, a title as short as "Count on Me" wrapped on a
@@ -654,7 +656,7 @@ struct PracticeView: View {
         }
     }
 
-    private func compactNowPlaying(_ track: Track, coverSide: CGFloat) -> some View {
+    private func compactNowPlaying(_ track: Track, coverSide: CGFloat, buttonsLift: CGFloat) -> some View {
         HStack(spacing: 12) {
             cover(track.artwork, side: coverSide)
 
@@ -669,7 +671,7 @@ struct PracticeView: View {
             .dynamicTypeSize(...PracticeLayout.headerTypeLimit)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .modifier(HeaderButtonsBeside(reserve: Self.headerButtonsReserve, buttons: headerButtons, fade: titleFade))
+        .modifier(HeaderButtonsBeside(reserve: Self.headerButtonsReserve, lift: buttonsLift, buttons: headerButtons, fade: titleFade))
         .padding(.horizontal, Self.sideMargin)
         .frame(maxWidth: Self.playerWidth)
     }
@@ -726,7 +728,7 @@ struct PracticeView: View {
         }
     }
 
-    /// Settled, a filled bookmark; the saved speed itself is the dot on the
+    /// Settled, a bare filled bookmark; the saved speed itself is the dot on the
     /// knob's scale. A different speed grows it into a prompt, which shrinks
     /// back once saved. One view throughout, so the glass morphs rather than
     /// cross-fading between two buttons.
@@ -754,7 +756,7 @@ struct PracticeView: View {
             .padding(.horizontal, isCurrent ? 0 : 14)
             .frame(minWidth: Self.headerButtonSide, minHeight: Self.headerButtonSide)
             .foregroundStyle(isCurrent ? AnyShapeStyle(.primary) : AnyShapeStyle(textTint))
-            .modifier(ButtonGlass(prompt: isCurrent ? nil : textTint))
+            .modifier(ButtonGlass(prompt: isCurrent ? nil : textTint, isLabel: isCurrent))
             .contentShape(.capsule)
         }
         .buttonStyle(.plain)
@@ -1025,6 +1027,7 @@ private final class DriftClock {
 /// masked so it fades out under them instead of showing through the glass.
 private struct HeaderButtonsBeside<Buttons: View, Fade: View>: ViewModifier {
     var reserve: CGFloat
+    var lift: CGFloat
     var buttons: Buttons
     var fade: Fade
 
@@ -1032,21 +1035,24 @@ private struct HeaderButtonsBeside<Buttons: View, Fade: View>: ViewModifier {
         content
             .padding(.trailing, reserve)
             .mask(fade)
-            .overlay(alignment: .trailing) { buttons }
+            .overlay(alignment: .trailing) { buttons.offset(y: -lift) }
     }
 }
 
 /// Glass for Practice's buttons: tinted when it prompts, and smoked either
 /// way on a bright cover, where clear glass under light text washes out.
+/// None on a label, which in the same glass as Change Song read as a button.
 private struct ButtonGlass: ViewModifier {
     var prompt: Color?
+    var isLabel = false
     @Environment(\.smokedFill) private var smokedFill
 
     func body(content: Content) -> some View {
-        content.glassEffect(glass.interactive(), in: .capsule)
+        content.glassEffect(glass.interactive(!isLabel), in: .capsule)
     }
 
     private var glass: Glass {
+        if isLabel { return .identity }
         if let smokedFill { return .regular.tint(smokedFill) }
         if let prompt { return .regular.tint(prompt.opacity(0.2)) }
         return .regular
