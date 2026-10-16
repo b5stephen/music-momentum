@@ -43,9 +43,9 @@ Practice's save, change-song and Mark buttons are glass too, so they take on the
 
 ## Volume
 
-Practice's volume is the system's, the level the side buttons set: Apple's own `MPVolumeView`, with its slider in iOS 26's thumbless media style, as Apple Music's is, under the transport in every layout. Its track is the text colour, not coral, since volume isn't a state; the transport sits midway between it and the scrubber, so the two bars frame it as a pair. Stacked, it's the first thing to go when the screen runs short of height, before the controls shrink: the side buttons do the same job, and the clips don't.
+Practice's volume is the system's, the level the side buttons set: Apple's own `MPVolumeView` under the transport in every layout, styled only through its own image setters: a track as thin as the scrubber's and a small dot for a thumb, far lighter than the system's glass one. Both are the text colour, not coral, since volume isn't a state; the transport sits midway between it and the scrubber, so the two bars frame it as a pair. Stacked, it's the first thing to go when the screen runs short of height, before the controls shrink: the side buttons do the same job, and the clips don't.
 
-Wide, the cover sits beside the title as it does stacked, with the save prompt and Change Song on a row of their own under it: in a column that narrow, the prompt growing over the title left only its first word. The playback column holds nothing but playback.
+Wide, the cover sits beside the title as it does stacked, the pair centred over the wheel with the save prompt and Change Song centred on a row of their own under it: in a column that narrow, the prompt growing over the title left only its first word. The playback column holds nothing but playback, and spreads, within limits, to run from the header's top to the wheel's foot.
 
 ## Type
 
@@ -85,6 +85,9 @@ Wide, the cover sits beside the title as it does stacked, with the save prompt a
 - **The system volume slider with its thumb:** it outweighed the thumbless scrubber above the transport.
 - **A volume track of our own driving a hidden `MPVolumeView`:** it matched the scrubber exactly, but reading the level needed an audio session of our own, and setting it went through the hidden view's inner slider.
 - **An upright volume slider beside the wheel in the wide layout:** it was `MPVolumeView` turned 90°, which Apple doesn't document or do itself.
+- **`MPVolumeView`'s slider forced into iOS 26's thumbless style:** its private slider couldn't be dragged back up from zero, and centring it by hand came undone whenever it laid itself out again.
+- **The wide header aligned to the column's leading edge,** with the buttons trailing under it: it fought the centred wheel, and Change Song sat apart from the song it changes.
+- **The wide playback column as a tight block** centred beside the header and wheel: it looked stark. Stretched the whole height, an iPad window's rows drifted apart, so each gap grows by at most 28pt.
 - **The cover over the playback column in the wide layout,** up to 180pt: it was the only thing the volume row could take height from, and on a landscape phone it shrank to 76pt.
 - **⏮ for restart:** a triangle-and-bar beside the skip buttons' circular arrows looked like a different set, and reads as "previous track". Restart uses `gobackward`, the skip arrow without a number.
 

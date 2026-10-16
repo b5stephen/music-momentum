@@ -300,7 +300,7 @@ struct PracticeView: View {
             }
             .frame(width: PracticeLayout.wideLeadingWidth(size.width))
 
-            player(layout)
+            player(layout, height: wideHeaderHeight + PracticeLayout.wideHeaderGap + layout.wheelDiameter)
                 .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: 960)
@@ -312,8 +312,15 @@ struct PracticeView: View {
     /// button that reshapes them, with the caption saying what's looping.
     /// Every row shares `sideMargin` with the header, so the cover, the
     /// scrubber's ends, the first pill and the outer buttons line up.
-    private func player(_ layout: PracticeLayout) -> some View {
-        VStack(spacing: 0) {
+    /// Given a `height`, the rows spread towards it: wide, the playback
+    /// column runs from the top of the header to the foot of the wheel, as a
+    /// tight block centred in empty space it looked stark beside them. The
+    /// spare goes equally either side of the transport, keeping it midway
+    /// between the scrubber and the volume, and stops at `spreadGap` so an
+    /// iPad window's rows don't drift apart.
+    private func player(_ layout: PracticeLayout, height: CGFloat? = nil) -> some View {
+        let spread = height != nil
+        return VStack(spacing: 0) {
             PlaybackScrubber(
                 position: controller.playbackTime,
                 duration: controller.duration,
@@ -325,9 +332,13 @@ struct PracticeView: View {
             .padding(.horizontal, Self.sideMargin)
             .padding(.bottom, layout.scrubberGap)
 
+            if spread { Self.spreadGap }
+
             transportControls(layout)
 
             if layout.showsVolume {
+                if spread { Self.spreadGap }
+
                 VolumeSlider(tint: track?.palette?.foreground)
                     .frame(height: PracticeLayout.volumeRow)
                     .padding(.top, layout.volumeGap(layoutHeights))
@@ -335,6 +346,8 @@ struct PracticeView: View {
             }
 
             Color.clear.frame(height: layout.transportGap)
+
+            if spread { Self.spreadGap }
 
             if layout.isCompact {
                 // The caption's line is the height compact gives back; the
@@ -365,6 +378,7 @@ struct PracticeView: View {
             }
         }
         .frame(maxWidth: Self.playerWidth)
+        .frame(height: height)
     }
 
     /// Always laid out, so switching between songs with and without markers
@@ -385,6 +399,9 @@ struct PracticeView: View {
     }
 
     private static let sideMargin: CGFloat = 24
+    private static var spreadGap: some View {
+        Spacer(minLength: 0).frame(maxHeight: 28)
+    }
     /// Wide enough for a precise scrubber, narrow enough that the transport's
     /// five buttons still read as one row.
     private static let playerWidth: CGFloat = 500
@@ -649,25 +666,22 @@ struct PracticeView: View {
         max(0, (coverSide - headerButtonSide) / 2)
     }
 
-    /// The cover beside the title as in the stacked header, but with the
-    /// buttons on a row of their own: in a column this narrow, the save
-    /// prompt growing over the title left only its first word. Trailing, so
-    /// Change Song holds still while the prompt comes and goes.
+    /// The cover and title as one group, centred over the wheel like the
+    /// buttons under them. Aligned to the column's leading edge instead, the
+    /// header fought the centred wheel, and Change Song pinned to the
+    /// trailing edge sat apart from the song it changes.
     private func wideHeader(_ track: Track, coverSide: CGFloat) -> some View {
         VStack(spacing: 12) {
             HStack(spacing: 14) {
                 cover(track.artwork, side: coverSide, radius: coverSide / 4)
                 titleBlock(track, alignment: .leading)
                     .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             headerButtons
-                .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(.horizontal, Self.sideMargin)
     }
 
-    /// The cover shows where the screen's colours come from.
     private func nowPlaying(_ track: Track, coverSide: CGFloat, width: CGFloat, indent: CGFloat, buttonsLift: CGFloat) -> some View {
         HStack(spacing: 14) {
             cover(track.artwork, side: coverSide, radius: coverSide / 4)
