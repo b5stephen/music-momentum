@@ -97,15 +97,41 @@ struct VolumeSlider: View {
 
 @Observable
 private final class SystemVolume {
-    private(set) var level: Float = AVAudioSession.sharedInstance().outputVolume
+    private(set) var level: Float = 0
     @ObservationIgnored weak var slider: UISlider?
     @ObservationIgnored private var observation: NSKeyValueObservation?
+    @ObservationIgnored private var activation: NSObjectProtocol?
 
+    /// `outputVolume` reads 0 and never changes for an app whose audio
+    /// session isn't active, which ours never was, since the Music app does
+    /// the playing. An ambient, mixable session plays nothing and leaves the
+    /// Music app's playback alone. Activated again on returning to the app,
+    /// in case the system deactivated it while we were away.
     init() {
-        observation = AVAudioSession.sharedInstance().observe(\.outputVolume) { [weak self] session, _ in
+        let session = AVAudioSession.sharedInstance()
+        Self.activate(session)
+        level = session.outputVolume
+        observation = session.observe(\.outputVolume) { [weak self] session, _ in
             let level = session.outputVolume
             Task { @MainActor in self?.level = level }
         }
+        activation = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            let session = AVAudioSession.sharedInstance()
+            Self.activate(session)
+            let level = session.outputVolume
+            Task { @MainActor in self?.level = level }
+        }
+    }
+
+    isolated deinit {
+        if let activation { NotificationCenter.default.removeObserver(activation) }
+    }
+
+    private nonisolated static func activate(_ session: AVAudioSession) {
+        try? session.setCategory(.ambient, options: .mixWithOthers)
+        try? session.setActive(true)
     }
 
     func set(_ newLevel: Float) {
