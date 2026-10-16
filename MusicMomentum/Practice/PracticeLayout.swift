@@ -13,6 +13,10 @@ import UIKit
 /// shrink, and only then the wheel. Shrinking only the wheel, as the screen
 /// first did, left a small dial under full-size controls.
 ///
+/// Once the gaps have closed, the volume row goes, before the controls
+/// shrink: the side buttons do the same job. Wide, volume stands upright at
+/// the wheel column's edge, where it costs width instead and always stays.
+///
 /// Before the wheel has given up much, the screen goes compact: a one-line
 /// header, a transport row of even buttons, and Mark in the clip row instead
 /// of on a caption line. That frees enough height to hand the wheel most of
@@ -21,6 +25,7 @@ nonisolated struct PracticeLayout: Equatable {
     /// The song and its speed on the left, playback on the right.
     var isWide: Bool
     var isCompact: Bool
+    var showsVolume: Bool
     var wheelDiameter: CGFloat
     /// The play button's circle. Compact, the button is a bare glyph in a
     /// 44pt frame and this is that frame.
@@ -78,6 +83,13 @@ nonisolated struct PracticeLayout: Equatable {
     /// A little over the tallest iPhone's screen once its bars are taken off.
     static let maxStackedHeight: CGFloat = 860
     static let wideHeaderGap: CGFloat = 20
+    static let volumeRow: CGFloat = 44
+    /// Wide, what the wheel leaves either side of it: the upright volume's
+    /// 44pt touch area, its centre on `sideMargin`, and a gap to the wheel.
+    /// Kept on both sides so the wheel stays centred in its column.
+    static let wideVolumeInset: CGFloat = 54
+    /// How far down its 44pt touch area the scrubber's bar ends.
+    private static let scrubberBarBottom: CGFloat = 31
     /// The header stops growing here: any larger and a title wraps over
     /// several lines and pushes the wheel down, and the buttons' glyphs
     /// spill out of their 44pt glass.
@@ -112,6 +124,8 @@ nonisolated struct PracticeLayout: Equatable {
     /// Halfway through the wheel's first shrink. Waiting until the wheel had
     /// given up its whole first step left it looking small for too long.
     private static let compactStage: CGFloat = 2.5
+    /// The gaps have closed and the controls are next.
+    private static let volumeStage: CGFloat = 1
 
     private static func stacked(_ size: CGSize, _ heights: Heights) -> Self {
         let cap = wheelCap(width: size.width)
@@ -120,15 +134,19 @@ nonisolated struct PracticeLayout: Equatable {
         let reach = min(unit((size.width - 440) / 160), unit((roomy - 260) / 40))
         let fits = { (layout: Self) in layout.stackedHeight(heights) <= size.height - roundingSlack }
 
-        let full = solve(from: -reach, cap: cap, roomy: roomy, isWide: false, isCompact: false, fits: fits)
-        guard full.stage > compactStage else { return full.layout }
+        let full = solve(from: -reach, cap: cap, roomy: roomy, isWide: false, isCompact: false, showsVolume: true, fits: fits)
+        guard full.stage > volumeStage else { return full.layout }
+        // Held at the stage it went at, so the controls don't grow back into
+        // the room it leaves.
+        let bare = solve(from: volumeStage, cap: cap, roomy: roomy, isWide: false, isCompact: false, showsVolume: false, fits: fits)
+        guard bare.stage > compactStage else { return bare.layout }
         // Compact frees so much that the stage falls back, but not into roomy:
         // a bigger-than-phone wheel over a compact transport looks wrong.
-        return solve(from: 0, cap: cap, roomy: cap, isWide: false, isCompact: true, fits: fits).layout
+        return solve(from: 0, cap: cap, roomy: cap, isWide: false, isCompact: true, showsVolume: false, fits: fits).layout
     }
 
     private static func wide(_ size: CGSize, _ heights: Heights) -> Self {
-        let column = wideLeadingWidth(size.width) - 48
+        let column = wideLeadingWidth(size.width) - 2 * wideVolumeInset
         let cap = min(column, 280)
         let roomy = min(column, roomyWheel)
         let available = size.height - verticalPadding - roundingSlack
@@ -137,9 +155,9 @@ nonisolated struct PracticeLayout: Equatable {
                 && layout.playerHeight(heights) <= available
         }
 
-        let full = solve(from: -unit((column - 260) / 40), cap: cap, roomy: roomy, isWide: true, isCompact: false, fits: fits)
+        let full = solve(from: -unit((column - 260) / 40), cap: cap, roomy: roomy, isWide: true, isCompact: false, showsVolume: true, fits: fits)
         guard full.stage > compactStage else { return full.layout }
-        return solve(from: 0, cap: cap, roomy: cap, isWide: true, isCompact: true, fits: fits).layout
+        return solve(from: 0, cap: cap, roomy: cap, isWide: true, isCompact: true, showsVolume: true, fits: fits).layout
     }
 
     /// The lowest stage that fits. Everything shrinks as the stage rises, so
@@ -151,9 +169,12 @@ nonisolated struct PracticeLayout: Equatable {
         roomy: CGFloat,
         isWide: Bool,
         isCompact: Bool,
+        showsVolume: Bool,
         fits: (Self) -> Bool
     ) -> (stage: CGFloat, layout: Self) {
-        let make = { stage in Self(stage: stage, cap: cap, roomy: roomy, isWide: isWide, isCompact: isCompact) }
+        let make = { stage in
+            Self(stage: stage, cap: cap, roomy: roomy, isWide: isWide, isCompact: isCompact, showsVolume: showsVolume)
+        }
         if fits(make(lower)) { return (lower, make(lower)) }
         if !fits(make(highestStage)) { return (highestStage, make(highestStage)) }
         var (low, high) = (lower, highestStage)
@@ -164,7 +185,7 @@ nonisolated struct PracticeLayout: Equatable {
         return (high, make(high))
     }
 
-    private init(stage: CGFloat, cap: CGFloat, roomy: CGFloat, isWide: Bool, isCompact: Bool) {
+    private init(stage: CGFloat, cap: CGFloat, roomy: CGFloat, isWide: Bool, isCompact: Bool, showsVolume: Bool) {
         func at(_ values: [CGFloat]) -> CGFloat { Self.interpolate(values, at: stage) }
         //                      roomy  phone  gaps  controls  wheel  floor
         let play =         at([76,     68,    68,   54,       54,    54])
@@ -178,6 +199,7 @@ nonisolated struct PracticeLayout: Equatable {
 
         self.isWide = isWide
         self.isCompact = isCompact
+        self.showsVolume = showsVolume
         if isCompact {
             playSize = 44
             transportGlyph = 22
@@ -213,9 +235,18 @@ nonisolated struct PracticeLayout: Equatable {
         return topMargin + Self.bottomMargin + header + 2 * wheelGap + wheelDiameter + playerHeight(heights)
     }
 
+    /// The transport sits midway between the scrubber's bar and the
+    /// volume's, so the two bars read as a pair framing it. The time labels
+    /// make the scrubber's side of the transport the taller.
+    func volumeGap(_ heights: Heights) -> CGFloat {
+        heights.scrubber - Self.scrubberBarBottom + scrubberGap
+            - (Self.volumeRow - VolumeSlider.trackHeight) / 2
+    }
+
     private func playerHeight(_ heights: Heights) -> CGFloat {
         heights.scrubber + scrubberGap
             + playSize + transportGap
+            + (showsVolume && !isWide ? volumeGap(heights) + Self.volumeRow : 0)
             + heights.pillRow
             + (isCompact ? 0 : heights.captionRow)
     }

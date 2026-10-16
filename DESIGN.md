@@ -25,7 +25,7 @@ On the website, each feature gets its own accent: coral for speed, amber for mar
 - **Coral means "on" or "act on this".** The running loop, a looping clip, the speed you saved. Never decoration, or it stops meaning anything. Play/pause is the primary colour.
 - **Only one state shouts.** Solid coral is for looping and for graphics (the speed knob's lit scale, the looping clip on the timeline). Everything else that's coral is a tint: `.tint` at 12–16% with `AccentText`. Settled things are `.quaternary` with secondary text.
 - **Fill carries state; glyph carries kind.** A dot is a point and a short bar (`SpanGlyph`) is a clip, as they're drawn in the timeline's marker lane; the fill says whether it's idle or looping. On Saved, idle pills are a one-pixel `.quaternary` hairline with no fill: a grey pill under every song outweighed the titles.
-- **Neutral controls stay neutral.** Nudge, cue, skip and the like use system fills, not coral. Toolbar glyphs that act on the screen (Saved's add and sort, a sheet's save tick) are `AccentColor` on the toolbar's own glass.
+- **Neutral controls stay neutral.** Nudge, cue, skip, the volume slider and the like use system fills, not coral. Toolbar glyphs that act on the screen (Saved's add and sort, a sheet's save tick) are `AccentColor` on the toolbar's own glass.
 - **Banners stay away from coral's hue.** Warnings are yellow; errors are neutral grey with a coral icon. No orange or red near the accent; they read as the same colour.
 - **Give text in buttons a concrete colour.** A hierarchical style like `.secondary` resolves against the button's tint and comes out a faded coral. `.bordered` turns grey once its text is recoloured, so tinted chips are drawn by hand.
 
@@ -40,6 +40,10 @@ A landscape window with room for Saved beside the narrowest card drops the tab b
 Saved's speed and marker chips are clear Liquid Glass with primary text and no coral, on the phone as well as here, so beside the card they take on the glow instead of clashing with it.
 
 Practice's save, change-song and Mark buttons are glass too, so they take on the cover like the knob does. Mark was bare text on the caption line until people didn't see it as a button. The save prompt is the same glass in the same colour as Change Song: tinted coral beside it, the pair read as two unrelated controls. The prompt is only there while there's a speed to save; once it's saved, the dot on the knob's scale says so. Mark, on its own line at the bottom, is the same 44pt capsule as the prompt, so glass on Practice means one thing at one size.
+
+## Volume
+
+Practice's volume is the system's, the level the side buttons set, in a slider under the transport the way Apple Music's Now Playing has one. It's drawn like the scrubber, a thumbless capsule in the text colour, not coral, since volume isn't a state; the transport sits midway between the two bars, so they frame it as a pair. It's the first thing to go when the screen runs short of height, before the controls shrink: the side buttons do the same job, and the clips don't. In the wide layout it stands upright at the outer edge of the wheel's column, where the left thumb rests holding a phone sideways; there it costs width, not height, so it stays even when the layout goes compact.
 
 ## Type
 
@@ -76,6 +80,7 @@ Practice's save, change-song and Mark buttons are glass too, so they take on the
 - **Practice's stack centred on the screen:** the cover's distance from the top changed with every screen height, and slid about 50pt while a floating card was dragged wider. **Pinning the title and the controls to the edges and giving all spare height to the gap under the title** left a tall card lopsided. **Holding the controls to the bottom edge too** made an iPhone Air look bottom-heavy. The title holds the top; spare height is shared above the wheel, below it and under the controls; and only a screen taller than a phone centres the stack.
 - **Moving Practice's cover in to 32pt** so its corner would be concentric with the floating card's left a short title wrapping on a 375pt screen. It's 24pt in with a rounder 16pt corner, and every row shares that margin.
 - **Tinting the pill of the clip the playhead is in:** a 12% coral fill and a coral glyph were too faint to notice mid-song, and the section name under the timeline already says where you are.
+- **The system volume slider:** its thumb made it outweigh the thumbless scrubber above the transport.
 - **⏮ for restart:** a triangle-and-bar beside the skip buttons' circular arrows looked like a different set, and reads as "previous track". Restart uses `gobackward`, the skip arrow without a number.
 
 ## Website

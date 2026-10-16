@@ -305,6 +305,13 @@ struct PracticeView: View {
                     savedSpeed: savedSong?.speed,
                     diameter: layout.wheelDiameter
                 )
+                .frame(maxWidth: .infinity)
+                // At the column's edge, where the left thumb rests in landscape.
+                .overlay(alignment: .leading) {
+                    VolumeSlider(axis: .vertical)
+                        .frame(height: layout.wheelDiameter * 0.6 + 2 * 22)
+                        .padding(.leading, Self.sideMargin - 22)
+                }
             }
             .frame(width: PracticeLayout.wideLeadingWidth(size.width))
 
@@ -344,7 +351,15 @@ struct PracticeView: View {
             .padding(.bottom, layout.scrubberGap)
 
             transportControls(layout)
-                .padding(.bottom, layout.transportGap)
+
+            if layout.showsVolume && !layout.isWide {
+                VolumeSlider()
+                    .frame(height: PracticeLayout.volumeRow)
+                    .padding(.top, layout.volumeGap(layoutHeights))
+                    .padding(.horizontal, Self.sideMargin)
+            }
+
+            Color.clear.frame(height: layout.transportGap)
 
             if layout.isCompact {
                 // The caption's line is the height compact gives back; the

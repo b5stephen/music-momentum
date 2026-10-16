@@ -21,6 +21,7 @@ struct PracticeLayoutTests {
         #expect(!phone.isCompact)
         #expect(phone.wheelDiameter == 260)
         #expect(phone.playSize == 68)
+        #expect(phone.showsVolume)
     }
 
     @Test("An iPhone SE fits the phone layout with a full wheel")
@@ -28,6 +29,18 @@ struct PracticeLayoutTests {
         let se = layout(375, 580)
         #expect(!se.isCompact)
         #expect(se.wheelDiameter == PracticeLayout.wheelCap(width: 375))
+    }
+
+    @Test("The volume row goes before the controls shrink")
+    func volumeGoesFirst() {
+        for width: CGFloat in [375, 402, 500, 640] {
+            for height in stride(from: CGFloat(1000), through: 300, by: -1) {
+                let stacked = layout(width, height)
+                if stacked.playSize < 68 && !stacked.isCompact {
+                    #expect(!stacked.showsVolume, "\(width)×\(height)")
+                }
+            }
+        }
     }
 
     @Test("A shorter window goes compact rather than shrinking the wheel")
