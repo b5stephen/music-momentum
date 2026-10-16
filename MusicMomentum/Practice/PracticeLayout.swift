@@ -43,6 +43,9 @@ nonisolated struct PracticeLayout: Equatable {
     var wheelGap: CGFloat
     var scrubberGap: CGFloat
     var transportGap: CGFloat
+    /// Wide, the most height the playback column can spread to: clear of a
+    /// landscape phone's tab bar, with `widePlayerBreathing` above and below.
+    var widePlayerSpace: CGFloat = 0
 
     /// Heights the layout can't work out from a stage: text, which follows
     /// Dynamic Type, and the headers, which wrap long titles.
@@ -63,8 +66,11 @@ nonisolated struct PracticeLayout: Equatable {
         )
     }
 
-    init(size: CGSize, heights: Heights) {
-        self = Self.isWide(size) ? Self.wide(size, heights) : Self.stacked(size, heights)
+    /// `tabBarInset` is the inset a landscape phone's floating tab bar
+    /// reserves along the bottom edge; only the wide layout's playback
+    /// column has to clear it, as the columns centre on the whole screen.
+    init(size: CGSize, heights: Heights, tabBarInset: CGFloat = 0) {
+        self = Self.isWide(size) ? Self.wide(size, heights, tabBarInset) : Self.stacked(size, heights)
     }
 
     /// Wider than tall, and with room for the transport beside the wheel.
@@ -84,6 +90,11 @@ nonisolated struct PracticeLayout: Equatable {
     /// A little over the tallest iPhone's screen once its bars are taken off.
     static let maxStackedHeight: CGFloat = 860
     static let wideHeaderGap: CGFloat = 20
+    /// Without it, the timeline met the top of a landscape phone and the
+    /// clips met its tab bar.
+    static let widePlayerBreathing: CGFloat = 16
+    /// The wide layout's top padding.
+    static let wideTopPadding: CGFloat = 6
     static let volumeRow: CGFloat = 44
     /// The system's thumbless slider track, near enough the scrubber's.
     private static let volumeTrack: CGFloat = 6
@@ -144,14 +155,20 @@ nonisolated struct PracticeLayout: Equatable {
         return solve(from: 0, cap: cap, roomy: cap, isWide: false, isCompact: true, showsVolume: false, fits: fits).layout
     }
 
-    private static func wide(_ size: CGSize, _ heights: Heights) -> Self {
+    private static func wide(_ size: CGSize, _ heights: Heights, _ tabBarInset: CGFloat) -> Self {
         let column = wideLeadingWidth(size.width) - 48
         let cap = min(column, 280)
         let roomy = min(column, roomyWheel)
         let available = size.height - verticalPadding - roundingSlack
+        // Centred, the playback column reaches half its height below the
+        // middle, which `tabBarInset` has dropped; it has to end clear of the
+        // tab bar.
+        let middle = wideTopPadding + (size.height - verticalPadding) / 2 + tabBarInset / 2
+        let playerSpace = min(size.height - verticalPadding, 2 * (size.height - 8 - middle))
+            - roundingSlack - 2 * widePlayerBreathing
         let fits = { (layout: Self) in
             heights.wideHeader + wideHeaderGap + layout.wheelDiameter <= available
-                && layout.playerHeight(heights) <= available
+                && layout.playerHeight(heights) <= playerSpace
         }
 
         func layout(showsVolume: Bool) -> Self {
@@ -159,11 +176,14 @@ nonisolated struct PracticeLayout: Equatable {
             guard full.stage > compactStage else { return full.layout }
             return solve(from: 0, cap: cap, roomy: cap, isWide: true, isCompact: true, showsVolume: showsVolume, fits: fits).layout
         }
-        let with = layout(showsVolume: true)
-        let without = layout(showsVolume: false)
+        var with = layout(showsVolume: true)
+        var without = layout(showsVolume: false)
+        with.widePlayerSpace = playerSpace
+        without.widePlayerSpace = playerSpace
         var same = without
         same.showsVolume = true
-        return same == with ? with : without
+        // At the floor nothing fits either way, and the two come out equal.
+        return same == with && with.playerHeight(heights) <= playerSpace ? with : without
     }
 
     /// The lowest stage that fits. Everything shrinks as the stage rises, so
@@ -249,7 +269,7 @@ nonisolated struct PracticeLayout: Equatable {
             - (Self.volumeRow - Self.volumeTrack) / 2
     }
 
-    private func playerHeight(_ heights: Heights) -> CGFloat {
+    func playerHeight(_ heights: Heights) -> CGFloat {
         heights.scrubber + scrubberGap
             + playSize + transportGap
             + (showsVolume ? volumeGap(heights) + Self.volumeRow : 0)

@@ -43,9 +43,9 @@ Practice's save, change-song and Mark buttons are glass too, so they take on the
 
 ## Volume
 
-Practice's volume is the system's, the level the side buttons set: Apple's own `MPVolumeView` under the transport in every layout, styled only through its own image setters: a track as thin as the scrubber's and a small dot for a thumb, far lighter than the system's glass one. Both are the text colour, not coral, since volume isn't a state; the transport sits midway between it and the scrubber, so the two bars frame it as a pair. Stacked, it's the first thing to go when the screen runs short of height, before the controls shrink: the side buttons do the same job, and the clips don't.
+Practice's volume is the system's, the level the side buttons set: Apple's own `MPVolumeView` under the transport in every layout, its native slider and thumb, tinted the text colour, not coral, since volume isn't a state; the transport sits midway between it and the scrubber, so the two bars frame it as a pair. Stacked, it's the first thing to go when the screen runs short of height, before the controls shrink: the side buttons do the same job, and the clips don't.
 
-Wide, the cover sits beside the title as it does stacked, the pair centred over the wheel with the save prompt and Change Song centred on a row of their own under it: in a column that narrow, the prompt growing over the title left only its first word. The playback column holds nothing but playback, and spreads, within limits, to run from the header's top to the wheel's foot.
+Wide, the cover sits beside the title as it does stacked, the pair centred over the wheel with the save prompt and Change Song centred on a row of their own under it: in a column that narrow, the prompt growing over the title left only its first word. The playback column holds nothing but playback, and spreads, within limits, to run from the header's top to the wheel's foot, but never closer than 16pt to the top of a landscape phone or its tab bar.
 
 ## Type
 
@@ -82,7 +82,7 @@ Wide, the cover sits beside the title as it does stacked, the pair centred over 
 - **Practice's stack centred on the screen:** the cover's distance from the top changed with every screen height, and slid about 50pt while a floating card was dragged wider. **Pinning the title and the controls to the edges and giving all spare height to the gap under the title** left a tall card lopsided. **Holding the controls to the bottom edge too** made an iPhone Air look bottom-heavy. The title holds the top; spare height is shared above the wheel, below it and under the controls; and only a screen taller than a phone centres the stack.
 - **Moving Practice's cover in to 32pt** so its corner would be concentric with the floating card's left a short title wrapping on a 375pt screen. It's 24pt in with a rounder 16pt corner, and every row shares that margin.
 - **Tinting the pill of the clip the playhead is in:** a 12% coral fill and a coral glyph were too faint to notice mid-song, and the section name under the timeline already says where you are.
-- **The system volume slider with its thumb:** it outweighed the thumbless scrubber above the transport.
+- **A volume slider styled to match the scrubber:** a thin track and a small dot through `MPVolumeView`'s image setters still sat above its speaker icons on a device. It's the native slider now, though its thumb outweighs the scrubber.
 - **A volume track of our own driving a hidden `MPVolumeView`:** it matched the scrubber exactly, but reading the level needed an audio session of our own, and setting it went through the hidden view's inner slider.
 - **An upright volume slider beside the wheel in the wide layout:** it was `MPVolumeView` turned 90°, which Apple doesn't document or do itself.
 - **`MPVolumeView`'s slider forced into iOS 26's thumbless style:** its private slider couldn't be dragged back up from zero, and centring it by hand came undone whenever it laid itself out again.

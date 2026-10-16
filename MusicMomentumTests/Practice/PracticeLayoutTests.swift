@@ -52,6 +52,15 @@ struct PracticeLayoutTests {
         #expect(wide.showsVolume)
     }
 
+    @Test("Wide, the playback column clears a landscape phone's tab bar", arguments: [
+        (830.0, 330.0, 70.0), (912.0, 360.0, 70.0), (750.0, 300.0, 60.0), (880.0, 640.0, 0.0),
+    ])
+    func wideClearsTabBar(width: Double, height: Double, inset: Double) {
+        let wide = PracticeLayout(size: CGSize(width: width, height: height), heights: .standard, tabBarInset: inset)
+        #expect(wide.isWide)
+        #expect(wide.playerHeight(.standard) <= wide.widePlayerSpace)
+    }
+
     @Test("A shorter window goes compact rather than shrinking the wheel")
     func shortWindow() {
         let short = layout(375, 530)

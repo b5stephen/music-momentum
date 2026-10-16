@@ -87,9 +87,11 @@ struct PracticeView: View {
         GeometryReader { proxy in
             let placement = controlsPlacement(proxy)
             let controlsClearance = placement.drop
+            let tabBarInset = verticalSizeClass == .compact ? proxy.safeAreaInsets.bottom : 0
             let layout = PracticeLayout(
                 size: CGSize(width: proxy.size.width, height: proxy.size.height - controlsClearance),
-                heights: layoutHeights
+                heights: layoutHeights,
+                tabBarInset: tabBarInset
             )
             ScrollView {
                 VStack(spacing: 0) {
@@ -100,7 +102,7 @@ struct PracticeView: View {
                                     track,
                                     layout: layout,
                                     size: proxy.size,
-                                    tabBarInset: verticalSizeClass == .compact ? proxy.safeAreaInsets.bottom : 0
+                                    tabBarInset: tabBarInset
                                 )
                             } else {
                                 loadedSong(track, layout: layout, width: proxy.size.width, placement: placement)
@@ -120,7 +122,7 @@ struct PracticeView: View {
 
                     messages
                 }
-                .padding(.top, track == nil ? 16 : layout.isWide ? Self.wideTopPadding : layout.topMargin + controlsClearance)
+                .padding(.top, track == nil ? 16 : layout.isWide ? PracticeLayout.wideTopPadding : layout.topMargin + controlsClearance)
                 .padding(.bottom, PracticeLayout.bottomMargin)
                 .frame(maxWidth: .infinity, minHeight: proxy.size.height)
             }
@@ -300,7 +302,7 @@ struct PracticeView: View {
             }
             .frame(width: PracticeLayout.wideLeadingWidth(size.width))
 
-            player(layout, height: wideHeaderHeight + PracticeLayout.wideHeaderGap + layout.wheelDiameter)
+            player(layout, height: min(wideHeaderHeight + PracticeLayout.wideHeaderGap + layout.wheelDiameter, layout.widePlayerSpace))
                 .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: 960)
@@ -406,7 +408,6 @@ struct PracticeView: View {
     /// five buttons still read as one row.
     private static let playerWidth: CGFloat = 500
 
-    private static let wideTopPadding: CGFloat = 6
 
     /// Wide, the silhouette sits where the wheel's column goes, beside the copy.
     private func arrivalDiameter(_ size: CGSize) -> CGFloat {
