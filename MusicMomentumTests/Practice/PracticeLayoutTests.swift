@@ -43,6 +43,15 @@ struct PracticeLayoutTests {
         }
     }
 
+    @Test("Wide keeps the volume row on a landscape phone and an iPad window", arguments: [
+        (830.0, 370.0), (912.0, 400.0), (880.0, 640.0),
+    ])
+    func wideVolume(width: Double, height: Double) {
+        let wide = layout(width, height)
+        #expect(wide.isWide)
+        #expect(wide.showsVolume)
+    }
+
     @Test("A shorter window goes compact rather than shrinking the wheel")
     func shortWindow() {
         let short = layout(375, 530)

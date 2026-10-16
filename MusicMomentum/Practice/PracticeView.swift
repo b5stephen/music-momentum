@@ -37,7 +37,6 @@ struct PracticeView: View {
     /// The size the screen last laid out at; see `isDragged(to:)`.
     @State private var laidOutSize: CGSize?
     /// Measured, so the wide layout's cover takes exactly what the player leaves.
-    @State private var widePlayerHeight: CGFloat = 200
     /// Measured, so the title fades out just short of a save prompt growing over it.
     @State private var headerButtonsWidth: CGFloat = 0
 
@@ -282,20 +281,13 @@ struct PracticeView: View {
     /// short to turn and the transport would scroll under the tab bar.
     /// On a landscape phone the tab bar floats in the middle of the bottom
     /// edge, so the inset it reserves is empty beside it. The columns centre
-    /// on the whole screen by dropping half of `tabBarInset`, and the player's
-    /// cover gives up the height that costs it.
+    /// on the whole screen by dropping half of `tabBarInset`. The cover sits
+    /// beside the title, as it does stacked: above the player it was the one
+    /// thing the volume row could take height from, and shrank to 76pt.
     private func loadedSongWide(_ track: Track, layout: PracticeLayout, size: CGSize, tabBarInset: CGFloat) -> some View {
-        // Centred, the player column reaches half its height below the
-        // middle, which `tabBarInset` has dropped; the transport stays clear
-        // of the tab bar.
-        let verticalPadding = PracticeLayout.verticalPadding
-        let middle = Self.wideTopPadding + (size.height - verticalPadding) / 2 + tabBarInset / 2
-        let playerColumnHeight = min(size.height - verticalPadding, 2 * (size.height - 8 - middle)) - PracticeLayout.roundingSlack
-        let coverSide = min(180, playerColumnHeight - widePlayerHeight - Self.wideCoverGap)
-        return HStack(spacing: 0) {
+        HStack(spacing: 0) {
             VStack(spacing: PracticeLayout.wideHeaderGap) {
-                nowPlaying(track, coverSide: nil)
-                    .lineLimit(2)
+                wideHeader(track, coverSide: layout.coverSide)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
                         wideHeaderHeight = $0
                     }
@@ -305,28 +297,11 @@ struct PracticeView: View {
                     savedSpeed: savedSong?.speed,
                     diameter: layout.wheelDiameter
                 )
-                .frame(maxWidth: .infinity)
-                // At the column's edge, where the left thumb rests in landscape.
-                .overlay(alignment: .leading) {
-                    VolumeSlider(axis: .vertical)
-                        .frame(height: layout.wheelDiameter * 0.6 + 2 * 22)
-                        .padding(.leading, Self.sideMargin - 22)
-                }
             }
             .frame(width: PracticeLayout.wideLeadingWidth(size.width))
 
-            VStack(spacing: 0) {
-                // On a short landscape phone there's no room left for it.
-                if coverSide >= 64 {
-                    cover(track.artwork, side: coverSide)
-                        .padding(.bottom, Self.wideCoverGap)
-                }
-                player(layout)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
-                    widePlayerHeight = $0
-                }
-            }
-            .frame(maxWidth: .infinity)
+            player(layout)
+                .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: 960)
         .frame(maxHeight: .infinity)
@@ -352,8 +327,8 @@ struct PracticeView: View {
 
             transportControls(layout)
 
-            if layout.showsVolume && !layout.isWide {
-                VolumeSlider()
+            if layout.showsVolume {
+                VolumeSlider(tint: track?.palette?.foreground)
                     .frame(height: PracticeLayout.volumeRow)
                     .padding(.top, layout.volumeGap(layoutHeights))
                     .padding(.horizontal, Self.sideMargin)
@@ -415,7 +390,6 @@ struct PracticeView: View {
     private static let playerWidth: CGFloat = 500
 
     private static let wideTopPadding: CGFloat = 6
-    private static let wideCoverGap: CGFloat = 16
 
     /// Wide, the silhouette sits where the wheel's column goes, beside the copy.
     private func arrivalDiameter(_ size: CGSize) -> CGFloat {
@@ -675,46 +649,54 @@ struct PracticeView: View {
         max(0, (coverSide - headerButtonSide) / 2)
     }
 
-    /// The cover shows where the screen's colours come from. Wide, it sits
-    /// over the player instead and `coverSide` is nil.
-    @ViewBuilder
-    private func nowPlaying(_ track: Track, coverSide: CGFloat?, width: CGFloat = 0, indent: CGFloat = 0, buttonsLift: CGFloat = 0) -> some View {
-        if let coverSide {
+    /// The cover beside the title as in the stacked header, but with the
+    /// buttons on a row of their own: in a column this narrow, the save
+    /// prompt growing over the title left only its first word. Trailing, so
+    /// Change Song holds still while the prompt comes and goes.
+    private func wideHeader(_ track: Track, coverSide: CGFloat) -> some View {
+        VStack(spacing: 12) {
             HStack(spacing: 14) {
                 cover(track.artwork, side: coverSide, radius: coverSide / 4)
                 titleBlock(track, alignment: .leading)
+                    .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.leading, indent)
-            .background(alignment: .topLeading) {
-                // Measured at the width the largest cover leaves, so the cover
-                // shrinking can't unwrap the title and feed back into the layout.
-                titleBlock(track, alignment: .leading)
-                    .frame(
-                        width: max(0, min(width, Self.playerWidth) - 2 * Self.sideMargin - 72 - 14 - indent - headerButtonsReserve(lift: buttonsLift, coverSide: coverSide)),
-                        alignment: .leading
-                    )
-                    .fixedSize(horizontal: false, vertical: true)
-                    .hidden()
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
-                        titleBlockHeight = $0
-                    }
-            }
-
-            .modifier(HeaderButtonsBeside(reserve: headerButtonsReserve(lift: buttonsLift, coverSide: coverSide), top: Self.headerButtonsTop(coverSide: coverSide), lift: buttonsLift, buttons: headerButtons, fade: titleFade))
-            // A floating card's corner is 40pt round; less this inset, that's
-            // the cover's 16, so the two curves are concentric. At 32pt and a
-            // sharper corner, a title as short as "Count on Me" wrapped on a
-            // 375pt screen.
-            .padding(.horizontal, Self.sideMargin)
-            .frame(maxWidth: Self.playerWidth)
-        } else {
-            VStack(spacing: 12) {
-                titleBlock(track, alignment: .center)
-                headerButtons
-            }
-            .padding(.horizontal)
+            headerButtons
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
+        .padding(.horizontal, Self.sideMargin)
+    }
+
+    /// The cover shows where the screen's colours come from.
+    private func nowPlaying(_ track: Track, coverSide: CGFloat, width: CGFloat, indent: CGFloat, buttonsLift: CGFloat) -> some View {
+        HStack(spacing: 14) {
+            cover(track.artwork, side: coverSide, radius: coverSide / 4)
+            titleBlock(track, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.leading, indent)
+        .background(alignment: .topLeading) {
+            // Measured at the width the largest cover leaves, so the cover
+            // shrinking can't unwrap the title and feed back into the layout.
+            titleBlock(track, alignment: .leading)
+                .frame(
+                    width: max(0, min(width, Self.playerWidth) - 2 * Self.sideMargin - 72 - 14 - indent - headerButtonsReserve(lift: buttonsLift, coverSide: coverSide)),
+                    alignment: .leading
+                )
+                .fixedSize(horizontal: false, vertical: true)
+                .hidden()
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                    titleBlockHeight = $0
+                }
+        }
+
+        .modifier(HeaderButtonsBeside(reserve: headerButtonsReserve(lift: buttonsLift, coverSide: coverSide), top: Self.headerButtonsTop(coverSide: coverSide), lift: buttonsLift, buttons: headerButtons, fade: titleFade))
+        // A floating card's corner is 40pt round; less this inset, that's
+        // the cover's 16, so the two curves are concentric. At 32pt and a
+        // sharper corner, a title as short as "Count on Me" wrapped on a
+        // 375pt screen.
+        .padding(.horizontal, Self.sideMargin)
+        .frame(maxWidth: Self.playerWidth)
     }
 
     private func compactNowPlaying(_ track: Track, coverSide: CGFloat, indent: CGFloat, buttonsLift: CGFloat) -> some View {
@@ -1236,6 +1218,10 @@ private struct DialSilhouette: View {
 
 #Preview("Compact, landscape phone", traits: .fixedLayout(width: 750, height: 350)) {
     loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)), rate: 0.72, loopOn: true)
+}
+
+#Preview("iPad window, wide", traits: .fixedLayout(width: 880, height: 640)) {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)), rate: 0.72)
 }
 
 #Preview("Roomy, iPad portrait", traits: .fixedLayout(width: 834, height: 1090)) {

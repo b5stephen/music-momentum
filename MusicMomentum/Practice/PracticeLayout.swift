@@ -14,8 +14,9 @@ import UIKit
 /// first did, left a small dial under full-size controls.
 ///
 /// Once the gaps have closed, the volume row goes, before the controls
-/// shrink: the side buttons do the same job. Wide, volume stands upright at
-/// the wheel column's edge, where it costs width instead and always stays.
+/// shrink: the side buttons do the same job. Wide, the wheel's column is
+/// usually what's short, and the volume row only goes when it's the reason
+/// anything gives way.
 ///
 /// Before the wheel has given up much, the screen goes compact: a one-line
 /// header, a transport row of even buttons, and Mark in the clip row instead
@@ -84,10 +85,8 @@ nonisolated struct PracticeLayout: Equatable {
     static let maxStackedHeight: CGFloat = 860
     static let wideHeaderGap: CGFloat = 20
     static let volumeRow: CGFloat = 44
-    /// Wide, what the wheel leaves either side of it: the upright volume's
-    /// 44pt touch area, its centre on `sideMargin`, and a gap to the wheel.
-    /// Kept on both sides so the wheel stays centred in its column.
-    static let wideVolumeInset: CGFloat = 54
+    /// The system's thumbless slider track, near enough the scrubber's.
+    private static let volumeTrack: CGFloat = 6
     /// How far down its 44pt touch area the scrubber's bar ends.
     private static let scrubberBarBottom: CGFloat = 31
     /// The header stops growing here: any larger and a title wraps over
@@ -146,7 +145,7 @@ nonisolated struct PracticeLayout: Equatable {
     }
 
     private static func wide(_ size: CGSize, _ heights: Heights) -> Self {
-        let column = wideLeadingWidth(size.width) - 2 * wideVolumeInset
+        let column = wideLeadingWidth(size.width) - 48
         let cap = min(column, 280)
         let roomy = min(column, roomyWheel)
         let available = size.height - verticalPadding - roundingSlack
@@ -155,9 +154,16 @@ nonisolated struct PracticeLayout: Equatable {
                 && layout.playerHeight(heights) <= available
         }
 
-        let full = solve(from: -unit((column - 260) / 40), cap: cap, roomy: roomy, isWide: true, isCompact: false, showsVolume: true, fits: fits)
-        guard full.stage > compactStage else { return full.layout }
-        return solve(from: 0, cap: cap, roomy: cap, isWide: true, isCompact: true, showsVolume: true, fits: fits).layout
+        func layout(showsVolume: Bool) -> Self {
+            let full = solve(from: -unit((column - 260) / 40), cap: cap, roomy: roomy, isWide: true, isCompact: false, showsVolume: showsVolume, fits: fits)
+            guard full.stage > compactStage else { return full.layout }
+            return solve(from: 0, cap: cap, roomy: cap, isWide: true, isCompact: true, showsVolume: showsVolume, fits: fits).layout
+        }
+        let with = layout(showsVolume: true)
+        let without = layout(showsVolume: false)
+        var same = without
+        same.showsVolume = true
+        return same == with ? with : without
     }
 
     /// The lowest stage that fits. Everything shrinks as the stage rises, so
@@ -240,13 +246,13 @@ nonisolated struct PracticeLayout: Equatable {
     /// make the scrubber's side of the transport the taller.
     func volumeGap(_ heights: Heights) -> CGFloat {
         heights.scrubber - Self.scrubberBarBottom + scrubberGap
-            - (Self.volumeRow - VolumeSlider.trackHeight) / 2
+            - (Self.volumeRow - Self.volumeTrack) / 2
     }
 
     private func playerHeight(_ heights: Heights) -> CGFloat {
         heights.scrubber + scrubberGap
             + playSize + transportGap
-            + (showsVolume && !isWide ? volumeGap(heights) + Self.volumeRow : 0)
+            + (showsVolume ? volumeGap(heights) + Self.volumeRow : 0)
             + heights.pillRow
             + (isCompact ? 0 : heights.captionRow)
     }
