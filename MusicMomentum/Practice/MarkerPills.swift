@@ -17,7 +17,7 @@ struct MarkerPills: View {
     var leadingInset: CGFloat?
     var trailingInset: CGFloat?
     /// On a plain page a grey fill under every song outweighs the titles, so
-    /// Saved draws idle pills as a hairline instead.
+    /// Saved draws idle pills as a hairline instead of glass.
     var outlinesIdle = false
     var isLooping: (SongMarker) -> Bool = { _ in false }
     /// With the loop on, a clip tap changes what's looping, so the clips that
@@ -38,6 +38,8 @@ struct MarkerPills: View {
     /// more when there is more.
     @State private var clipped: (leading: Bool, trailing: Bool) = (false, false)
     @Environment(\.onAccent) private var onAccent
+    @Environment(\.smokedFill) private var smokedFill
+    @Environment(\.inGlassPanel) private var inGlassPanel
     @Environment(\.displayScale) private var displayScale
 
     private enum PillState {
@@ -141,7 +143,7 @@ struct MarkerPills: View {
         }
         .padding(.horizontal, 11)
         .padding(.vertical, 7)
-        .background(fill(state), in: Capsule())
+        .background { background(state) }
         .overlay {
             if outlinesIdle, state == .idle {
                 Capsule().strokeBorder(.quaternary, lineWidth: 1 / displayScale)
@@ -189,10 +191,22 @@ struct MarkerPills: View {
         return isLoopOn && marker.isClip ? .joinable : .idle
     }
 
-    private func fill(_ state: PillState) -> AnyShapeStyle {
-        switch state {
-        case .idle, .joinable: outlinesIdle ? AnyShapeStyle(.clear) : AnyShapeStyle(.quaternary)
-        case .looping: AnyShapeStyle(.tint)
+    /// Glass, as Practice's other buttons are: grey beside them read as a
+    /// different, disabled kind of control. In a glass panel, a flat fill and
+    /// a hairline instead. Looping is solid in every case.
+    @ViewBuilder
+    private func background(_ state: PillState) -> some View {
+        if state == .looping {
+            Capsule().fill(.tint)
+        } else if outlinesIdle {
+            Color.clear
+        } else if inGlassPanel {
+            Capsule()
+                .fill(.primary.opacity(0.1))
+                .overlay { Capsule().strokeBorder(.primary.opacity(0.14), lineWidth: 1) }
+        } else {
+            Color.clear
+                .glassEffect((smokedFill.map { Glass.regular.tint($0) } ?? .regular).interactive(), in: .capsule)
         }
     }
 

@@ -62,7 +62,7 @@ nonisolated struct PracticeLayout: Equatable {
 
         static let standard = Heights(
             titleBlock: 54, wideHeader: 110, compactHeader: 44,
-            scrubber: 56, pillRow: 36, captionRow: 52
+            scrubber: 58, pillRow: 36, captionRow: 52
         )
     }
 
@@ -93,13 +93,15 @@ nonisolated struct PracticeLayout: Equatable {
     /// Without it, the timeline met the top of a landscape phone and the
     /// clips met its tab bar.
     static let widePlayerBreathing: CGFloat = 16
+    /// Between the wide playback column's glass panel and its rows.
+    static let widePanelPadding: CGFloat = 14
     /// The wide layout's top padding.
     static let wideTopPadding: CGFloat = 6
     static let volumeRow: CGFloat = 44
     /// The system's thumbless slider track, near enough the scrubber's.
     private static let volumeTrack: CGFloat = 6
     /// How far down its 44pt touch area the scrubber's bar ends.
-    private static let scrubberBarBottom: CGFloat = 31
+    private static let scrubberBarBottom: CGFloat = 33
     /// The header stops growing here: any larger and a title wraps over
     /// several lines and pushes the wheel down, and the buttons' glyphs
     /// spill out of their 44pt glass.
@@ -165,7 +167,7 @@ nonisolated struct PracticeLayout: Equatable {
         // tab bar.
         let middle = wideTopPadding + (size.height - verticalPadding) / 2 + tabBarInset / 2
         let playerSpace = min(size.height - verticalPadding, 2 * (size.height - 8 - middle))
-            - roundingSlack - 2 * widePlayerBreathing
+            - roundingSlack - 2 * widePlayerBreathing - 2 * widePanelPadding
         let fits = { (layout: Self) in
             heights.wideHeader + wideHeaderGap + layout.wheelDiameter <= available
                 && layout.playerHeight(heights) <= playerSpace
@@ -295,8 +297,8 @@ extension PracticeLayout.Heights {
             titleBlock: titleBlock,
             wideHeader: wideHeader,
             compactHeader: max(44, line(.headline, titleTraits) + 2 + line(.subheadline, titleTraits)),
-            // The labels tuck 4pt up under the bar's 44pt touch area.
-            scrubber: 44 + line(.caption1) - 4,
+            // The labels tuck 2pt up under the bar's 44pt touch area.
+            scrubber: 44 + line(.caption1) - 2,
             pillRow: footnote.scaledValue(for: 32, compatibleWith: traits) + 4,
             captionRow: 8 + max(44, line(.subheadline) + 16)
         )

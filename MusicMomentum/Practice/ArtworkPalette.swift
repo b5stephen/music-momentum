@@ -213,4 +213,7 @@ extension EnvironmentValues {
     /// on a bright cover, where the usual light glass washes out. `nil` keeps
     /// the light glass.
     @Entry var smokedFill: Color? = nil
+    /// Inside a glass panel, where controls drop their own glass: glass on
+    /// glass blurs the panel's blur.
+    @Entry var inGlassPanel = false
 }

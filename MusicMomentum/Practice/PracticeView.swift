@@ -288,7 +288,8 @@ struct PracticeView: View {
     }
 
     /// Landscape phones and wide iPad windows: the song and its speed on the
-    /// left, playback on the right. Stacked, the wheel would be left too
+    /// left, playback on the right, on a glass panel so the column reads as
+    /// one object beside the wheel. Bare, its rows floated apart. Stacked, the wheel would be left too
     /// short to turn and the transport would scroll under the tab bar.
     /// On a landscape phone the tab bar floats in the middle of the bottom
     /// edge, so the inset it reserves is empty beside it. The columns centre
@@ -311,8 +312,14 @@ struct PracticeView: View {
             }
             .frame(width: PracticeLayout.wideLeadingWidth(size.width))
 
-            player(layout, height: min(wideHeaderHeight + PracticeLayout.wideHeaderGap + layout.wheelDiameter, layout.widePlayerSpace))
-                .frame(maxWidth: .infinity)
+            player(layout, height: min(
+                wideHeaderHeight + PracticeLayout.wideHeaderGap + layout.wheelDiameter - 2 * PracticeLayout.widePanelPadding,
+                layout.widePlayerSpace
+            ))
+            .padding(.vertical, PracticeLayout.widePanelPadding)
+            .modifier(PanelGlass())
+            .padding(.trailing, 16)
+            .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: 960)
         .frame(maxHeight: .infinity)
@@ -480,6 +487,9 @@ struct PracticeView: View {
         // touch area's slack so the glyphs, not their 44pt frames, meet the
         // scrubber's ends.
         .padding(.horizontal, Self.sideMargin - 10)
+        // Wide, spread across the column they were 190pt apart and read as a
+        // toolbar rather than one control.
+        .frame(maxWidth: layout.isWide ? 360 : nil)
     }
 
     /// Compact, a bare glyph: as a disc the size of the other buttons it
@@ -1105,17 +1115,36 @@ private struct HeaderButtonsBeside<Buttons: View, Fade: View>: ViewModifier {
 }
 
 /// Glass for Practice's buttons, smoked on a bright cover, where clear glass
-/// under light text washes out.
+/// under light text washes out. In a glass panel, a flat fill and hairline.
 private struct ButtonGlass: ViewModifier {
     @Environment(\.smokedFill) private var smokedFill
+    @Environment(\.inGlassPanel) private var inGlassPanel
 
     func body(content: Content) -> some View {
-        content.glassEffect(glass.interactive(), in: .capsule)
+        if inGlassPanel {
+            content
+                .background(.primary.opacity(0.1), in: .capsule)
+                .overlay { Capsule().strokeBorder(.primary.opacity(0.14), lineWidth: 1) }
+        } else {
+            content.glassEffect(glass.interactive(), in: .capsule)
+        }
     }
 
     private var glass: Glass {
         if let smokedFill { return .regular.tint(smokedFill) }
         return .regular
+    }
+}
+
+private struct PanelGlass: ViewModifier {
+    @Environment(\.smokedFill) private var smokedFill
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.inGlassPanel, true)
+            // The clips scroll edge to edge; the panel's corners end them.
+            .clipShape(.rect(cornerRadius: 32))
+            .glassEffect(smokedFill.map { Glass.regular.tint($0) } ?? .regular, in: .rect(cornerRadius: 32))
     }
 }
 
