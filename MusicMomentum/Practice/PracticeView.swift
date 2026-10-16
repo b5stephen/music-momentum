@@ -199,14 +199,17 @@ struct PracticeView: View {
     /// iPadOS puts over the top-leading corner, where the cover sits. Not a
     /// safe area: the screen gets them only when it reaches that corner.
     /// The header buttons sit at the trailing end, clear of them, so they're
-    /// lifted back to the top.
+    /// lifted back to the top, a row of their own beside the controls.
+    ///
+    /// Dropping only while the controls reached the cover snapped the header
+    /// up and down as a window was dragged past the width where the centred
+    /// stack moved clear of them. The floating card already sits below the
+    /// controls, but still sees them in its corner insets.
     private func windowControlsClearance(_ proxy: GeometryProxy) -> CGFloat {
-        let controls = proxy.containerCornerInsets.topLeading
-        guard controls.height > 0, track != nil,
+        guard !savedIsBeside, track != nil,
               !PracticeLayout(size: proxy.size, heights: layoutHeights).isWide
         else { return 0 }
-        let coverLeading = (proxy.size.width - min(proxy.size.width, Self.playerWidth)) / 2 + Self.sideMargin
-        return controls.width > coverLeading ? controls.height : 0
+        return proxy.containerCornerInsets.topLeading.height
     }
 
     private func loadedSong(_ track: Track, layout: PracticeLayout, width: CGFloat, buttonsLift: CGFloat) -> some View {
@@ -614,8 +617,17 @@ struct PracticeView: View {
     private static let headerButtonGap: CGFloat = 8
     private static let collapsedHeaderButtons = headerButtonSide
     /// What the title always leaves beside it, so a save prompt growing over
-    /// it never reflows it.
-    private static let headerButtonsReserve = collapsedHeaderButtons + 10
+    /// it never reflows it. Nothing once the buttons are lifted into a row of
+    /// their own, where reserving it wrapped titles short of an empty edge.
+    private static let collapsedHeaderReserve = collapsedHeaderButtons + 10
+
+    private func headerButtonsReserve(lift: CGFloat, coverSide: CGFloat) -> CGFloat {
+        Self.buttonsClearTitle(lift: lift, coverSide: coverSide) ? 0 : Self.collapsedHeaderReserve
+    }
+
+    private static func buttonsClearTitle(lift: CGFloat, coverSide: CGFloat) -> Bool {
+        lift >= headerButtonsTop(coverSide: coverSide) + headerButtonSide
+    }
     private static let titleFadeLength: CGFloat = 24
 
     /// Level with the cover while the title fits beside it, and held there
@@ -640,7 +652,7 @@ struct PracticeView: View {
                 // shrinking can't unwrap the title and feed back into the layout.
                 titleBlock(track, alignment: .leading)
                     .frame(
-                        width: max(0, min(width, Self.playerWidth) - 2 * Self.sideMargin - 72 - 14 - Self.headerButtonsReserve),
+                        width: max(0, min(width, Self.playerWidth) - 2 * Self.sideMargin - 72 - 14 - headerButtonsReserve(lift: buttonsLift, coverSide: coverSide)),
                         alignment: .leading
                     )
                     .fixedSize(horizontal: false, vertical: true)
@@ -649,7 +661,7 @@ struct PracticeView: View {
                         titleBlockHeight = $0
                     }
             }
-            .modifier(HeaderButtonsBeside(reserve: Self.headerButtonsReserve, top: Self.headerButtonsTop(coverSide: coverSide), lift: buttonsLift, buttons: headerButtons, fade: titleFade))
+            .modifier(HeaderButtonsBeside(reserve: headerButtonsReserve(lift: buttonsLift, coverSide: coverSide), top: Self.headerButtonsTop(coverSide: coverSide), lift: buttonsLift, buttons: headerButtons, fade: titleFade))
             // A floating card's corner is 40pt round; less this inset, that's
             // the cover's 16, so the two curves are concentric. At 32pt and a
             // sharper corner, a title as short as "Count on Me" wrapped on a
@@ -680,7 +692,7 @@ struct PracticeView: View {
             .dynamicTypeSize(...PracticeLayout.headerTypeLimit)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .modifier(HeaderButtonsBeside(reserve: Self.headerButtonsReserve, top: Self.headerButtonsTop(coverSide: coverSide), lift: buttonsLift, buttons: headerButtons, fade: titleFade))
+        .modifier(HeaderButtonsBeside(reserve: headerButtonsReserve(lift: buttonsLift, coverSide: coverSide), top: Self.headerButtonsTop(coverSide: coverSide), lift: buttonsLift, buttons: headerButtons, fade: titleFade))
         .padding(.horizontal, Self.sideMargin)
         .frame(maxWidth: Self.playerWidth)
     }
@@ -1035,7 +1047,8 @@ private struct HeaderButtonsBeside<Buttons: View, Fade: View>: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(.trailing, reserve)
-            .mask(fade)
+            // Lifted clear of the title, the buttons have nothing to fade under.
+            .mask { if reserve > 0 { fade } else { Rectangle() } }
             .overlay(alignment: .topTrailing) { buttons.padding(.top, top).offset(y: -lift) }
     }
 }
