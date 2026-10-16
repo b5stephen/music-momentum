@@ -40,6 +40,9 @@ struct PracticeView: View {
     @State private var widePlayerHeight: CGFloat = 200
     /// Measured, so the title fades out just short of a save prompt growing over it.
     @State private var headerButtonsWidth: CGFloat = 0
+    /// The title and artist on one line each, so the header buttons only
+    /// leave the title's row when it won't fit beside them.
+    @State private var headerTextWidth: CGFloat = 0
 
     /// Editing carries the marker's identity so switching straight from one
     /// marker to another rebuilds the sheet.
@@ -103,7 +106,7 @@ struct PracticeView: View {
                                     tabBarInset: verticalSizeClass == .compact ? proxy.safeAreaInsets.bottom : 0
                                 )
                             } else {
-                                loadedSong(track, layout: layout, width: proxy.size.width, buttonsLift: controlsClearance)
+                                loadedSong(track, layout: layout, width: proxy.size.width, controlsClearance: controlsClearance)
                             }
                         }
                         .animation(isDragged(to: proxy.size) ? .snappy : nil, value: layout.isCompact)
@@ -204,15 +207,25 @@ struct PracticeView: View {
     /// Dropping only while the controls reached the cover snapped the header
     /// up and down as a window was dragged past the width where the centred
     /// stack moved clear of them. The floating card already sits below the
-    /// controls, but still sees them in its corner insets.
+    /// controls, and a regular-width window's tab bar shares their row and
+    /// insets the screen below it, but both still see them in their corner
+    /// insets; dropping again left a band of empty glass above the header.
     private func windowControlsClearance(_ proxy: GeometryProxy) -> CGFloat {
-        guard !savedIsBeside, track != nil,
+        let controls = proxy.containerCornerInsets.topLeading.height
+        guard !savedIsBeside, track != nil, proxy.safeAreaInsets.top < controls,
               !PracticeLayout(size: proxy.size, heights: layoutHeights).isWide
         else { return 0 }
-        return proxy.containerCornerInsets.topLeading.height
+        return controls
     }
 
-    private func loadedSong(_ track: Track, layout: PracticeLayout, width: CGFloat, buttonsLift: CGFloat) -> some View {
+    /// The header buttons go up beside the window's controls only when the
+    /// title won't fit beside them; lifted whatever the title, a short one
+    /// sat under an empty corner, the buttons a row above it.
+    private func headerButtonsLift(clearance: CGFloat, titleWidth: CGFloat) -> CGFloat {
+        clearance > 0 && headerTextWidth > titleWidth - Self.collapsedHeaderReserve ? clearance : 0
+    }
+
+    private func loadedSong(_ track: Track, layout: PracticeLayout, width: CGFloat, controlsClearance: CGFloat) -> some View {
         // The wheel's frame is about 23pt emptier below its scale than above
         // it, and the scrubber's bar sits 20pt down its touch area, so equal
         // gaps looked bigger under the wheel. Spacers share spare height
@@ -220,9 +233,18 @@ struct PracticeView: View {
         let lift = min(43, 2 * layout.wheelGap)
         return VStack(spacing: 0) {
             if layout.isCompact {
-                compactNowPlaying(track, coverSide: layout.coverSide, buttonsLift: buttonsLift)
+                compactNowPlaying(
+                    track,
+                    coverSide: layout.coverSide,
+                    buttonsLift: headerButtonsLift(clearance: controlsClearance, titleWidth: headerTextRoom(width: width, cover: layout.coverSide + 12))
+                )
             } else {
-                nowPlaying(track, coverSide: layout.coverSide, width: width, buttonsLift: buttonsLift)
+                nowPlaying(
+                    track,
+                    coverSide: layout.coverSide,
+                    width: width,
+                    buttonsLift: headerButtonsLift(clearance: controlsClearance, titleWidth: headerTextRoom(width: width, cover: 72 + 14))
+                )
             }
 
             // Spare height goes either side of the wheel and under the
@@ -630,6 +652,11 @@ struct PracticeView: View {
     }
     private static let titleFadeLength: CGFloat = 24
 
+    /// The width beside the cover, before any is left for the buttons.
+    private func headerTextRoom(width: CGFloat, cover: CGFloat) -> CGFloat {
+        min(width, Self.playerWidth) - 2 * Self.sideMargin - cover
+    }
+
     /// Level with the cover while the title fits beside it, and held there
     /// when a long title grows the header and the cover centres on it.
     /// Centred too, the buttons dropped with every line the title wrapped to.
@@ -661,6 +688,14 @@ struct PracticeView: View {
                         titleBlockHeight = $0
                     }
             }
+            .background(alignment: .topLeading) {
+                titleBlock(track, alignment: .leading)
+                    .fixedSize()
+                    .hidden()
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: {
+                        headerTextWidth = $0
+                    }
+            }
             .modifier(HeaderButtonsBeside(reserve: headerButtonsReserve(lift: buttonsLift, coverSide: coverSide), top: Self.headerButtonsTop(coverSide: coverSide), lift: buttonsLift, buttons: headerButtons, fade: titleFade))
             // A floating card's corner is 40pt round; less this inset, that's
             // the cover's 16, so the two curves are concentric. At 32pt and a
@@ -681,20 +716,32 @@ struct PracticeView: View {
         HStack(spacing: 12) {
             cover(track.artwork, side: coverSide)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(track.title)
-                    .font(.headline)
-                Text(track.artistName)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .lineLimit(1)
-            .dynamicTypeSize(...PracticeLayout.headerTypeLimit)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            compactTitleBlock(track)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(alignment: .leading) {
+                    compactTitleBlock(track)
+                        .fixedSize()
+                        .hidden()
+                        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: {
+                            headerTextWidth = $0
+                        }
+                }
         }
         .modifier(HeaderButtonsBeside(reserve: headerButtonsReserve(lift: buttonsLift, coverSide: coverSide), top: Self.headerButtonsTop(coverSide: coverSide), lift: buttonsLift, buttons: headerButtons, fade: titleFade))
         .padding(.horizontal, Self.sideMargin)
         .frame(maxWidth: Self.playerWidth)
+    }
+
+    private func compactTitleBlock(_ track: Track) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(track.title)
+                .font(.headline)
+            Text(track.artistName)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .dynamicTypeSize(...PracticeLayout.headerTypeLimit)
     }
 
     /// Clear under the buttons, but only while the save prompt has grown past
