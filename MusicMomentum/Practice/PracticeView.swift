@@ -404,9 +404,11 @@ struct PracticeView: View {
     /// Marking moved under the pill row it adds to.
     private func transportControls(_ layout: PracticeLayout) -> some View {
         HStack(spacing: 0) {
+            // A size down from the skips, which read as one group with play;
+            // the same size, four circular arrows looked alike at a glance.
             transportButton(
                 "gobackward",
-                size: layout.transportGlyph,
+                size: layout.transportGlyph * 0.88,
                 label: controller.isLoopOn ? "Restart loop" : "Restart"
             ) {
                 controller.restart()
@@ -471,8 +473,7 @@ struct PracticeView: View {
                             .frame(width: 17, height: 17)
                     }
                     .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .frame(minHeight: Self.markGlassSide)
+                    .frame(minHeight: Self.headerButtonSide)
                 } else {
                     MarkGlyph()
                         .frame(width: 20, height: 20)
@@ -491,8 +492,9 @@ struct PracticeView: View {
         .accessibilityLabel("Mark this point")
     }
 
-    /// Shorter than the header's 44pt glass so it doesn't tower over the
-    /// pills; the touch area stays 44pt.
+    /// Compact, Mark sits in the clip row, and shorter than the header's 44pt
+    /// glass so it doesn't tower over the pills; the touch area stays 44pt.
+    /// On its own line it's the save prompt's size, so the two read as a pair.
     private static let markGlassSide: CGFloat = 36
 
     /// Plain like its neighbours until it's on, when it's the one control that
@@ -610,11 +612,18 @@ struct PracticeView: View {
 
     private static let headerButtonSide: CGFloat = 44
     private static let headerButtonGap: CGFloat = 8
-    private static let collapsedHeaderButtons = 2 * headerButtonSide + headerButtonGap
+    private static let collapsedHeaderButtons = headerButtonSide
     /// What the title always leaves beside it, so a save prompt growing over
     /// it never reflows it.
     private static let headerButtonsReserve = collapsedHeaderButtons + 10
     private static let titleFadeLength: CGFloat = 24
+
+    /// Level with the cover while the title fits beside it, and held there
+    /// when a long title grows the header and the cover centres on it.
+    /// Centred too, the buttons dropped with every line the title wrapped to.
+    private static func headerButtonsTop(coverSide: CGFloat) -> CGFloat {
+        max(0, (coverSide - headerButtonSide) / 2)
+    }
 
     /// The cover shows where the screen's colours come from. Wide, it sits
     /// over the player instead and `coverSide` is nil.
@@ -640,7 +649,7 @@ struct PracticeView: View {
                         titleBlockHeight = $0
                     }
             }
-            .modifier(HeaderButtonsBeside(reserve: Self.headerButtonsReserve, lift: buttonsLift, buttons: headerButtons, fade: titleFade))
+            .modifier(HeaderButtonsBeside(reserve: Self.headerButtonsReserve, top: Self.headerButtonsTop(coverSide: coverSide), lift: buttonsLift, buttons: headerButtons, fade: titleFade))
             // A floating card's corner is 40pt round; less this inset, that's
             // the cover's 16, so the two curves are concentric. At 32pt and a
             // sharper corner, a title as short as "Count on Me" wrapped on a
@@ -671,7 +680,7 @@ struct PracticeView: View {
             .dynamicTypeSize(...PracticeLayout.headerTypeLimit)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .modifier(HeaderButtonsBeside(reserve: Self.headerButtonsReserve, lift: buttonsLift, buttons: headerButtons, fade: titleFade))
+        .modifier(HeaderButtonsBeside(reserve: Self.headerButtonsReserve, top: Self.headerButtonsTop(coverSide: coverSide), lift: buttonsLift, buttons: headerButtons, fade: titleFade))
         .padding(.horizontal, Self.sideMargin)
         .frame(maxWidth: Self.playerWidth)
     }
@@ -692,9 +701,13 @@ struct PracticeView: View {
 
     private var headerButtons: some View {
         HStack(spacing: Self.headerButtonGap) {
-            saveButton
+            if !isSpeedSaved {
+                saveButton
+                    .transition(.opacity.combined(with: .scale(scale: 0.6, anchor: .trailing)))
+            }
             changeSongButton
         }
+        .animation(.bouncy(duration: 0.4), value: isSpeedSaved)
         .dynamicTypeSize(...PracticeLayout.headerTypeLimit)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: {
             headerButtonsWidth = $0
@@ -728,43 +741,31 @@ struct PracticeView: View {
         }
     }
 
-    /// Settled, a bare filled bookmark; the saved speed itself is the dot on the
-    /// knob's scale. A different speed grows it into a prompt, which shrinks
-    /// back once saved. One view throughout, so the glass morphs rather than
-    /// cross-fading between two buttons.
+    private var isSpeedSaved: Bool {
+        savedSong?.percent == Int((controller.playbackRate * 100).rounded())
+    }
+
+    /// Only there while there's a speed to save; the saved speed itself is the
+    /// dot on the knob's scale.
     private var saveButton: some View {
         let percent = Int((controller.playbackRate * 100).rounded())
-        let saved = savedSong
-        let isCurrent = saved?.percent == percent
-        let title = isCurrent ? "Saved at \(percent)%"
-            : saved != nil ? "Update saved speed to \(percent)%"
-            : "Save at \(percent)%"
-
         return Button {
             controller.saveCurrentSong()
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: isCurrent ? "bookmark.fill" : "bookmark")
-                if !isCurrent {
-                    Text("Save \(percent)%")
-                        .monospacedDigit()
-                        .fixedSize()
-                        .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .leading)))
-                }
+                Image(systemName: "bookmark")
+                Text("Save \(percent)%")
+                    .monospacedDigit()
+                    .fixedSize()
             }
             .font(.subheadline.weight(.semibold))
-            .padding(.horizontal, isCurrent ? 0 : 14)
-            .frame(minWidth: Self.headerButtonSide, minHeight: Self.headerButtonSide)
-            .modifier(ButtonGlass(isLabel: isCurrent))
+            .padding(.horizontal, 14)
+            .frame(minHeight: Self.headerButtonSide)
+            .modifier(ButtonGlass())
             .contentShape(.capsule)
         }
         .buttonStyle(.plain)
-        // Settled, it's a label rather than a disabled button, which would
-        // dim it below legible.
-        .allowsHitTesting(!isCurrent)
-        .accessibilityLabel(title)
-        .accessibilityRemoveTraits(isCurrent ? .isButton : [])
-        .animation(.bouncy(duration: 0.4), value: isCurrent)
+        .accessibilityLabel(savedSong != nil ? "Update saved speed to \(percent)%" : "Save at \(percent)%")
     }
 
     private var changeSongButton: some View {
@@ -1026,6 +1027,7 @@ private final class DriftClock {
 /// masked so it fades out under them instead of showing through the glass.
 private struct HeaderButtonsBeside<Buttons: View, Fade: View>: ViewModifier {
     var reserve: CGFloat
+    var top: CGFloat
     var lift: CGFloat
     var buttons: Buttons
     var fade: Fade
@@ -1034,23 +1036,20 @@ private struct HeaderButtonsBeside<Buttons: View, Fade: View>: ViewModifier {
         content
             .padding(.trailing, reserve)
             .mask(fade)
-            .overlay(alignment: .trailing) { buttons.offset(y: -lift) }
+            .overlay(alignment: .topTrailing) { buttons.padding(.top, top).offset(y: -lift) }
     }
 }
 
 /// Glass for Practice's buttons, smoked on a bright cover, where clear glass
-/// under light text washes out. None on a label, which in the same glass as
-/// Change Song read as a button.
+/// under light text washes out.
 private struct ButtonGlass: ViewModifier {
-    var isLabel = false
     @Environment(\.smokedFill) private var smokedFill
 
     func body(content: Content) -> some View {
-        content.glassEffect(glass.interactive(!isLabel), in: .capsule)
+        content.glassEffect(glass.interactive(), in: .capsule)
     }
 
     private var glass: Glass {
-        if isLabel { return .identity }
         if let smokedFill { return .regular.tint(smokedFill) }
         return .regular
     }

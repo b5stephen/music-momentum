@@ -39,7 +39,7 @@ A landscape window with room for Saved beside the narrowest card drops the tab b
 
 Saved's speed and marker chips are clear Liquid Glass with primary text and no coral, on the phone as well as here, so beside the card they take on the glow instead of clashing with it.
 
-Practice's save, change-song and Mark buttons are glass too, so they take on the cover like the knob does. Mark was bare text on the caption line until people didn't see it as a button. The save prompt is the same glass in the same colour as Change Song: tinted coral beside it, the pair read as two unrelated controls. Once the speed is saved, the bookmark loses its glass: it says the song is saved, and in the same glass as Change Song it looked like a button.
+Practice's save, change-song and Mark buttons are glass too, so they take on the cover like the knob does. Mark was bare text on the caption line until people didn't see it as a button. The save prompt is the same glass in the same colour as Change Song: tinted coral beside it, the pair read as two unrelated controls. The prompt is only there while there's a speed to save; once it's saved, the dot on the knob's scale says so. Mark, on its own line at the bottom, is the same 44pt capsule as the prompt, so glass on Practice means one thing at one size.
 
 ## Type
 
@@ -68,7 +68,8 @@ Practice's save, change-song and Mark buttons are glass too, so they take on the
 - **Grey save and change-song chips under the title:** they read as disabled, and "Saved at 70%" repeated the number the knob shows. The saved speed is a dot on the knob's scale instead.
 - **A coral-tinted save prompt** on glass tinted to match: beside the neutral Change Song it looked like the two buttons came from different screens.
 - **A glass bookmark once the speed was saved:** beside Change Song it looked just as tappable, though tapping it did nothing.
-- **A save prompt that pushed the title aside** reflowed it mid-drag, and **one floating over the title** smeared the letters through its glass. The title keeps room for two circles and fades out under the prompt.
+- **A bare bookmark once the speed was saved:** beside the glass Change Song it looked like a button that had lost its glass, and the knob's saved dot already said the same thing.
+- **A save prompt that pushed the title aside** reflowed it mid-drag, and **one floating over the title** smeared the letters through its glass. The title keeps room for Change Song and fades out under the prompt.
 - **Markers drawn on the timeline's track:** a clip at track height read as buffering, and a looping one needed a halo to survive the played fill. They have a lane of their own above it.
 - **A playhead line on a song without markers:** crossing the empty lane, it sat high above the track and the bar looked off-centre; a short tick centred on the track read as a notch. Until there's a marker to measure against, the end of the fill marks the position.
 - **A ⊢ bracket for clips:** it read as a span, but nothing on the timeline looked like it once clips were drawn there as bars. The pills and the lane now use the same shapes.
