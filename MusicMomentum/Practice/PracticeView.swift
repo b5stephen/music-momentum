@@ -242,7 +242,7 @@ struct PracticeView: View {
         // gaps looked bigger under the wheel. Spacers share spare height
         // equally whatever their minimums, so the difference is a fixed block.
         let lift = min(43, 2 * layout.wheelGap)
-        return VStack(spacing: 0) {
+        let stack = VStack(spacing: 0) {
             if layout.isCompact {
                 compactNowPlaying(track, coverSide: layout.coverSide, indent: placement.indent, buttonsLift: placement.drop)
             } else {
@@ -273,9 +273,18 @@ struct PracticeView: View {
             Spacer(minLength: 0)
         }
         // Past a phone's height the gaps would only drift apart, as they did
-        // on an iPad upright, so the stack centres instead. A fixed height
-        // keeps it still while a card is dragged wider.
+        // on an iPad upright, so the stack stops growing. A fixed height
+        // keeps it still while a card is dragged wider. Centred, a tall iPad
+        // window put over 100pt of empty space above the header; a third of
+        // the spare above and two below keeps it near the top without
+        // leaving a tall window bottom-heavy.
         .frame(maxHeight: PracticeLayout.maxStackedHeight)
+        return VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            stack.layoutPriority(1)
+            Spacer(minLength: 0)
+            Spacer(minLength: 0)
+        }
     }
 
     /// Landscape phones and wide iPad windows: the song and its speed on the
