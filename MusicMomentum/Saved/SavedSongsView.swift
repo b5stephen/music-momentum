@@ -55,24 +55,22 @@ struct SavedSongsView: View {
                 if songs.isEmpty, isBesidePractice {
                     ContentUnavailableView("No saved songs yet", systemImage: "bookmark")
                 } else if songs.isEmpty {
-                    ContentUnavailableView {
-                        Label("No saved songs yet", systemImage: "bookmark")
-                    } description: {
-                        Text("Save a song to practice it again at the speed you left it.")
-                    } actions: {
-                        Button {
-                            chooseSong()
-                        } label: {
-                            Label("Add Song", systemImage: "music.note.list")
-                                .font(.body.weight(.medium))
-                                .foregroundStyle(Color.accentText)
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 10)
-                                .background(Color.accentColor.opacity(0.14), in: Capsule())
+                    AroundCrease {
+                        ContentUnavailableView {
+                            emptyLabel
+                        } description: {
+                            emptyDescription
+                        } actions: {
+                            addSongButton
                         }
-                        // Not `.bordered`, which turns grey once its text is recoloured.
-                        .buttonStyle(.plain)
-                        .disabled(!controller.canUseMusic)
+                    } above: {
+                        ContentUnavailableView {
+                            emptyLabel
+                        } description: {
+                            emptyDescription
+                        }
+                    } below: {
+                        addSongButton
                     }
                 } else {
                     // One flat list, not a section per song: section gaps split
@@ -241,6 +239,32 @@ struct SavedSongsView: View {
             .fill(.separator)
             .frame(height: 0.5)
             .padding(.leading, SavedSongRow.titleInset)
+    }
+
+    // MARK: - Empty
+
+    private var emptyLabel: some View {
+        Label("No saved songs yet", systemImage: "bookmark")
+    }
+
+    private var emptyDescription: some View {
+        Text("Save a song to practice it again at the speed you left it.")
+    }
+
+    private var addSongButton: some View {
+        Button {
+            chooseSong()
+        } label: {
+            Label("Add Song", systemImage: "music.note.list")
+                .font(.body.weight(.medium))
+                .foregroundStyle(Color.accentText)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(Color.accentColor.opacity(0.14), in: Capsule())
+        }
+        // Not `.bordered`, which turns grey once its text is recoloured.
+        .buttonStyle(.plain)
+        .disabled(!controller.canUseMusic)
     }
 
     // MARK: - Actions
@@ -588,4 +612,43 @@ private func previewContainer() -> ModelContainer {
 
     return SpeedEditorSheet(song: song) { _ in }
         .modelContainer(container)
+}
+
+/// `ContentUnavailableView` centres itself, which is where a bent foldable's
+/// crease runs when it's upright: the headline sat in the fold. Bent, `above`
+/// centres in the half over the crease and `below` in the half under it, the
+/// one under the hand; flat, it's `whole`.
+private struct AroundCrease<Whole: View, Above: View, Below: View>: View {
+    @ViewBuilder var whole: Whole
+    @ViewBuilder var above: Above
+    @ViewBuilder var below: Below
+    @State private var crease: ClosedRange<CGFloat>?
+
+    var body: some View {
+        Group {
+            if let crease {
+                VStack(spacing: 0) {
+                    above
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(height: crease.lowerBound)
+                    Color.clear
+                        .frame(height: crease.upperBound - crease.lowerBound)
+                    below
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            } else {
+                whole
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .onGeometryChange(for: ClosedRange<CGFloat>?.self) { proxy in
+            guard #available(iOS 27.1, *),
+                  let crease = proxy.reservedRegions(kind: .division).first(where: {
+                      $0.isActive && $0.frame.width > $0.frame.height
+                          && $0.frame.minY > 0 && $0.frame.maxY < proxy.size.height
+                  })?.frame
+            else { return nil }
+            return crease.minY...crease.maxY
+        } action: { crease = $0 }
+    }
 }

@@ -535,11 +535,17 @@ struct PracticeView: View {
         PracticeLayout.isWide(size) ? PracticeLayout.wideLeadingWidth(size.width) : nil
     }
 
-    /// Bent, the silhouette goes above the crease and the copy below it, when
-    /// each half has room; the copy needs about the height of its four rows.
+    /// Height above the crease that the arrival message and the gaps round
+    /// it take, so the silhouette gets the rest: a headline and two lines of
+    /// detail at the default text size, with room to spare.
+    static let creaseMessageReserve: CGFloat = 160
+
+    /// Bent, the silhouette and message go above the crease and the button
+    /// below it, when each half has room.
     private func arrivalCrease(_ proxy: GeometryProxy) -> ClosedRange<CGFloat>? {
         guard arrivalLeadingWidth(proxy.size) == nil, let crease = horizontalCrease(proxy),
-              crease.lowerBound >= 150 + 32, proxy.size.height - crease.upperBound >= 240
+              crease.lowerBound >= 150 + Self.creaseMessageReserve,
+              proxy.size.height - crease.upperBound >= 120
         else { return nil }
         return crease
     }
@@ -1081,10 +1087,18 @@ private struct ArrivalState: View {
             }
             .frame(maxWidth: 960, maxHeight: .infinity)
         } else if let crease {
+            // What's read above the crease, what's tapped below it, under the hand.
             AroundCrease(crease: crease) {
-                DialSilhouette(diameter: min(diameter, crease.lowerBound - 32), systemImage: systemImage)
+                VStack(spacing: 24) {
+                    DialSilhouette(
+                        diameter: min(diameter, crease.lowerBound - PracticeView.creaseMessageReserve),
+                        systemImage: systemImage
+                    )
+                    message
+                        .frame(maxWidth: 480)
+                }
             } below: {
-                copy
+                call
                     .frame(maxWidth: 480)
             }
         } else {
@@ -1108,16 +1122,26 @@ private struct ArrivalState: View {
 
     private var copy: some View {
         VStack(spacing: 0) {
-            VStack(spacing: 8) {
-                Text(headline)
-                    .font(.title2.weight(.semibold))
-                Text(detail)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 40)
+            message
+            call
+                .padding(.top, 24)
+        }
+    }
 
+    private var message: some View {
+        VStack(spacing: 8) {
+            Text(headline)
+                .font(.title2.weight(.semibold))
+            Text(detail)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 40)
+    }
+
+    private var call: some View {
+        VStack(spacing: 0) {
             // Tinted rather than solid, so it's the same coral as the save prompt and
             // speed pills: a solid fill reads as a brighter, other colour. Drawn
             // by hand because `.bordered` turns grey once its text is recoloured.
@@ -1130,7 +1154,6 @@ private struct ArrivalState: View {
                     .background(Color.accentColor.opacity(0.14), in: Capsule())
             }
             .buttonStyle(.plain)
-            .padding(.top, 24)
 
             Text(footnote)
                 .font(.footnote)
@@ -1291,10 +1314,17 @@ private struct RestoringState: View {
             }
             .frame(maxWidth: 960, maxHeight: .infinity)
         } else if let crease {
+            // The spinner stands in for the arrival message, which sits above the crease.
             AroundCrease(crease: crease) {
-                DialSilhouette(diameter: min(diameter, crease.lowerBound - 32), systemImage: "music.note.list")
+                VStack(spacing: 24) {
+                    DialSilhouette(
+                        diameter: min(diameter, crease.lowerBound - PracticeView.creaseMessageReserve),
+                        systemImage: "music.note.list"
+                    )
+                    spinner
+                }
             } below: {
-                spinner
+                EmptyView()
             }
         } else {
             VStack(spacing: 0) {
