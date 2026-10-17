@@ -996,6 +996,7 @@ struct PracticeView: View {
             headline: "Nothing loaded yet",
             detail: "Pick a song from Apple Music and slow it down to a speed you can actually play.",
             actionTitle: "Choose a Song",
+            actionImage: "music.note.list",
             footnote: savedIsBeside
                 ? "Or tap one of your saved songs."
                 : "Or open Saved to pick up where you left off."
@@ -1073,6 +1074,8 @@ private struct ArrivalState: View {
     var headline: String
     var detail: String
     var actionTitle: String
+    /// The picker's glyph on a button that opens it, as Saved's Add Song has.
+    var actionImage: String?
     var footnote: String
     var action: () -> Void
 
@@ -1142,18 +1145,14 @@ private struct ArrivalState: View {
 
     private var call: some View {
         VStack(spacing: 0) {
-            // Tinted rather than solid, so it's the same coral as the save prompt and
-            // speed pills: a solid fill reads as a brighter, other colour. Drawn
-            // by hand because `.bordered` turns grey once its text is recoloured.
             Button(action: action) {
-                Text(actionTitle)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(Color.accentText)
-                    .frame(height: 50)
-                    .padding(.horizontal, 30)
-                    .background(Color.accentColor.opacity(0.14), in: Capsule())
+                if let actionImage {
+                    Label(actionTitle, systemImage: actionImage)
+                } else {
+                    Text(actionTitle)
+                }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(CallToActionButtonStyle())
 
             Text(footnote)
                 .font(.footnote)
@@ -1518,6 +1517,7 @@ private func loadedPreview(
         headline: "Nothing loaded yet",
         detail: "Pick a song from Apple Music and slow it down to a speed you can actually play.",
         actionTitle: "Choose a Song",
+        actionImage: "music.note.list",
         footnote: "Or open Saved to pick up where you left off."
     ) {}
         .padding(.vertical, 16)

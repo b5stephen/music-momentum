@@ -256,14 +256,8 @@ struct SavedSongsView: View {
             chooseSong()
         } label: {
             Label("Add Song", systemImage: "music.note.list")
-                .font(.body.weight(.medium))
-                .foregroundStyle(Color.accentText)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(Color.accentColor.opacity(0.14), in: Capsule())
         }
-        // Not `.bordered`, which turns grey once its text is recoloured.
-        .buttonStyle(.plain)
+        .buttonStyle(CallToActionButtonStyle())
         .disabled(!controller.canUseMusic)
     }
 
