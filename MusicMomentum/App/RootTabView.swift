@@ -258,17 +258,22 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
 }
 
 #Preview("Open iPhone Duo, landscape", traits: .fixedLayout(width: 951, height: 669)) {
-    RootTabView(sampleTrack: SampleSong.track)
-        .modelContainer(try! SampleSong.container())
+    RootTabView(sampleTrack: previewTrack)
+        .modelContainer(previewContainer())
 }
 
 #Preview("iPhone Air, landscape", traits: .fixedLayout(width: 912, height: 420)) {
-    RootTabView(sampleTrack: SampleSong.track)
-        .modelContainer(try! SampleSong.container())
+    RootTabView(sampleTrack: previewTrack)
+        .modelContainer(previewContainer())
 }
 
+private let previewTrack = PracticeView.Track(
+    id: "1", title: "Count on Me", artistName: "Bruno Mars",
+    palette: ArtworkPalette(cover: OKLCH(red: 0.88, green: 0.64, blue: 0.05))
+)
+
 @MainActor
-private func floatingPreview(palette: ArtworkPalette?) -> some View {
+private func previewContainer() -> ModelContainer {
     let container = try! AppSchema.inMemoryContainer()
     let song = SavedSong.save(
         songID: "1", title: "Count on Me", artistName: "Bruno Mars",
@@ -280,6 +285,11 @@ private func floatingPreview(palette: ArtworkPalette?) -> some View {
         songID: "2", title: "Little Wing", artistName: "Jimi Hendrix",
         artworkData: nil, speed: 0.6, in: container.mainContext
     )
+    return container
+}
+
+@MainActor
+private func floatingPreview(palette: ArtworkPalette?) -> some View {
     let controller = PlaybackController()
     controller.playbackRate = 0.75
     return FloatingLayout(palette: palette) {
@@ -294,5 +304,5 @@ private func floatingPreview(palette: ArtworkPalette?) -> some View {
             previewCurrentID: palette.map { _ in "1" }
         ) {}
     }
-    .modelContainer(container)
+    .modelContainer(previewContainer())
 }
