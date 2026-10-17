@@ -35,7 +35,7 @@ With a song loaded, Practice is painted in the cover's own colours, the way Appl
 
 ## Wide iPad
 
-A landscape window with room for Saved beside the narrowest card drops the tab bar: Practice becomes a resizable card hovering over Saved, which runs the full width of the window behind it. It's one page, not a split: no divider, and the cover's colour glows on the page around the card. Saved drops what the card already says: no large title, and a minimal empty state.
+A landscape window with room for Saved beside the narrowest card, and tall enough for the phone layout in the card, drops the tab bar: Practice becomes a resizable card hovering over Saved, which runs the full width of the window behind it. It's one page, not a split: no divider, and the cover's colour glows on the page around the card. Saved drops what the card already says: no large title, and a minimal empty state.
 
 Saved's speed and marker chips are clear Liquid Glass with primary text and no coral, on the phone as well as here, so beside the card they take on the glow instead of clashing with it.
 
@@ -65,6 +65,7 @@ Wide, the cover sits beside the title as it does stacked, the pair centred over 
 - **The cover drawn into Practice's background,** faded from the top: no fade looked right across every cover.
 - **The single colour MusicKit ships with artwork** as the ground: it's often the cover's border, not its average.
 - **Coral or grey chips beside the floating card:** coral clashed with the cover; grey read as disabled. Hence glass.
+- **The floating card on a landscape iPhone Air or Pro Max,** which are just wide enough for Saved beside it: the card was under 400pt tall and Practice scrolled. A phone on its side keeps the tabs and Practice's two-column layout.
 - **Highlighting the loaded song in Saved** with a panel, coral or the cover's colour.
 - **A Mark pill pinned to the end of Practice's clip row:** it took a pill's width, leaving room for two and a half clips on a phone. Mark is a link on the caption line under the row instead.
 - **The save and change-song chips beside a short window's wheel,** with a one-line title above, to give the wheel the header's height: mocked up, they didn't sit right beside the dial.

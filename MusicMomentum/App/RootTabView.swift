@@ -75,12 +75,17 @@ struct RootTabView: View {
         .environment(\.colorScheme, tab == .practice && practicePalette != nil ? .dark : colorScheme)
     }
 
-    /// Landscape, with room for Saved beside the narrowest card. Measured
-    /// across the side insets: an unfolded iPhone Duo's camera reserves 84pt
-    /// down its trailing edge, but only at the top, and Saved's rows clear it.
+    /// Landscape, with room for Saved beside the narrowest card and for the
+    /// card's own height. Measured across the insets: an unfolded iPhone Duo's
+    /// camera reserves 84pt down its trailing edge, but only at the top, and
+    /// Saved's rows clear it. Width alone floated a landscape iPhone Air
+    /// (912×420) and Pro Max, in a card too short for Practice.
     private nonisolated static func floats(_ size: CGSize, insets: EdgeInsets) -> Bool {
         let width = size.width + insets.leading + insets.trailing
-        return width > size.height && width >= FloatingLayout<EmptyView, EmptyView>.minWindowWidth
+        let height = size.height + insets.top + insets.bottom
+        return width > height
+            && width >= FloatingLayout<EmptyView, EmptyView>.minWindowWidth
+            && height >= FloatingLayout<EmptyView, EmptyView>.minWindowHeight
     }
 }
 
@@ -113,8 +118,12 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
     private nonisolated static var minSavedWidth: CGFloat { 480 }
     private nonisolated static var margin: CGFloat { 28 }
     nonisolated static var minWindowWidth: CGFloat { minWidth + 2 * margin + minSavedWidth }
+    /// An iPhone SE's practice screen inside the card's insets: 652pt, over
+    /// any phone on its side (a Pro Max is 440) and under an open iPhone
+    /// Duo's 669.
+    nonisolated static var minWindowHeight: CGFloat { 580 + 2 * contentInset + 2 * margin }
     private static var radius: CGFloat { 40 }
-    private static var contentInset: CGFloat { 8 }
+    private nonisolated static var contentInset: CGFloat { 8 }
 
     private var cardWidth: CGFloat {
         if let crease { return max(Self.minWidth, crease.lowerBound - Self.margin) }
@@ -246,6 +255,16 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
 
 #Preview("Floating, nothing loaded", traits: .fixedLayout(width: 1376, height: 1032)) {
     floatingPreview(palette: nil)
+}
+
+#Preview("Open iPhone Duo, landscape", traits: .fixedLayout(width: 951, height: 669)) {
+    RootTabView(sampleTrack: SampleSong.track)
+        .modelContainer(try! SampleSong.container())
+}
+
+#Preview("iPhone Air, landscape", traits: .fixedLayout(width: 912, height: 420)) {
+    RootTabView(sampleTrack: SampleSong.track)
+        .modelContainer(try! SampleSong.container())
 }
 
 @MainActor
