@@ -11,6 +11,8 @@ import SwiftUI
 /// keeps the practice tab alive so switching away doesn't tear down playback.
 /// A wide landscape window drops the tabs and floats Practice over Saved.
 struct RootTabView: View {
+    /// Stands in for a loaded song; see `SampleSong`.
+    var sampleTrack: PracticeView.Track?
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
     @State private var controller = PlaybackController()
@@ -26,9 +28,9 @@ struct RootTabView: View {
         Group {
             if floats {
                 FloatingLayout(palette: practicePalette) {
-                    PracticeView(controller: controller, savedIsBeside: true) { practicePalette = $0 }
+                    PracticeView(controller: controller, previewTrack: sampleTrack, savedIsBeside: true) { practicePalette = $0 }
                 } saved: {
-                    SavedSongsView(controller: controller, isBesidePractice: true) {}
+                    SavedSongsView(controller: controller, isBesidePractice: true, previewCurrentID: sampleTrack?.id) {}
                 }
             } else {
                 tabs
@@ -56,12 +58,12 @@ struct RootTabView: View {
     private var tabs: some View {
         TabView(selection: $tab) {
             Tab("Practice", systemImage: "guitars", value: .practice) {
-                PracticeView(controller: controller) { practicePalette = $0 }
+                PracticeView(controller: controller, previewTrack: sampleTrack) { practicePalette = $0 }
                     .environment(\.colorScheme, colorScheme)
             }
 
             Tab("Saved", systemImage: "bookmark", value: .saved) {
-                SavedSongsView(controller: controller) { tab = .practice }
+                SavedSongsView(controller: controller, previewCurrentID: sampleTrack?.id) { tab = .practice }
                     .environment(\.colorScheme, colorScheme)
             }
         }
