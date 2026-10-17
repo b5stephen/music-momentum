@@ -127,6 +127,8 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
     }
 
     var body: some View {
+        // Out here so the geometry closure captures a value, not the generic `Self`.
+        let narrowestCardEdge = Self.margin + Self.minWidth
         ZStack(alignment: .leading) {
             glow
 
@@ -170,7 +172,7 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
                   let region = proxy.reservedRegions(kind: .division).first(where: {
                       $0.isActive && $0.frame.height > $0.frame.width
                   }),
-                  region.frame.minX - Self.margin >= Self.minWidth
+                  region.frame.minX >= narrowestCardEdge
             else { return nil }
             return region.frame.minX...region.frame.maxX
         } action: { crease in
