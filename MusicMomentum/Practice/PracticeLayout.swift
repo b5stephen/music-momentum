@@ -73,7 +73,7 @@ nonisolated struct PracticeLayout: Equatable {
 
         static let standard = Heights(
             titleBlock: 54, wideTitleBlock: 54, compactHeader: 44,
-            scrubber: 58, pillRow: 36, captionRow: 52
+            scrubber: 56, pillRow: 36, captionRow: 52
         )
     }
 
@@ -117,7 +117,7 @@ nonisolated struct PracticeLayout: Equatable {
     /// The system's thumbless slider track, near enough the scrubber's.
     private static let volumeTrack: CGFloat = 6
     /// How far down its 44pt touch area the scrubber's bar ends.
-    private static let scrubberBarBottom: CGFloat = 33
+    private static let scrubberBarBottom: CGFloat = 31
     /// The header stops growing here: any larger and a title wraps over
     /// several lines and pushes the wheel down, and the buttons' glyphs
     /// spill out of their 44pt glass.
@@ -346,8 +346,8 @@ extension PracticeLayout.Heights {
             titleBlock: titleBlock,
             wideTitleBlock: wideTitleBlock,
             compactHeader: max(44, line(.headline, titleTraits) + 2 + line(.subheadline, titleTraits)),
-            // The labels tuck 2pt up under the bar's 44pt touch area.
-            scrubber: 44 + line(.caption1) - 2,
+            // The labels tuck 4pt up under the bar's 44pt touch area.
+            scrubber: 44 + line(.caption1) - 4,
             pillRow: footnote.scaledValue(for: 32, compatibleWith: traits) + 4,
             captionRow: 8 + max(44, line(.subheadline) + 16)
         )

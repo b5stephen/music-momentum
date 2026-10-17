@@ -49,8 +49,8 @@ struct PlaybackScrubber: View {
 
     var body: some View {
         // The bar's 44pt is touch area around the lane and the track, so the
-        // labels tuck up to just under the thumb.
-        VStack(spacing: -2) {
+        // labels tuck up under the track rather than under the touch area.
+        VStack(spacing: -4) {
             bar
             labels
         }
@@ -65,14 +65,10 @@ struct PlaybackScrubber: View {
     }
 
     private static let laneHeight: CGFloat = 8
-    /// Clear of the thumb, which overhangs the track's slot by 6pt.
-    private static let laneGap: CGFloat = 8
-    private static let trackHeight: CGFloat = 6
-    private static let trackSlot: CGFloat = 12
-    /// The size of the system slider's thumb, so the scrubber and the volume
-    /// slider under it read as a pair. With a small dot of its own, beside
-    /// the native thumb it looked like a different control.
-    private static let thumbSize = CGSize(width: 38, height: 24)
+    private static let laneGap: CGFloat = 4
+    /// The track's height while a finger is down; it sits in a slot this
+    /// tall either way, so growing doesn't nudge the lane above it.
+    private static let draggingTrackHeight: CGFloat = 12
     private static let tapSlop: CGFloat = 6
     private static let holdDelay: Duration = .milliseconds(300)
 
@@ -82,8 +78,9 @@ struct PlaybackScrubber: View {
     private var bar: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
+            let trackHeight: CGFloat = isDragging ? Self.draggingTrackHeight : 6
             // Above the track's slot is the lane's; the track below always scrubs.
-            let laneBottom = (proxy.size.height - Self.laneHeight - Self.laneGap - Self.trackSlot) / 2
+            let laneBottom = (proxy.size.height - Self.laneHeight - Self.laneGap - Self.draggingTrackHeight) / 2
                 + Self.laneHeight + Self.laneGap / 2
 
             VStack(spacing: Self.laneGap) {
@@ -95,13 +92,13 @@ struct PlaybackScrubber: View {
                         .fill(.primary.opacity(0.18))
                     Capsule()
                         .fill(.primary)
-                        .frame(width: max(Self.trackHeight, width * fraction))
+                        .frame(width: max(trackHeight, width * fraction))
                         .opacity(duration == nil ? 0 : 1)
                 }
-                .frame(height: Self.trackHeight)
-                .overlay(alignment: .leading) { thumb(width: width) }
-                .frame(height: Self.trackSlot)
+                .frame(height: trackHeight)
+                .frame(height: Self.draggingTrackHeight)
             }
+            .overlay(alignment: .topLeading) { playhead(width: width, trackHeight: trackHeight) }
             .frame(maxHeight: .infinity)
             .contentShape(.rect)
             .gesture(dragGesture(width: width, laneBottom: laneBottom))
@@ -141,20 +138,18 @@ struct PlaybackScrubber: View {
         }
     }
 
-    /// White and shadowed whatever the screen's colours, as the system's is.
-    /// Centred on the position, as the lane's markers are, and stopped at the
-    /// track's ends. It replaced a hairline through the lane, which beside a
-    /// thumb this size looked like a stray mark.
-    private func thumb(width: CGFloat) -> some View {
-        let size = Self.thumbSize
+    /// A hairline through the lane and the track, so you can see where you
+    /// are against a clip. Without markers it's hidden: crossing an empty
+    /// lane, it sat high above the track and the bar looked off-centre.
+    private func playhead(width: CGFloat, trackHeight: CGFloat) -> some View {
+        let overhang: CGFloat = 2
+        let trackBottom = Self.laneHeight + Self.laneGap + (Self.draggingTrackHeight + trackHeight) / 2
         return Capsule()
-            .fill(.white)
-            .shadow(color: .black.opacity(0.18), radius: 4, y: 1)
-            .frame(width: size.width, height: size.height)
-            .scaleEffect(isDragging ? 1.15 : 1)
-            .offset(x: min(max(0, width * fraction - size.width / 2), max(0, width - size.width)))
+            .fill(.primary.opacity(0.8))
+            .frame(width: 1.5, height: trackBottom + 2 * overhang)
+            .offset(x: min(max(0, width * fraction - 0.75), max(0, width - 1.5)), y: -overhang)
             .allowsHitTesting(false)
-            .opacity(duration == nil ? 0 : 1)
+            .opacity(duration == nil || markers.isEmpty ? 0 : 1)
     }
 
     private func dragGesture(width: CGFloat, laneBottom: CGFloat) -> some Gesture {
