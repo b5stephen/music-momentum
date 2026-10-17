@@ -97,6 +97,7 @@ struct PracticeView: View {
                 tabBarInset: tabBarInset
             )
             let creaseSplit = track == nil ? nil : self.creaseSplit(proxy, layout: layout, placement: placement)
+            let arrivalCrease = track == nil ? self.arrivalCrease(proxy) : nil
             ScrollView {
                 VStack(spacing: 0) {
                     if let track {
@@ -124,18 +125,19 @@ struct PracticeView: View {
                     } else if controller.isRestoringLastSong {
                         RestoringState(
                             diameter: arrivalDiameter(proxy.size),
-                            leadingWidth: arrivalLeadingWidth(proxy.size)
+                            leadingWidth: arrivalLeadingWidth(proxy.size),
+                            crease: arrivalCrease
                         )
                     } else if controller.canUseMusic {
-                        noSong(size: proxy.size)
+                        noSong(size: proxy.size, crease: arrivalCrease)
                     } else {
-                        noAccess(size: proxy.size)
+                        noAccess(size: proxy.size, crease: arrivalCrease)
                     }
 
                     messages
                 }
-                .padding(.top, track == nil ? 16 : layout.isWide ? PracticeLayout.wideTopPadding : creaseSplit != nil ? 0 : layout.topMargin + controlsClearance)
-                .padding(.bottom, creaseSplit != nil ? 0 : PracticeLayout.bottomMargin)
+                .padding(.top, arrivalCrease != nil || creaseSplit != nil ? 0 : track == nil ? 16 : layout.isWide ? PracticeLayout.wideTopPadding : layout.topMargin + controlsClearance)
+                .padding(.bottom, arrivalCrease != nil || creaseSplit != nil ? 0 : PracticeLayout.bottomMargin)
                 .frame(maxWidth: .infinity, minHeight: proxy.size.height)
             }
             .scrollBounceBehavior(.basedOnSize)
@@ -302,18 +304,22 @@ struct PracticeView: View {
     /// A bent foldable's crease across the screen, as the band it reserves,
     /// margins included. Flat, the region is inactive and the stack lays
     /// out as one; a crease down the screen is left to the floating layout.
-    private func creaseSplit(
-        _ proxy: GeometryProxy,
-        layout: PracticeLayout,
-        placement: ControlsPlacement
-    ) -> (layout: PracticeLayout, crease: ClosedRange<CGFloat>)? {
-        guard #available(iOS 27.1, *), !layout.isWide,
+    private func horizontalCrease(_ proxy: GeometryProxy) -> ClosedRange<CGFloat>? {
+        guard #available(iOS 27.1, *),
               let region = proxy.reservedRegions(kind: .division).first(where: {
                   $0.isActive && $0.frame.width > $0.frame.height
                       && $0.frame.minY > 0 && $0.frame.maxY < proxy.size.height
               })
         else { return nil }
-        let crease = region.frame.minY...region.frame.maxY
+        return region.frame.minY...region.frame.maxY
+    }
+
+    private func creaseSplit(
+        _ proxy: GeometryProxy,
+        layout: PracticeLayout,
+        placement: ControlsPlacement
+    ) -> (layout: PracticeLayout, crease: ClosedRange<CGFloat>)? {
+        guard !layout.isWide, let crease = horizontalCrease(proxy) else { return nil }
         guard let split = layout.split(
             above: crease.lowerBound - placement.drop,
             below: proxy.size.height - crease.upperBound - PracticeLayout.bottomMargin,
@@ -527,6 +533,15 @@ struct PracticeView: View {
 
     private func arrivalLeadingWidth(_ size: CGSize) -> CGFloat? {
         PracticeLayout.isWide(size) ? PracticeLayout.wideLeadingWidth(size.width) : nil
+    }
+
+    /// Bent, the silhouette goes above the crease and the copy below it, when
+    /// each half has room; the copy needs about the height of its four rows.
+    private func arrivalCrease(_ proxy: GeometryProxy) -> ClosedRange<CGFloat>? {
+        guard arrivalLeadingWidth(proxy.size) == nil, let crease = horizontalCrease(proxy),
+              crease.lowerBound >= 150 + 32, proxy.size.height - crease.upperBound >= 240
+        else { return nil }
+        return crease
     }
 
     private var layoutHeights: PracticeLayout.Heights {
@@ -966,10 +981,11 @@ struct PracticeView: View {
     // MARK: - Arriving
 
     @ViewBuilder
-    private func noSong(size: CGSize) -> some View {
+    private func noSong(size: CGSize, crease: ClosedRange<CGFloat>?) -> some View {
         ArrivalState(
             diameter: arrivalDiameter(size),
             leadingWidth: arrivalLeadingWidth(size),
+            crease: crease,
             systemImage: "music.note.list",
             headline: "Nothing loaded yet",
             detail: "Pick a song from Apple Music and slow it down to a speed you can actually play.",
@@ -984,10 +1000,11 @@ struct PracticeView: View {
 
     /// Once denied the system won't prompt again, so the button goes to Settings.
     @ViewBuilder
-    private func noAccess(size: CGSize) -> some View {
+    private func noAccess(size: CGSize, crease: ClosedRange<CGFloat>?) -> some View {
         ArrivalState(
             diameter: arrivalDiameter(size),
             leadingWidth: arrivalLeadingWidth(size),
+            crease: crease,
             systemImage: "lock",
             headline: "Apple Music access needed",
             detail: "Music Momentum plays songs from your own library and Apple Music. It can't reach either one until you allow it.",
@@ -1044,6 +1061,8 @@ private struct ArrivalState: View {
     var diameter: CGFloat
     /// Set when wide: the silhouette's column, beside the copy.
     var leadingWidth: CGFloat?
+    /// A bent foldable's crease across the screen; see `AroundCrease`.
+    var crease: ClosedRange<CGFloat>?
     var systemImage: String
     var headline: String
     var detail: String
@@ -1061,6 +1080,13 @@ private struct ArrivalState: View {
                     .frame(maxWidth: .infinity)
             }
             .frame(maxWidth: 960, maxHeight: .infinity)
+        } else if let crease {
+            AroundCrease(crease: crease) {
+                DialSilhouette(diameter: min(diameter, crease.lowerBound - 32), systemImage: systemImage)
+            } below: {
+                copy
+                    .frame(maxWidth: 480)
+            }
         } else {
             VStack(spacing: 0) {
                 Spacer(minLength: 16)
@@ -1253,6 +1279,7 @@ private struct PanelGlass: ViewModifier {
 private struct RestoringState: View {
     var diameter: CGFloat
     var leadingWidth: CGFloat?
+    var crease: ClosedRange<CGFloat>?
 
     var body: some View {
         if let leadingWidth {
@@ -1263,6 +1290,12 @@ private struct RestoringState: View {
                     .frame(maxWidth: .infinity)
             }
             .frame(maxWidth: 960, maxHeight: .infinity)
+        } else if let crease {
+            AroundCrease(crease: crease) {
+                DialSilhouette(diameter: min(diameter, crease.lowerBound - 32), systemImage: "music.note.list")
+            } below: {
+                spinner
+            }
         } else {
             VStack(spacing: 0) {
                 Spacer(minLength: 16)
@@ -1284,6 +1317,28 @@ private struct RestoringState: View {
         ProgressView()
             .controlSize(.large)
             .accessibilityLabel("Loading your last song")
+    }
+}
+
+/// A bent foldable's crease across the screen, `crease` in the screen's
+/// space: `above` centred in the half over it and `below` in the half under
+/// it, so nothing sits in the fold.
+private struct AroundCrease<Above: View, Below: View>: View {
+    var crease: ClosedRange<CGFloat>
+    @ViewBuilder var above: Above
+    @ViewBuilder var below: Below
+
+    var body: some View {
+        VStack(spacing: 0) {
+            above
+                .frame(maxWidth: .infinity)
+                .frame(height: crease.lowerBound)
+            Color.clear
+                .frame(height: crease.upperBound - crease.lowerBound)
+            below
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 }
 
