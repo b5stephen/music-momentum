@@ -150,4 +150,23 @@ struct PracticeLayoutTests {
     func floor(width: Double, height: Double) {
         #expect(layout(width, height).wheelDiameter >= 150)
     }
+
+    @Test("A bent crease puts the wheel above it and the player below")
+    func creaseSplit() throws {
+        // An unfolded iPhone Duo upright, its crease band 40pt across the middle.
+        let stacked = layout(669, 860)
+        let above: CGFloat = 420
+        let below: CGFloat = 860 - 460 - PracticeLayout.bottomMargin
+        let split = try #require(stacked.split(above: above, below: below, width: 669, heights: .standard))
+        let header = max(split.coverSide, PracticeLayout.Heights.standard.titleBlock, 44)
+        #expect(split.topMargin + header + 2 * PracticeLayout.creaseWheelGap + split.wheelDiameter <= above)
+        #expect(split.playerHeight(.standard) <= below)
+    }
+
+    @Test("A crease too near an edge leaves the stack whole")
+    func creaseTooLow() {
+        let stacked = layout(669, 860)
+        #expect(stacked.split(above: 760, below: 60, width: 669, heights: .standard) == nil)
+        #expect(stacked.split(above: 120, below: 700, width: 669, heights: .standard) == nil)
+    }
 }

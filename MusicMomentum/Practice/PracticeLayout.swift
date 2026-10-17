@@ -274,6 +274,29 @@ nonisolated struct PracticeLayout: Equatable {
         min(max(value, 0), 1)
     }
 
+    // MARK: - Crease
+
+    /// The gap either side of the wheel when a crease splits the stack.
+    static let creaseWheelGap: CGFloat = 14
+    /// The smallest wheel the stack's own give-way allows.
+    private static let wheelFloor: CGFloat = 150
+
+    /// A bent foldable's crease across the stack: the header and wheel take
+    /// the half above it and the player the half below, so nothing sits in
+    /// the fold. `above` is the height above the crease and `below` the
+    /// height below it less the bottom margin. Nil when either half is too
+    /// short, and the stack carries on across the crease.
+    func split(above: CGFloat, below: CGFloat, width: CGFloat, heights: Heights) -> Self? {
+        guard !isWide, playerHeight(heights) <= below - Self.roundingSlack else { return nil }
+        let header = isCompact ? heights.compactHeader : max(coverSide, heights.titleBlock, 44)
+        let room = above - topMargin - header - 2 * Self.creaseWheelGap - Self.roundingSlack
+        let diameter = min(max(wheelDiameter, Self.wheelCap(width: width)), room)
+        guard diameter >= Self.wheelFloor else { return nil }
+        var split = self
+        split.wheelDiameter = diameter
+        return split
+    }
+
     // MARK: - Heights
 
     func stackedHeight(_ heights: Heights) -> CGFloat {

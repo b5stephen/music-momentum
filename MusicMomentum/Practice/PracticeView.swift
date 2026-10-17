@@ -96,6 +96,7 @@ struct PracticeView: View {
                 heights: layoutHeights,
                 tabBarInset: tabBarInset
             )
+            let creaseSplit = track == nil ? nil : self.creaseSplit(proxy, layout: layout, placement: placement)
             ScrollView {
                 VStack(spacing: 0) {
                     if let track {
@@ -106,6 +107,14 @@ struct PracticeView: View {
                                     layout: layout,
                                     size: proxy.size,
                                     tabBarInset: tabBarInset
+                                )
+                            } else if let creaseSplit {
+                                loadedSongAroundCrease(
+                                    track,
+                                    layout: creaseSplit.layout,
+                                    crease: creaseSplit.crease,
+                                    size: proxy.size,
+                                    placement: placement
                                 )
                             } else {
                                 loadedSong(track, layout: layout, width: proxy.size.width, placement: placement)
@@ -125,8 +134,8 @@ struct PracticeView: View {
 
                     messages
                 }
-                .padding(.top, track == nil ? 16 : layout.isWide ? PracticeLayout.wideTopPadding : layout.topMargin + controlsClearance)
-                .padding(.bottom, PracticeLayout.bottomMargin)
+                .padding(.top, track == nil ? 16 : layout.isWide ? PracticeLayout.wideTopPadding : creaseSplit != nil ? 0 : layout.topMargin + controlsClearance)
+                .padding(.bottom, creaseSplit != nil ? 0 : PracticeLayout.bottomMargin)
                 .frame(maxWidth: .infinity, minHeight: proxy.size.height)
             }
             .scrollBounceBehavior(.basedOnSize)
@@ -287,6 +296,68 @@ struct PracticeView: View {
             stack.layoutPriority(1)
             Spacer(minLength: 0)
             Spacer(minLength: 0)
+        }
+    }
+
+    /// A bent foldable's crease across the screen, as the band it reserves,
+    /// margins included. Flat, the region is inactive and the stack lays
+    /// out as one; a crease down the screen is left to the floating layout.
+    private func creaseSplit(
+        _ proxy: GeometryProxy,
+        layout: PracticeLayout,
+        placement: ControlsPlacement
+    ) -> (layout: PracticeLayout, crease: ClosedRange<CGFloat>)? {
+        guard #available(iOS 27.1, *), !layout.isWide,
+              let region = proxy.reservedRegions(kind: .division).first(where: {
+                  $0.isActive && $0.frame.width > $0.frame.height
+                      && $0.frame.minY > 0 && $0.frame.maxY < proxy.size.height
+              })
+        else { return nil }
+        let crease = region.frame.minY...region.frame.maxY
+        guard let split = layout.split(
+            above: crease.lowerBound - placement.drop,
+            below: proxy.size.height - crease.upperBound - PracticeLayout.bottomMargin,
+            width: proxy.size.width,
+            heights: layoutHeights
+        ) else { return nil }
+        return (split, crease)
+    }
+
+    /// The header and wheel above the crease, the player below it.
+    private func loadedSongAroundCrease(
+        _ track: Track,
+        layout: PracticeLayout,
+        crease: ClosedRange<CGFloat>,
+        size: CGSize,
+        placement: ControlsPlacement
+    ) -> some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 0) {
+                if layout.isCompact {
+                    compactNowPlaying(track, coverSide: layout.coverSide, indent: placement.indent, buttonsLift: placement.drop)
+                } else {
+                    nowPlaying(track, coverSide: layout.coverSide, width: size.width, indent: placement.indent, buttonsLift: placement.drop)
+                }
+                Spacer(minLength: PracticeLayout.creaseWheelGap)
+                SpeedWheelPicker(
+                    speed: $controller.playbackRate,
+                    savedSpeed: savedSong?.speed,
+                    diameter: layout.wheelDiameter
+                )
+                Spacer(minLength: PracticeLayout.creaseWheelGap)
+            }
+            .padding(.top, layout.topMargin + placement.drop)
+            .frame(height: crease.lowerBound)
+
+            Color.clear.frame(height: crease.upperBound - crease.lowerBound)
+
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                player(layout)
+                Spacer(minLength: 0)
+            }
+            .padding(.bottom, PracticeLayout.bottomMargin)
+            .frame(height: size.height - crease.upperBound)
         }
     }
 

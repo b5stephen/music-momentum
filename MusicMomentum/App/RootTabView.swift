@@ -36,7 +36,7 @@ struct RootTabView: View {
                 tabs
             }
         }
-        .onGeometryChange(for: Bool.self) { Self.floats($0.size) } action: { floats = $0 }
+        .onGeometryChange(for: Bool.self) { Self.floats($0.size, insets: $0.safeAreaInsets) } action: { floats = $0 }
         .task { controller.configure(modelContext: modelContext) }
         // Duplicates and another device's library artwork only ever arrive by
         // sync, so tidying on each import is enough.
@@ -75,9 +75,12 @@ struct RootTabView: View {
         .environment(\.colorScheme, tab == .practice && practicePalette != nil ? .dark : colorScheme)
     }
 
-    /// Landscape, with room for Saved beside the narrowest card.
-    private nonisolated static func floats(_ size: CGSize) -> Bool {
-        size.width > size.height && size.width >= FloatingLayout<EmptyView, EmptyView>.minWindowWidth
+    /// Landscape, with room for Saved beside the narrowest card. Measured
+    /// across the side insets: an unfolded iPhone Duo's camera reserves 84pt
+    /// down its trailing edge, but only at the top, and Saved's rows clear it.
+    private nonisolated static func floats(_ size: CGSize, insets: EdgeInsets) -> Bool {
+        let width = size.width + insets.leading + insets.trailing
+        return width > size.height && width >= FloatingLayout<EmptyView, EmptyView>.minWindowWidth
     }
 }
 
@@ -96,6 +99,9 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
     @State private var windowWidth: CGFloat = 1376
     /// iPadOS's window controls, which sit over the card's top-leading corner.
     @State private var windowControlsHeight: CGFloat = 0
+    /// A bent foldable's crease down the window, margins included. The card
+    /// ends at it and Saved starts past it, so neither folds.
+    @State private var crease: ClosedRange<CGFloat>?
 
     /// The widest iPhone's width, so the card is the phone layout at its roomiest.
     private static var defaultWidth: CGFloat { 440 }
@@ -111,7 +117,21 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
     private static var contentInset: CGFloat { 8 }
 
     private var cardWidth: CGFloat {
-        clamped(liveWidth ?? savedWidth)
+        if let crease { return max(Self.minWidth, crease.lowerBound - Self.margin) }
+        return clamped(liveWidth ?? savedWidth)
+    }
+
+    /// The corner inset counts only when it's more than the window's own
+    /// rounded corner, which the card's corner already clears: an unfolded
+    /// iPhone Duo reports its 55pt screen corner there with no controls in
+    /// it, and the card sat 35pt low.
+    private nonisolated static func windowControlsHeight(_ proxy: GeometryProxy) -> CGFloat {
+        let inset = proxy.containerCornerInsets.topLeading
+        if #available(iOS 27.0, *), let radius = proxy.concentricCornerRadii?.topLeading,
+           inset.width <= radius, inset.height <= radius {
+            return 0
+        }
+        return inset.height
     }
 
     private func clamped(_ width: CGFloat) -> CGFloat {
@@ -125,7 +145,7 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
 
             saved
                 .scrollContentBackground(.hidden)
-                .padding(.leading, cardWidth + 2 * Self.margin)
+                .padding(.leading, crease?.upperBound ?? cardWidth + 2 * Self.margin)
 
             practice
                 // Stands in for a phone's status bar and tab bar, so the
@@ -148,15 +168,27 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
                 // The status bar and home indicator are shorter than the
                 // margin, so the card can measure from the screen's edges.
                 .ignoresSafeArea(edges: .vertical)
-                .onGeometryChange(for: CGFloat.self) { $0.containerCornerInsets.topLeading.height } action: {
-                    windowControlsHeight = $0
-                }
+                .onGeometryChange(for: CGFloat.self, of: Self.windowControlsHeight) { windowControlsHeight = $0 }
 
-            resizeHandle
-                .offset(x: Self.margin + cardWidth)
+            // Bent, the crease sets the width.
+            if crease == nil {
+                resizeHandle
+                    .offset(x: Self.margin + cardWidth)
+            }
         }
         .background(Color(.systemBackground))
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
+        .onGeometryChange(for: ClosedRange<CGFloat>?.self) { proxy in
+            guard #available(iOS 27.1, *),
+                  let region = proxy.reservedRegions(kind: .division).first(where: {
+                      $0.isActive && $0.frame.height > $0.frame.width
+                  }),
+                  region.frame.minX - Self.margin >= Self.minWidth
+            else { return nil }
+            return region.frame.minX...region.frame.maxX
+        } action: { crease in
+            withAnimation(.snappy) { self.crease = crease }
+        }
     }
 
     private var glow: some View {
