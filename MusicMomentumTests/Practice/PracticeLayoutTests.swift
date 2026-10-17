@@ -61,6 +61,43 @@ struct PracticeLayoutTests {
         #expect(wide.playerHeight(.standard) <= wide.widePlayerSpace)
     }
 
+    /// The header used to be measured cover and all, so the height the layout
+    /// planned for came from whatever cover the last pass drew. With a
+    /// one-line title, 430–443pt-tall wide windows flipped between two
+    /// covers every frame and never settled.
+    @Test("Wide, the header the layout plans for is the one its cover makes", arguments: [44.0, 51.0, 76.0])
+    func wideHeaderFromOwnCover(title: Double) {
+        var heights = PracticeLayout.Heights.standard
+        heights.wideTitleBlock = title
+        for width: CGFloat in [700, 760, 830, 912] {
+            for height in stride(from: CGFloat(300), to: width, by: 1) {
+                let wide = PracticeLayout(size: CGSize(width: width, height: height), heights: heights)
+                guard wide.isWide, wide.wheelDiameter > 150 else { continue }
+                #expect(
+                    wide.wideHeaderHeight(heights) + PracticeLayout.wideHeaderGap + wide.wheelDiameter
+                        <= height - PracticeLayout.verticalPadding - PracticeLayout.roundingSlack,
+                    "\(width)×\(height)"
+                )
+            }
+        }
+    }
+
+    @Test("Wide, getting taller only shrinks the cover at the compact switch")
+    func wideCoverGrowsWithHeight() {
+        var heights = PracticeLayout.Heights.standard
+        heights.wideTitleBlock = 51
+        for width: CGFloat in [700, 760, 830, 912] {
+            var previous = PracticeLayout(size: CGSize(width: width, height: 300), heights: heights)
+            for height in stride(from: CGFloat(301), to: width, by: 1) {
+                let next = PracticeLayout(size: CGSize(width: width, height: height), heights: heights)
+                if next.isCompact == previous.isCompact {
+                    #expect(next.coverSide >= previous.coverSide - 0.01, "\(width)×\(height)")
+                }
+                previous = next
+            }
+        }
+    }
+
     @Test("A shorter window goes compact rather than shrinking the wheel")
     func shortWindow() {
         let short = layout(375, 530)

@@ -33,7 +33,10 @@ struct PracticeView: View {
     /// Measured, so a long title that wraps is allowed for.
     @State private var titleBlockHeight = PracticeLayout.Heights.standard.titleBlock
     /// Measured, so the wide layout's wheel takes exactly what the title leaves.
-    @State private var wideHeaderHeight = PracticeLayout.Heights.standard.wideHeader
+    @State private var wideTitleBlockHeight = PracticeLayout.Heights.standard.wideTitleBlock
+    /// Measured, so the wide playback panel ends level with the wheel's foot.
+    /// Only the panel reads it; the layout reading it was a feedback loop.
+    @State private var wideHeaderHeight: CGFloat?
     /// The size the screen last laid out at; see `isDragged(to:)`.
     @State private var laidOutSize: CGSize?
     /// Measured, so the wide layout's cover takes exactly what the player leaves.
@@ -301,7 +304,7 @@ struct PracticeView: View {
         let panel = widePanel(layout)
         return HStack(alignment: .top, spacing: 0) {
             VStack(spacing: PracticeLayout.wideHeaderGap) {
-                wideHeader(track, coverSide: layout.coverSide)
+                wideHeader(track, coverSide: layout.coverSide, width: PracticeLayout.wideLeadingWidth(size.width))
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
                         wideHeaderHeight = $0
                     }
@@ -332,7 +335,8 @@ struct PracticeView: View {
     /// whenever the tab bar held it short, it started below the title and
     /// lined up with nothing.
     private func widePanel(_ layout: PracticeLayout) -> (height: CGFloat, top: CGFloat) {
-        let column = wideHeaderHeight + PracticeLayout.wideHeaderGap + layout.wheelDiameter
+        let header = wideHeaderHeight ?? layout.wideHeaderHeight(layoutHeights)
+        let column = header + PracticeLayout.wideHeaderGap + layout.wheelDiameter
         let padding = 2 * PracticeLayout.widePanelPadding
         let fromTitle = min(column, column / 2 + layout.widePanelReach)
         if fromTitle - padding >= layout.playerHeight(layoutHeights) {
@@ -459,7 +463,7 @@ struct PracticeView: View {
         PracticeLayout.Heights(
             dynamicTypeSize: dynamicTypeSize,
             titleBlock: titleBlockHeight,
-            wideHeader: wideHeaderHeight
+            wideTitleBlock: wideTitleBlockHeight
         )
         #else
         PracticeLayout.Heights.standard
@@ -707,12 +711,22 @@ struct PracticeView: View {
     /// buttons under them. Aligned to the column's leading edge instead, the
     /// header fought the centred wheel, and Change Song pinned to the
     /// trailing edge sat apart from the song it changes.
-    private func wideHeader(_ track: Track, coverSide: CGFloat) -> some View {
-        VStack(spacing: 12) {
+    private func wideHeader(_ track: Track, coverSide: CGFloat, width: CGFloat) -> some View {
+        VStack(spacing: PracticeLayout.wideHeaderSpacing) {
             HStack(spacing: 14) {
                 cover(track.artwork, side: coverSide, radius: coverSide / 4)
                 titleBlock(track, alignment: .leading)
                     .lineLimit(2)
+            }
+            .background(alignment: .topLeading) {
+                titleBlock(track, alignment: .leading)
+                    .lineLimit(2)
+                    .frame(width: max(0, width - 2 * Self.sideMargin - PracticeLayout.maxCover - 14), alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .hidden()
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                        wideTitleBlockHeight = $0
+                    }
             }
             headerButtons
         }
@@ -727,11 +741,9 @@ struct PracticeView: View {
         }
         .padding(.leading, indent)
         .background(alignment: .topLeading) {
-            // Measured at the width the largest cover leaves, so the cover
-            // shrinking can't unwrap the title and feed back into the layout.
             titleBlock(track, alignment: .leading)
                 .frame(
-                    width: max(0, min(width, Self.playerWidth) - 2 * Self.sideMargin - 72 - 14 - indent - headerButtonsReserve(lift: buttonsLift, coverSide: coverSide)),
+                    width: max(0, min(width, Self.playerWidth) - 2 * Self.sideMargin - PracticeLayout.maxCover - 14 - indent - headerButtonsReserve(lift: buttonsLift, coverSide: coverSide)),
                     alignment: .leading
                 )
                 .fixedSize(horizontal: false, vertical: true)

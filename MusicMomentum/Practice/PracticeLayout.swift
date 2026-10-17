@@ -59,8 +59,12 @@ nonisolated struct PracticeLayout: Equatable {
     struct Heights: Equatable {
         /// Title and artist beside the cover.
         var titleBlock: CGFloat
-        /// Title, artist and buttons above the wide layout's wheel.
-        var wideHeader: CGFloat
+        /// Title and artist beside the wide layout's cover, measured at the
+        /// width its largest cover leaves. Measuring the whole header fed the
+        /// cover back into the stage that sizes it: at some window heights a
+        /// smaller cover let the stage fall, the bigger cover pushed it back
+        /// up, and the screen re-laid out every frame without settling.
+        var wideTitleBlock: CGFloat
         var compactHeader: CGFloat
         var scrubber: CGFloat
         var pillRow: CGFloat
@@ -68,7 +72,7 @@ nonisolated struct PracticeLayout: Equatable {
         var captionRow: CGFloat
 
         static let standard = Heights(
-            titleBlock: 54, wideHeader: 110, compactHeader: 44,
+            titleBlock: 54, wideTitleBlock: 54, compactHeader: 44,
             scrubber: 58, pillRow: 36, captionRow: 52
         )
     }
@@ -97,6 +101,11 @@ nonisolated struct PracticeLayout: Equatable {
     /// A little over the tallest iPhone's screen once its bars are taken off.
     static let maxStackedHeight: CGFloat = 860
     static let wideHeaderGap: CGFloat = 20
+    /// Between the wide header's cover and title and its buttons.
+    static let wideHeaderSpacing: CGFloat = 12
+    /// The roomy stage's cover. Titles are measured beside it, so a cover
+    /// shrinking can't unwrap one and feed back into the layout.
+    static let maxCover: CGFloat = 72
     /// Without it, the timeline met the top of a landscape phone and the
     /// clips met its tab bar.
     static let widePlayerBreathing: CGFloat = 16
@@ -176,7 +185,7 @@ nonisolated struct PracticeLayout: Equatable {
         let playerSpace = min(size.height - verticalPadding, 2 * (size.height - 8 - middle))
             - roundingSlack - 2 * widePlayerBreathing - 2 * widePanelPadding
         let fits = { (layout: Self) in
-            heights.wideHeader + wideHeaderGap + layout.wheelDiameter <= available
+            layout.wideHeaderHeight(heights) + wideHeaderGap + layout.wheelDiameter <= available
                 && layout.playerHeight(heights) <= playerSpace
         }
 
@@ -274,6 +283,12 @@ nonisolated struct PracticeLayout: Equatable {
         return topMargin + Self.bottomMargin + header + 2 * wheelGap + wheelDiameter + playerHeight(heights)
     }
 
+    /// The wide header's cover or title, whichever is taller, over its
+    /// 44pt buttons.
+    func wideHeaderHeight(_ heights: Heights) -> CGFloat {
+        max(coverSide, heights.wideTitleBlock) + Self.wideHeaderSpacing + 44
+    }
+
     /// The transport sits midway between the scrubber's bar and the
     /// volume's, so the two bars read as a pair framing it. The time labels
     /// make the scrubber's side of the transport the taller.
@@ -295,7 +310,7 @@ nonisolated struct PracticeLayout: Equatable {
 extension PracticeLayout.Heights {
     /// The text heights at a Dynamic Type size, with the measured headers.
     @MainActor
-    init(dynamicTypeSize: DynamicTypeSize, titleBlock: CGFloat, wideHeader: CGFloat) {
+    init(dynamicTypeSize: DynamicTypeSize, titleBlock: CGFloat, wideTitleBlock: CGFloat) {
         let traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(dynamicTypeSize))
         let titleTraits = UITraitCollection(
             preferredContentSizeCategory: UIContentSizeCategory(min(dynamicTypeSize, PracticeLayout.headerTypeLimit))
@@ -306,7 +321,7 @@ extension PracticeLayout.Heights {
         let footnote = UIFontMetrics(forTextStyle: .footnote)
         self.init(
             titleBlock: titleBlock,
-            wideHeader: wideHeader,
+            wideTitleBlock: wideTitleBlock,
             compactHeader: max(44, line(.headline, titleTraits) + 2 + line(.subheadline, titleTraits)),
             // The labels tuck 2pt up under the bar's 44pt touch area.
             scrubber: 44 + line(.caption1) - 2,
