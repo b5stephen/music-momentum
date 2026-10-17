@@ -102,7 +102,6 @@ struct PlaybackScrubber: View {
                 .overlay(alignment: .leading) { thumb(width: width) }
                 .frame(height: Self.trackSlot)
             }
-            .overlay(alignment: .topLeading) { playhead(width: width) }
             .frame(maxHeight: .infinity)
             .contentShape(.rect)
             .gesture(dragGesture(width: width, laneBottom: laneBottom))
@@ -143,7 +142,9 @@ struct PlaybackScrubber: View {
     }
 
     /// White and shadowed whatever the screen's colours, as the system's is.
-    /// It stops at the track's ends; the playhead still marks the exact spot.
+    /// Centred on the position, as the lane's markers are, and stopped at the
+    /// track's ends. It replaced a hairline through the lane, which beside a
+    /// thumb this size looked like a stray mark.
     private func thumb(width: CGFloat) -> some View {
         let size = Self.thumbSize
         return Capsule()
@@ -154,20 +155,6 @@ struct PlaybackScrubber: View {
             .offset(x: min(max(0, width * fraction - size.width / 2), max(0, width - size.width)))
             .allowsHitTesting(false)
             .opacity(duration == nil ? 0 : 1)
-    }
-
-    /// A hairline through the lane down to the thumb, so you can see where
-    /// you are against a clip. Without markers it's hidden: crossing an empty
-    /// lane, it sat high above the track and the bar looked off-centre.
-    private func playhead(width: CGFloat) -> some View {
-        let overhang: CGFloat = 2
-        let thumbTop = Self.laneHeight + Self.laneGap + (Self.trackSlot - Self.thumbSize.height) / 2
-        return Capsule()
-            .fill(.primary.opacity(0.8))
-            .frame(width: 1.5, height: thumbTop + overhang)
-            .offset(x: min(max(0, width * fraction - 0.75), max(0, width - 1.5)), y: -overhang)
-            .allowsHitTesting(false)
-            .opacity(duration == nil || markers.isEmpty ? 0 : 1)
     }
 
     private func dragGesture(width: CGFloat, laneBottom: CGFloat) -> some Gesture {

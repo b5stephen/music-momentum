@@ -42,6 +42,13 @@ nonisolated struct PracticeLayout: Equatable {
     var topMargin: CGFloat
     var wheelGap: CGFloat
     var scrubberGap: CGFloat
+    /// Above the scrubber's touch area, whose lane sits only 8pt down it: on
+    /// the wide layout's panel the lane looked pressed against the top edge.
+    /// It closes with the gaps, so an iPhone SE keeps its full wheel.
+    var scrubberTop: CGFloat
+    /// Wide, how far the playback panel can reach below the columns' middle
+    /// before it's too close to a landscape phone's tab bar.
+    var widePanelReach: CGFloat = 0
     var transportGap: CGFloat
     /// Wide, the most height the playback column can spread to: clear of a
     /// landscape phone's tab bar, with `widePlayerBreathing` above and below.
@@ -180,8 +187,11 @@ nonisolated struct PracticeLayout: Equatable {
         }
         var with = layout(showsVolume: true)
         var without = layout(showsVolume: false)
+        let reach = size.height - 8 - middle - widePlayerBreathing - roundingSlack / 2
         with.widePlayerSpace = playerSpace
         without.widePlayerSpace = playerSpace
+        with.widePanelReach = reach
+        without.widePanelReach = reach
         var same = without
         same.showsVolume = true
         // At the floor nothing fits either way, and the two come out equal.
@@ -223,6 +233,7 @@ nonisolated struct PracticeLayout: Equatable {
         wheelGap =         at([40,     30,    14,   14,       14,    14])
         transportGap =     at([28,     24,    16,   16,       16,    16])
         scrubberGap =      at([16,     14,    10,   10,       10,    10])
+        scrubberTop =      at([8,      8,     0,    0,        0,     0])
         wheelDiameter =    at([roomy,  cap,   cap,  cap,      min(cap, 210), min(cap, 150)])
 
         self.isWide = isWide
@@ -272,7 +283,7 @@ nonisolated struct PracticeLayout: Equatable {
     }
 
     func playerHeight(_ heights: Heights) -> CGFloat {
-        heights.scrubber + scrubberGap
+        scrubberTop + heights.scrubber + scrubberGap
             + playSize + transportGap
             + (showsVolume ? volumeGap(heights) + Self.volumeRow : 0)
             + heights.pillRow

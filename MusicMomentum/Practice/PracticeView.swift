@@ -296,8 +296,10 @@ struct PracticeView: View {
     /// on the whole screen by dropping half of `tabBarInset`. The cover sits
     /// beside the title, as it does stacked: above the player it was the one
     /// thing the volume row could take height from, and shrank to 76pt.
+    ///
     private func loadedSongWide(_ track: Track, layout: PracticeLayout, size: CGSize, tabBarInset: CGFloat) -> some View {
-        HStack(spacing: 0) {
+        let panel = widePanel(layout)
+        return HStack(alignment: .top, spacing: 0) {
             VStack(spacing: PracticeLayout.wideHeaderGap) {
                 wideHeader(track, coverSide: layout.coverSide)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
@@ -312,18 +314,32 @@ struct PracticeView: View {
             }
             .frame(width: PracticeLayout.wideLeadingWidth(size.width))
 
-            player(layout, height: min(
-                wideHeaderHeight + PracticeLayout.wideHeaderGap + layout.wheelDiameter - 2 * PracticeLayout.widePanelPadding,
-                layout.widePlayerSpace
-            ))
+            player(layout, height: panel.height - 2 * PracticeLayout.widePanelPadding)
             .padding(.vertical, PracticeLayout.widePanelPadding)
             .modifier(PanelGlass())
+            .padding(.top, panel.top)
             .padding(.trailing, 16)
             .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: 960)
         .frame(maxHeight: .infinity)
         .offset(y: tabBarInset / 2)
+    }
+
+    /// The panel runs from the header's top towards the wheel's foot, as far
+    /// as a landscape phone's tab bar lets it. Only when that's too short for
+    /// its rows is it centred on the wheel's column instead: centred
+    /// whenever the tab bar held it short, it started below the title and
+    /// lined up with nothing.
+    private func widePanel(_ layout: PracticeLayout) -> (height: CGFloat, top: CGFloat) {
+        let column = wideHeaderHeight + PracticeLayout.wideHeaderGap + layout.wheelDiameter
+        let padding = 2 * PracticeLayout.widePanelPadding
+        let fromTitle = min(column, column / 2 + layout.widePanelReach)
+        if fromTitle - padding >= layout.playerHeight(layoutHeights) {
+            return (fromTitle, 0)
+        }
+        let centred = min(column - padding, layout.widePlayerSpace) + padding
+        return (centred, max(0, (column - centred) / 2))
     }
 
     /// Playback, then what's being practised: the clips sit under the loop
@@ -348,6 +364,7 @@ struct PracticeView: View {
                 onCommit: { controller.endScrub(at: $0) }
             )
             .padding(.horizontal, Self.sideMargin)
+            .padding(.top, layout.scrubberTop)
             .padding(.bottom, layout.scrubberGap)
 
             if spread { Self.spreadGap }
