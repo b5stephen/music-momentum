@@ -230,7 +230,7 @@ struct PracticeView: View {
     /// below it, but both still see them in their corner insets; dropping
     /// again left a band of empty glass above the header.
     private func controlsPlacement(_ proxy: GeometryProxy) -> ControlsPlacement {
-        let controls = proxy.containerCornerInsets.topLeading
+        let controls = proxy.windowControls
         let layout = PracticeLayout(size: proxy.size, heights: layoutHeights)
         guard !savedIsBeside, track != nil, proxy.safeAreaInsets.top < controls.height, !layout.isWide
         else { return ControlsPlacement() }

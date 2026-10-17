@@ -121,19 +121,6 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
         return clamped(liveWidth ?? savedWidth)
     }
 
-    /// The corner inset counts only when it's more than the window's own
-    /// rounded corner, which the card's corner already clears: an unfolded
-    /// iPhone Duo reports its 55pt screen corner there with no controls in
-    /// it, and the card sat 35pt low.
-    private nonisolated static func windowControlsHeight(_ proxy: GeometryProxy) -> CGFloat {
-        let inset = proxy.containerCornerInsets.topLeading
-        if #available(iOS 27.0, *), let radius = proxy.concentricCornerRadii?.topLeading,
-           inset.width <= radius, inset.height <= radius {
-            return 0
-        }
-        return inset.height
-    }
-
     private func clamped(_ width: CGFloat) -> CGFloat {
         let roomiest = min(Self.maxWidth, windowWidth - 2 * Self.margin - Self.minSavedWidth)
         return min(max(width, Self.minWidth), max(Self.minWidth, roomiest))
@@ -168,7 +155,7 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
                 // The status bar and home indicator are shorter than the
                 // margin, so the card can measure from the screen's edges.
                 .ignoresSafeArea(edges: .vertical)
-                .onGeometryChange(for: CGFloat.self, of: Self.windowControlsHeight) { windowControlsHeight = $0 }
+                .onGeometryChange(for: CGFloat.self) { $0.windowControls.height } action: { windowControlsHeight = $0 }
 
             // Bent, the crease sets the width.
             if crease == nil {
