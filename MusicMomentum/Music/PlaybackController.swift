@@ -36,7 +36,16 @@ final class PlaybackController {
     private var tickObservation: Task<Void, Never>?
 
     private(set) var playbackTime: TimeInterval = 0
-    var duration: TimeInterval? { selectedSong?.duration }
+    var duration: TimeInterval? {
+        #if DEBUG
+        if selectedSong == nil, let sampleDuration { return sampleDuration }
+        #endif
+        return selectedSong?.duration
+    }
+    #if DEBUG
+    /// The loaded `SampleSong`'s length, so it can be marked up.
+    var sampleDuration: TimeInterval?
+    #endif
     /// Suspends the ticker so the thumb doesn't fight the playhead.
     var isScrubbing = false
     /// A queue that has been prepared but never played drops any

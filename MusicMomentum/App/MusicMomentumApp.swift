@@ -11,6 +11,9 @@ import SwiftUI
 @main
 struct MusicMomentumApp: App {
     private let container: ModelContainer
+    #if DEBUG
+    @AppStorage(SampleSong.loadedKey) private var sampleSongID = SampleSong.tracks[0].id
+    #endif
 
     init() {
         #if DEBUG
@@ -25,7 +28,7 @@ struct MusicMomentumApp: App {
     var body: some Scene {
         WindowGroup {
             #if DEBUG
-            RootTabView(sampleTrack: SampleSong.isRequested ? SampleSong.track : nil)
+            RootTabView(sampleTrack: SampleSong.isRequested ? SampleSong.track(id: sampleSongID) : nil)
             #else
             RootTabView()
             #endif

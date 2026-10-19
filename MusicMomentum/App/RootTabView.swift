@@ -38,6 +38,13 @@ struct RootTabView: View {
         }
         .onGeometryChange(for: Bool.self) { Self.floats($0.size, insets: $0.safeAreaInsets) } action: { floats = $0 }
         .task { controller.configure(modelContext: modelContext) }
+        #if DEBUG
+        .onChange(of: sampleTrack?.id, initial: true) { _, id in
+            guard SampleSong.isRequested, let id, let duration = SampleSong.duration(of: id) else { return }
+            controller.sampleDuration = duration
+            controller.playbackRate = SampleSong.speed(of: id) ?? 1.0
+        }
+        #endif
         // Duplicates and another device's library artwork only ever arrive by
         // sync, so tidying on each import is enough.
         .task {

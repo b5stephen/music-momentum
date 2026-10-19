@@ -303,7 +303,7 @@ struct SavedSongsView: View {
     /// The song has to reach the player first (the editor plays the passage),
     /// but the tab stays put.
     private func openEditor(_ song: SavedSong, marker: SongMarker? = nil) {
-        guard controller.selectedSong?.id.rawValue != song.songID else {
+        guard (controller.selectedSong?.id.rawValue ?? previewCurrentID) != song.songID else {
             present(song, marker: marker)
             return
         }

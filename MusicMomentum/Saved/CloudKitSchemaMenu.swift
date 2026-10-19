@@ -12,6 +12,7 @@ struct CloudKitSchemaMenu: View {
     @State private var running = false
     @State private var outcome: Outcome?
     @State private var sampleSongRelaunch = false
+    @AppStorage(SampleSong.loadedKey) private var loadedSample = SampleSong.tracks[0].id
 
     private struct Outcome: Identifiable {
         let id = UUID()
@@ -24,10 +25,13 @@ struct CloudKitSchemaMenu: View {
             Button("Validate CloudKit Schema", systemImage: "checkmark.icloud") { run(dryRun: true) }
             Button("Push CloudKit Schema (Dev)", systemImage: "icloud.and.arrow.up") { run(dryRun: false) }
             Section {
-                Toggle("Sample Song", systemImage: "music.note", isOn: .init(
-                    get: { SampleSong.isRequested },
-                    set: { _ in sampleSongRelaunch = true }
-                ))
+                Picker("Sample Song", systemImage: "music.note", selection: sampleSelection) {
+                    Text("Your Library").tag("")
+                    ForEach(SampleSong.tracks, id: \.id) { track in
+                        Text(track.title).tag(track.id)
+                    }
+                }
+                .pickerStyle(.menu)
             }
         } label: {
             if running {
@@ -40,7 +44,7 @@ struct CloudKitSchemaMenu: View {
         .alert(item: $outcome) { outcome in
             Alert(title: Text(outcome.title), message: Text(outcome.message))
         }
-        .alert(SampleSong.isRequested ? "Use your library?" : "Use the sample song?", isPresented: $sampleSongRelaunch) {
+        .alert(SampleSong.isRequested ? "Use your library?" : "Use the sample songs?", isPresented: $sampleSongRelaunch) {
             Button("Quit") {
                 SampleSong.setRequested(!SampleSong.isRequested)
                 exit(0)
@@ -49,6 +53,17 @@ struct CloudKitSchemaMenu: View {
         } message: {
             Text("The app quits to switch stores. Open it again from the Home Screen.")
         }
+    }
+
+    /// `""` is the library. Only going in or out of the samples relaunches.
+    private var sampleSelection: Binding<String> {
+        .init(
+            get: { SampleSong.isRequested ? loadedSample : "" },
+            set: { id in
+                if !id.isEmpty { loadedSample = id }
+                if id.isEmpty == SampleSong.isRequested { sampleSongRelaunch = true }
+            }
+        )
     }
 
     private func run(dryRun: Bool) {

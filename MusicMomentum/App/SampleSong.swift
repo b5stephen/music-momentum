@@ -7,13 +7,16 @@
 import Foundation
 import SwiftData
 
-/// Loads the previews' song, plus a few more to fill Saved, so the app can be
-/// resized and screenshotted in a simulator, which can't play Apple Music. It
-/// runs on an in-memory store so the samples never sync to iCloud, which is
-/// why switching it needs a relaunch. Switched from the debug menu, or for one launch with the
-/// `-SampleSong YES` argument.
+/// Loads a few songs so the app can be resized and screenshotted in a
+/// simulator, which can't play Apple Music. They're made up, never real
+/// ones, because they end up in App Store screenshots, and each has a length
+/// so marking works. It runs on an in-memory store so the samples never sync
+/// to iCloud, which is why switching it on or off needs a relaunch; which
+/// sample is loaded switches live. Switched from the debug menu, or for one
+/// launch with the `-SampleSong YES` argument.
 enum SampleSong {
     private static let key = "SampleSong"
+    static let loadedKey = "SampleSongLoaded"
 
     static let isRequested = UserDefaults.standard.bool(forKey: key)
 
@@ -21,40 +24,84 @@ enum SampleSong {
         UserDefaults.standard.set(requested, forKey: key)
     }
 
-    static let track = PracticeView.Track(
-        id: "1", title: "Little Wing", artistName: "Jimi Hendrix",
-        palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18))
-    )
+    private struct Sample {
+        let id: String
+        let title: String
+        let artistName: String
+        let speed: Double
+        let duration: TimeInterval
+        let cover: OKLCH
+        let markers: [(name: String, start: TimeInterval, end: TimeInterval?)]
+    }
 
-    private static let others: [(String, String, String, Double, [(String, TimeInterval, TimeInterval?)])] = [
-        ("2", "Blackbird", "The Beatles", 0.75, [("Intro", 0, 18), ("Bridge", 82, 101)]),
-        ("3", "Nothing Else Matters", "Metallica", 1.0, [("Intro", 0, 54)]),
-        ("4", "Wonderful Tonight", "Eric Clapton", 0.85, [("Riff", 0, 16), ("Outro", 196, nil)]),
-        ("5", "Hotel California", "Eagles", 0.5, [("Verse", 52, 90), ("Solo", 260, 340), ("Outro Duet", 340, 380)]),
-        ("6", "Under the Bridge", "Red Hot Chili Peppers", 0.7, []),
+    /// Most recently changed first, as Saved lists them.
+    private static let samples = [
+        Sample(
+            id: "1", title: "Paper Lanterns", artistName: "The Quiet Harbors", speed: 0.6, duration: 145,
+            cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18),
+            markers: [("Intro", 0, 22), ("Solo", 96, 112), ("Verse 2", 58, nil)]
+        ),
+        Sample(
+            id: "2", title: "Copper Sky", artistName: "Mara Lindqvist", speed: 0.75, duration: 138,
+            cover: OKLCH(red: 0.16, green: 0.24, blue: 0.42),
+            markers: [("Intro", 0, 18), ("Bridge", 82, 101)]
+        ),
+        Sample(
+            id: "3", title: "Slow Tide Waltz", artistName: "Juniper & the Owls", speed: 1.0, duration: 388,
+            cover: OKLCH(red: 0.15, green: 0.16, blue: 0.18),
+            markers: [("Intro", 0, 54)]
+        ),
+        Sample(
+            id: "4", title: "Northbound Lights", artistName: "Theo Calloway", speed: 0.85, duration: 222,
+            cover: OKLCH(red: 0.72, green: 0.58, blue: 0.40),
+            markers: [("Riff", 0, 16), ("Outro", 196, nil)]
+        ),
+        Sample(
+            id: "5", title: "Dust on the Fretboard", artistName: "Ramona Vale", speed: 0.5, duration: 391,
+            cover: OKLCH(red: 0.85, green: 0.52, blue: 0.22),
+            markers: [("Verse", 52, 90), ("Solo", 260, 340), ("Outro Duet", 340, 380)]
+        ),
+        Sample(
+            id: "6", title: "Half Moon Motel", artistName: "The Velvet Arcade", speed: 0.7, duration: 264,
+            cover: OKLCH(red: 0.20, green: 0.45, blue: 0.48),
+            markers: []
+        ),
     ]
+
+    static let tracks = samples.map {
+        PracticeView.Track(
+            id: $0.id, title: $0.title, artistName: $0.artistName,
+            palette: ArtworkPalette(cover: $0.cover)
+        )
+    }
+
+    /// The loaded sample, falling back to the first for an unknown ID.
+    static func track(id: String) -> PracticeView.Track {
+        tracks.first { $0.id == id } ?? tracks[0]
+    }
+
+    static func duration(of id: String) -> TimeInterval? {
+        samples.first { $0.id == id }?.duration
+    }
+
+    static func speed(of id: String) -> Double? {
+        samples.first { $0.id == id }?.speed
+    }
 
     @MainActor
     static func container() throws -> ModelContainer {
         let container = try AppSchema.inMemoryContainer()
         let context = container.mainContext
-        // Saved before Little Wing, so it tops the most-recently-changed list.
-        for (id, title, artist, speed, markers) in others {
+        // Saved oldest first, so the list comes out in `samples` order.
+        for sample in samples.reversed() {
             let song = SavedSong.save(
-                songID: id, title: title, artistName: artist,
-                artworkData: nil, speed: speed, in: context
+                songID: sample.id, title: sample.title, artistName: sample.artistName,
+                artworkData: nil, speed: sample.speed, in: context
             )
-            for (name, start, end) in markers {
-                SongMarker.add(to: song, name: name, startTime: start, endTime: end, in: context)
+            for marker in sample.markers {
+                SongMarker.add(to: song, name: marker.name, startTime: marker.start, endTime: marker.end, in: context)
             }
         }
-        let song = SavedSong.save(
-            songID: track.id, title: track.title, artistName: track.artistName,
-            artworkData: nil, speed: 0.6, in: context
-        )
-        SongMarker.add(to: song, name: "Intro", startTime: 0, endTime: 22, in: context)
-        SongMarker.add(to: song, name: "Solo", startTime: 96, endTime: 112, in: context)
-        SongMarker.add(to: song, name: "Verse 2", startTime: 150, endTime: nil, in: context)
         return container
     }
 }
