@@ -34,6 +34,10 @@ struct SavedSongsView: View {
     @State private var loadingID: String?
     @State private var lookupError: String?
     @State private var marking: Marking?
+    #if DEBUG
+    /// Hidden while the samples are loaded, since they're for screenshots.
+    @State private var showsDebugMenu = !SampleSong.isRequested
+    #endif
 
     private struct Marking: Identifiable {
         let song: SavedSong
@@ -177,11 +181,19 @@ struct SavedSongsView: View {
                     .disabled(!controller.canUseMusic)
                 }
                 #if DEBUG
-                ToolbarItem(placement: .topBarLeading) {
-                    CloudKitSchemaMenu()
+                if showsDebugMenu {
+                    ToolbarSpacer(.fixed, placement: .primaryAction)
+                    ToolbarItem(placement: .primaryAction) {
+                        CloudKitSchemaMenu()
+                    }
                 }
                 #endif
             }
+            #if DEBUG
+            .onShake {
+                if SampleSong.isRequested { showsDebugMenu.toggle() }
+            }
+            #endif
             .sheet(isPresented: $showPicker) {
                 SongPickerView(onSelect: add)
             }
