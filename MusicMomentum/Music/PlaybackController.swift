@@ -241,7 +241,12 @@ final class PlaybackController {
 
     /// Undetermined still counts: tapping the button is what brings the prompt up.
     var canUseMusic: Bool {
-        authorizationStatus != .denied && authorizationStatus != .restricted
+        #if DEBUG
+        // The samples are for screenshots, where a greyed-out Add and Change
+        // Song look broken; the simulator has no Apple Music to allow.
+        if sampleDuration != nil { return true }
+        #endif
+        return authorizationStatus != .denied && authorizationStatus != .restricted
     }
 
     // MARK: - Playback
