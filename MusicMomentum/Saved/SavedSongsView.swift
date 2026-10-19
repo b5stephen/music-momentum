@@ -490,6 +490,7 @@ private struct SavedSongRow: View {
                 .clipShape(.rect(cornerRadius: 6))
         } else {
             placeholder { Image(systemName: "music.note").foregroundStyle(.secondary) }
+                .sampleCover(songID: song.songID, cornerRadius: 6)
         }
     }
 

@@ -806,7 +806,7 @@ struct PracticeView: View {
     private func wideHeader(_ track: Track, coverSide: CGFloat, width: CGFloat) -> some View {
         VStack(spacing: PracticeLayout.wideHeaderSpacing) {
             HStack(spacing: 14) {
-                cover(track.artwork, side: coverSide, radius: coverSide / 4)
+                cover(track, side: coverSide, radius: coverSide / 4)
                 titleBlock(track, alignment: .leading)
                     .lineLimit(2)
             }
@@ -827,7 +827,7 @@ struct PracticeView: View {
 
     private func nowPlaying(_ track: Track, coverSide: CGFloat, width: CGFloat, indent: CGFloat, buttonsLift: CGFloat) -> some View {
         HStack(spacing: 14) {
-            cover(track.artwork, side: coverSide, radius: coverSide / 4)
+            cover(track, side: coverSide, radius: coverSide / 4)
             titleBlock(track, alignment: .leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -856,7 +856,7 @@ struct PracticeView: View {
 
     private func compactNowPlaying(_ track: Track, coverSide: CGFloat, indent: CGFloat, buttonsLift: CGFloat) -> some View {
         HStack(spacing: 12) {
-            cover(track.artwork, side: coverSide)
+            cover(track, side: coverSide)
 
             compactTitleBlock(track)
                 .lineLimit(1)
@@ -920,9 +920,9 @@ struct PracticeView: View {
     }
 
     @ViewBuilder
-    private func cover(_ artwork: Artwork?, side: CGFloat, radius: CGFloat? = nil) -> some View {
+    private func cover(_ track: Track, side: CGFloat, radius: CGFloat? = nil) -> some View {
         let radius = radius ?? side / 8
-        if let artwork {
+        if let artwork = track.artwork {
             ArtworkImage(artwork, width: side, height: side)
                 .clipShape(.rect(cornerRadius: radius))
                 .accessibilityHidden(true)
@@ -931,6 +931,7 @@ struct PracticeView: View {
                 .fill(.quaternary)
                 .frame(width: side, height: side)
                 .overlay { Image(systemName: "music.note").foregroundStyle(.secondary) }
+                .sampleCover(songID: track.id, cornerRadius: radius)
                 .accessibilityHidden(true)
         }
     }
