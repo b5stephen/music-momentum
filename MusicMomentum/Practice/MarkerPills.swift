@@ -6,8 +6,9 @@
 import SwiftData
 import SwiftUI
 
-/// A song's markers as a row of pills. Kind is carried by the glyph alone
-/// (dot for a point, span for a clip); the fill means only state.
+/// A song's markers as a row of pills, each standing for the section it
+/// starts; the fill means only state. Expects the markers in time order,
+/// which is what numbers the unnamed ones.
 ///
 /// Everything past the tap is optional, since the saved list has no loop.
 struct MarkerPills: View {
@@ -20,8 +21,8 @@ struct MarkerPills: View {
     /// Saved draws idle pills as a hairline instead of glass.
     var outlinesIdle = false
     var isLooping: (SongMarker) -> Bool = { _ in false }
-    /// With the loop on, a clip tap changes what's looping, so the clips that
-    /// could join it say so.
+    /// With the loop on, a pill tap changes what's looping, so the pills that
+    /// could take it over say so.
     var isLoopOn = false
     var onTap: (SongMarker) -> Void
     var onPlayLoop: ((SongMarker) -> Void)?
@@ -86,7 +87,7 @@ struct MarkerPills: View {
             .buttonStyle(.plain)
             .accessibilityLabel(accessibilityLabel(marker, state: state(of: marker)))
             .accessibilityValue(marker.timeLabel)
-            .ifLet(marker.isClip ? onPlayLoop : nil) { view, playLoop in
+            .ifLet(onPlayLoop) { view, playLoop in
                 view.accessibilityAction(named: "Play on loop") { playLoop(marker) }
             }
             .ifLet(onJump) { view, jump in
@@ -120,7 +121,7 @@ struct MarkerPills: View {
     }
 
     private func hasMenu(for marker: SongMarker) -> Bool {
-        (marker.isClip && onPlayLoop != nil)
+        onPlayLoop != nil
             || onJump != nil
             || onEdit != nil
             || onDelete != nil
@@ -130,16 +131,12 @@ struct MarkerPills: View {
         let state = state(of: marker)
 
         return HStack(spacing: 5) {
-            glyph(marker)
+            Circle()
+                .frame(width: dotSize, height: dotSize)
                 .opacity(state == .idle ? 0.55 : 0.8)
-            Text(marker.name)
+            Text(displayName(marker))
                 .font(.footnote.weight(.medium))
                 .lineLimit(1)
-            if let length = clipLength(marker) {
-                Text(length)
-                    .font(.footnote.monospacedDigit())
-                    .opacity(0.6)
-            }
         }
         .padding(.horizontal, 11)
         .padding(.vertical, 7)
@@ -158,7 +155,7 @@ struct MarkerPills: View {
 
     @ViewBuilder
     private func menuItems(_ marker: SongMarker) -> some View {
-        if let onPlayLoop, marker.isClip {
+        if let onPlayLoop {
             Button { onPlayLoop(marker) } label: { Label("Play on Loop", systemImage: "repeat") }
         }
         if let onJump {
@@ -172,23 +169,14 @@ struct MarkerPills: View {
         }
     }
 
-    @ViewBuilder
-    private func glyph(_ marker: SongMarker) -> some View {
-        if marker.isClip {
-            SpanGlyph()
-        } else {
-            Circle().frame(width: dotSize, height: dotSize)
-        }
-    }
-
-    private func clipLength(_ marker: SongMarker) -> String? {
-        guard let end = marker.endTime else { return nil }
-        return PlaybackScrubber.lengthLabel(max(0, end - marker.startTime))
+    private func displayName(_ marker: SongMarker) -> String {
+        let index = markers.firstIndex { $0 === marker } ?? 0
+        return SongSection<PersistentIdentifier>.markerName(marker.name, index: index)
     }
 
     private func state(of marker: SongMarker) -> PillState {
         if isLooping(marker) { return .looping }
-        return isLoopOn && marker.isClip ? .joinable : .idle
+        return isLoopOn ? .joinable : .idle
     }
 
     /// Glass, as Practice's other buttons are: grey beside them read as a
@@ -220,11 +208,11 @@ struct MarkerPills: View {
     }
 
     private func accessibilityLabel(_ marker: SongMarker, state: PillState) -> String {
-        let kind = marker.isClip ? "clip" : "marker"
+        let name = displayName(marker)
         switch state {
-        case .idle: return "\(marker.name), \(kind)"
-        case .joinable: return "\(marker.name), \(kind), not looping"
-        case .looping: return "\(marker.name), \(kind), looping"
+        case .idle: return "\(name), marker"
+        case .joinable: return "\(name), marker, not looping"
+        case .looping: return "\(name), marker, looping"
         }
     }
 }
@@ -240,10 +228,11 @@ private extension View {
     let container = try! AppSchema.inMemoryContainer()
     let song = SavedSong(songID: "1", speed: 0.8, title: "Little Wing", artistName: "Jimi Hendrix")
     container.mainContext.insert(song)
-    SongMarker.add(to: song, name: "Intro", startTime: 4, endTime: nil, in: container.mainContext)
-    SongMarker.add(to: song, name: "Verse riff", startTime: 18, endTime: 31, in: container.mainContext)
-    SongMarker.add(to: song, name: "Solo", startTime: 96, endTime: 128, in: container.mainContext)
-    SongMarker.add(to: song, name: "Outro", startTime: 180, endTime: nil, in: container.mainContext)
+    SongMarker.add(to: song, name: "Intro", at: 4, in: container.mainContext)
+    SongMarker.add(to: song, name: "Verse riff", at: 18, in: container.mainContext)
+    SongMarker.add(to: song, at: 31, in: container.mainContext)
+    SongMarker.add(to: song, name: "Solo", at: 96, in: container.mainContext)
+    SongMarker.add(to: song, name: "Outro", at: 180, in: container.mainContext)
 
     return VStack(spacing: 10) {
         PlaybackScrubber(
@@ -254,8 +243,7 @@ private extension View {
                     id: $0.persistentModelID,
                     name: $0.name,
                     start: $0.startTime,
-                    end: $0.endTime,
-                    isLooping: $0.name == "Solo"
+                    end: nil
                 )
             }
         ) { _ in }

@@ -8,6 +8,8 @@ import SwiftData
 import Testing
 @testable import MusicMomentum
 
+/// Every mutator here moves a section boundary, so a wrong one misplaces
+/// part of the song the user marked up.
 @MainActor
 @Suite("Song markers")
 struct SongMarkerTests {
@@ -26,65 +28,145 @@ struct SongMarkerTests {
         try context.fetch(FetchDescriptor<SongMarker>())
     }
 
-    @Test("A marker with only a start is a point; with an end it's a clip")
-    func pointVersusClip() {
-        let point = SongMarker.add(to: song, name: "Solo", startTime: 61, endTime: nil, in: context)
-        let clip = SongMarker.add(to: song, name: "Riff", startTime: 10, endTime: 18.5, in: context)
-        #expect(!point.isClip)
-        #expect(clip.isClip)
-        #expect(point.timeLabel == "1:01")
-        #expect(clip.timeLabel == "0:10 – 0:18")
+    private var times: [TimeInterval] { song.sortedMarkers.map(\.startTime) }
+
+    @Test("Adding trims the name, keeps a blank one blank and clamps at zero")
+    func add() {
+        let named = SongMarker.add(to: song, name: "  Solo ", at: 61, in: context)
+        let unnamed = SongMarker.add(to: song, name: "  ", at: -2, in: context)
+        #expect(named.name == "Solo")
+        #expect(named.timeLabel == "1:01")
+        #expect(unnamed.name == "")
+        #expect(unnamed.startTime == 0)
+        #expect(unnamed.endTime == nil)
     }
 
-    @Test("Blank names get a default that counts markers of the same kind")
-    func defaultNames() {
-        let a = SongMarker.add(to: song, name: "", startTime: 1, endTime: nil, in: context)
-        let b = SongMarker.add(to: song, name: "  ", startTime: 2, endTime: nil, in: context)
-        let c = SongMarker.add(to: song, name: "", startTime: 3, endTime: 8, in: context)
-        #expect(a.name == "Marker 1")
-        #expect(b.name == "Marker 2")
-        #expect(c.name == "Clip 1")
+    @Test("Unnamed markers display as Marker N, counted in time order")
+    func displayNames() {
+        let late = SongMarker.add(to: song, at: 90, in: context)
+        let named = SongMarker.add(to: song, name: "Verse", at: 40, in: context)
+        let early = SongMarker.add(to: song, at: 5, in: context)
+        #expect(song.displayName(of: early) == "Marker 1")
+        #expect(song.displayName(of: named) == "Verse")
+        #expect(song.displayName(of: late) == "Marker 3")
     }
 
-    @Test("An end too close to the start is dropped rather than making a zero-length clip")
-    func rejectsTinyClip() {
-        let marker = SongMarker.add(to: song, name: "x", startTime: 10, endTime: 10.2, in: context)
-        #expect(marker.endTime == nil)
-        marker.set(name: "x", start: 10, end: 9)
-        #expect(marker.endTime == nil)
-        marker.set(name: "x", start: 10, end: 10.5)
-        #expect(marker.endTime == 10.5)
-    }
-
-    @Test("Clearing the end turns a clip back into a point")
-    func clearEnd() {
-        let marker = SongMarker.add(to: song, name: "Riff", startTime: 10, endTime: 18, in: context)
-        marker.clearEnd(in: context)
-        #expect(!marker.isClip)
-        #expect(marker.startTime == 10)
-    }
-
-    @Test("Markers sort by where they fall in the track")
-    func sortedByStart() {
-        SongMarker.add(to: song, name: "C", startTime: 90, endTime: nil, in: context)
-        SongMarker.add(to: song, name: "A", startTime: 5, endTime: nil, in: context)
-        SongMarker.add(to: song, name: "B", startTime: 40, endTime: 50, in: context)
+    @Test("Markers sort by time, then by age")
+    func sortedByTime() {
+        SongMarker.add(to: song, name: "C", at: 90, in: context)
+        SongMarker.add(to: song, name: "A", at: 5, in: context)
+        SongMarker.add(to: song, name: "B", at: 40, in: context)
         #expect(song.sortedMarkers.map(\.name) == ["A", "B", "C"])
     }
 
-    @Test("Deleting a marker leaves the others alone")
-    func deleteOne() throws {
-        let keep = SongMarker.add(to: song, name: "Keep", startTime: 1, endTime: nil, in: context)
-        let drop = SongMarker.add(to: song, name: "Drop", startTime: 2, endTime: nil, in: context)
-        SongMarker.delete(drop, in: context)
-        let remaining = try allMarkers()
-        #expect(remaining.count == 1)
-        #expect(remaining[0].persistentModelID == keep.persistentModelID)
+    @Test("Adding near an existing marker reuses it instead of making a sliver")
+    func addSnaps() throws {
+        let chorus = SongMarker.add(to: song, name: "Chorus", at: 60, in: context)
+        let snapped = SongMarker.addSnapping(to: song, name: "Ignored", at: 60.4, in: context)
+        #expect(snapped.marker === chorus)
+        #expect(!snapped.created)
+        #expect(chorus.name == "Chorus")
+        #expect(chorus.startTime == 60)
+
+        let fresh = SongMarker.addSnapping(to: song, name: "Bridge", at: 60.5, in: context)
+        #expect(fresh.created)
+        #expect(fresh.marker.name == "Bridge")
+        #expect(try allMarkers().count == 2)
+    }
+
+    @Test("Setting a marker may move it past its neighbours")
+    func setMovesFreely() {
+        let a = SongMarker.add(to: song, name: "A", at: 10, in: context)
+        SongMarker.add(to: song, name: "B", at: 20, in: context)
+        a.set(name: "A", time: 30, in: context)
+        #expect(song.sortedMarkers.map(\.name) == ["B", "A"])
+    }
+
+    @Test("Nudging moves the boundary both sections share")
+    func nudgeMovesSharedBoundary() throws {
+        SongMarker.add(to: song, name: "Chorus", at: 60, in: context)
+        let verse2 = SongMarker.add(to: song, name: "Verse 2", at: 90, in: context)
+        verse2.nudge(by: 1, in: context)
+        let sections = song.sections(duration: 200)
+        let chorus = try #require(sections.first { $0.label == "Chorus" })
+        let next = try #require(sections.first { $0.label == "Verse 2" })
+        #expect(chorus.end == 91)
+        #expect(next.start == 91)
+        #expect(times == [60, 91])
+    }
+
+    @Test("A nudge stops short of the neighbouring marker and of zero")
+    func nudgeClamps() {
+        let first = SongMarker.add(to: song, at: 0.5, in: context)
+        let second = SongMarker.add(to: song, at: 10, in: context)
+        SongMarker.add(to: song, at: 11, in: context)
+        first.nudge(by: -1, in: context)
+        #expect(first.startTime == 0)
+        second.nudge(by: 5, in: context)
+        #expect(abs(second.startTime - (11 - MarkerPlacement.minimumNudgedSection)) < 1e-9)
+        // Already at the limit: a further nudge leaves it be.
+        let before = second.startTime
+        second.nudge(by: 1, in: context)
+        #expect(second.startTime == before)
+        #expect(song.sortedMarkers.map(\.startTime).count == 3)
+    }
+
+    @Test("Splitting adds a boundary instead of moving the shared one")
+    func split() throws {
+        SongMarker.add(to: song, name: "Chorus", at: 60, in: context)
+        let verse2 = SongMarker.add(to: song, name: "Verse 2", at: 90, in: context)
+        let gap = SongMarker.split(song, at: 85, in: context)
+        #expect(verse2.startTime == 90)
+        #expect(gap.name == "")
+        let sections = song.sections(duration: 200)
+        #expect(sections.map(\.start) == [0, 60, 85, 90])
+        #expect(sections.map(\.label) == [nil, "Chorus", nil, "Verse 2"])
+    }
+
+    @Test("Splitting doesn't snap, but never stacks two markers at one time")
+    func splitDoesNotSnap() throws {
+        let chorus = SongMarker.add(to: song, name: "Chorus", at: 60, in: context)
+        let near = SongMarker.split(song, at: 60.3, in: context)
+        #expect(near !== chorus)
+        let same = SongMarker.split(song, at: 60, in: context)
+        #expect(same === chorus)
+        #expect(try allMarkers().count == 2)
+    }
+
+    @Test("Deleting a marker merges its section into the previous one, and can be undone")
+    func deleteMerges() throws {
+        SongMarker.add(to: song, name: "Verse", at: 20, in: context)
+        let chorus = SongMarker.add(to: song, name: "Chorus", at: 60, in: context)
+        SongMarker.add(to: song, name: "Outro", at: 120, in: context)
+
+        let removed = SongMarker.delete(chorus, in: context)
+        #expect(removed == .init(name: "Chorus", time: 60))
+        let merged = song.sections(duration: 200)
+        #expect(merged.map(\.start) == [0, 20, 120])
+        #expect(merged[1].label == "Verse")
+        #expect(merged[1].end == 120)
+
+        SongMarker.restore(removed, to: song, in: context)
+        #expect(song.sortedMarkers.map(\.name) == ["Verse", "Chorus", "Outro"])
+        #expect(times == [20, 60, 120])
+    }
+
+    @Test("Merging with the next deletes the next marker")
+    func mergeWithNext() throws {
+        let verse = SongMarker.add(to: song, name: "Verse", at: 20, in: context)
+        SongMarker.add(to: song, name: "Chorus", at: 60, in: context)
+        let outro = SongMarker.add(to: song, name: "Outro", at: 120, in: context)
+
+        #expect(SongMarker.mergeWithNext(verse, in: context) == .init(name: "Chorus", time: 60))
+        #expect(song.sortedMarkers.map(\.name) == ["Verse", "Outro"])
+        #expect(song.sections(duration: 200)[1].end == 120)
+        #expect(SongMarker.mergeWithNext(outro, in: context) == nil)
+        #expect(try allMarkers().count == 2)
     }
 
     @Test("Deleting a song takes its markers with it")
     func cascadeDelete() throws {
-        SongMarker.add(to: song, name: "Riff", startTime: 10, endTime: 18, in: context)
+        SongMarker.add(to: song, name: "Riff", at: 10, in: context)
         context.delete(song)
         try context.save()
         #expect(try allMarkers().isEmpty)
@@ -104,27 +186,20 @@ struct SongMarkerTests {
         #expect(PreciseTime.parse("-5") == nil)
     }
 
-    @Test("Tick spacing keeps to a handful of labels at every zoom")
-    func tickInterval() {
-        #expect(MarkerRangeEditor.tickInterval(for: 5) == 1)
-        #expect(MarkerRangeEditor.tickInterval(for: 30) == 5)
-        #expect(MarkerRangeEditor.tickInterval(for: 245) == 60)
-    }
-
     @Test("Every marker change counts as an edit to its song")
     func markerChangesTouchSong() {
         let when = Date.now.addingTimeInterval(-300)
 
         song.lastPracticed = when
-        let marker = SongMarker.add(to: song, name: "Solo", startTime: 60, endTime: 90, in: context)
+        let marker = SongMarker.add(to: song, name: "Solo", at: 60, in: context)
         #expect(song.lastPracticed > when)
 
         song.lastPracticed = when
-        marker.set(name: "Solo", start: 62, end: 90)
+        marker.set(name: "Solo", time: 62, in: context)
         #expect(song.lastPracticed > when)
 
         song.lastPracticed = when
-        marker.clearEnd(in: context)
+        marker.nudge(by: 0.1, in: context)
         #expect(song.lastPracticed > when)
 
         song.lastPracticed = when

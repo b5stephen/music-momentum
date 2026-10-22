@@ -179,7 +179,21 @@ extension SavedSong {
 }
 
 extension SavedSong {
+    /// Ties go to the older marker, so the order (and "Marker N") holds still.
     var sortedMarkers: [SongMarker] {
-        (markers ?? []).sorted { $0.startTime < $1.startTime }
+        (markers ?? []).sorted { ($0.startTime, $0.createdAt) < ($1.startTime, $1.createdAt) }
+    }
+
+    func sections(duration: TimeInterval) -> [SongSection<PersistentIdentifier>] {
+        SongSection.derive(
+            from: sortedMarkers.map { (id: $0.persistentModelID, time: $0.startTime, name: $0.name) },
+            duration: duration
+        )
+    }
+
+    /// The marker's name, or "Marker N" when it has none.
+    func displayName(of marker: SongMarker) -> String {
+        let index = sortedMarkers.firstIndex { $0 === marker } ?? 0
+        return SongSection<PersistentIdentifier>.markerName(marker.name, index: index)
     }
 }

@@ -6,82 +6,158 @@
 import Foundation
 import SwiftData
 
-/// A point (start only) or a clip (start and end) in a saved song.
+/// A point in a saved song. Sections run from one marker to the next and
+/// are derived, never stored; see `SongSection`.
 @Model
 final class SongMarker {
+    /// Empty when the user didn't name it; shown as "Marker N".
     var name: String = ""
+    /// The marker's time. Named for when markers had an end too; renaming it
+    /// would rename the CloudKit field installed builds still sync.
     var startTime: TimeInterval = 0
-    /// `nil` for a point. Always past `startTime` when set — `set(name:start:end:)` keeps that true.
+    /// Clips' ends, from before markers were points. Kept only so the
+    /// CloudKit field survives: `ClipMigration` turns each into a marker of
+    /// its own and clears it, and nothing sets it again.
     var endTime: TimeInterval?
     var createdAt: Date = Date.now
     var song: SavedSong?
 
-    init(name: String, startTime: TimeInterval, endTime: TimeInterval? = nil, song: SavedSong? = nil) {
+    init(name: String, startTime: TimeInterval, song: SavedSong? = nil) {
         self.name = name
         self.startTime = startTime
-        self.endTime = endTime
         self.song = song
     }
 
-    var isClip: Bool { endTime != nil }
-
     var timeLabel: String {
-        let start = PlaybackScrubber.timeLabel(startTime)
-        guard let endTime else { return start }
-        return "\(start) – \(PlaybackScrubber.timeLabel(endTime))"
+        PlaybackScrubber.timeLabel(startTime)
+    }
+
+    /// The next marker in time order, whose section follows this one's.
+    var next: SongMarker? {
+        guard let markers = song?.sortedMarkers,
+              let index = markers.firstIndex(where: { $0 === self }),
+              index + 1 < markers.count
+        else { return nil }
+        return markers[index + 1]
+    }
+
+    private var previous: SongMarker? {
+        guard let markers = song?.sortedMarkers,
+              let index = markers.firstIndex(where: { $0 === self }),
+              index > 0
+        else { return nil }
+        return markers[index - 1]
     }
 }
 
 // MARK: - Storage
 
 extension SongMarker {
-    /// Any tighter and the player can't reliably land inside the clip between ticker polls.
-    static let minimumClipLength: TimeInterval = 0.5
+    /// What a delete took away, enough to put the marker back for Undo.
+    struct Removed: Equatable {
+        let name: String
+        let time: TimeInterval
+    }
 
     @discardableResult
     static func add(
         to song: SavedSong,
-        name: String,
-        startTime: TimeInterval,
-        endTime: TimeInterval?,
+        name: String = "",
+        at time: TimeInterval,
         in context: ModelContext
     ) -> SongMarker {
         let marker = SongMarker(name: "", startTime: 0, song: song)
         context.insert(marker)
-        marker.set(name: name, start: startTime, end: endTime)
+        marker.apply(name: name, time: time)
         try? context.save()
         return marker
     }
 
-    /// Clamps the start at zero, drops an end that doesn't leave room for a clip,
-    /// and gives a blank name a default.
-    func set(name: String, start: TimeInterval, end: TimeInterval?) {
-        song?.lastPracticed = .now
-        startTime = max(0, start)
-        if let end, end - startTime >= Self.minimumClipLength {
-            endTime = end
-        } else {
-            endTime = nil
+    /// Reuses a marker within `MarkerPlacement.snapThreshold` rather than
+    /// leaving a sliver of a section beside it; a reused marker keeps its own
+    /// name. `created` says which happened, so only a new marker is offered a
+    /// name.
+    @discardableResult
+    static func addSnapping(
+        to song: SavedSong,
+        name: String = "",
+        at time: TimeInterval,
+        in context: ModelContext
+    ) -> (marker: SongMarker, created: Bool) {
+        let markers = song.sortedMarkers
+        if let index = MarkerPlacement.snapIndex(for: max(0, time), in: markers.map(\.startTime)) {
+            return (markers[index], false)
         }
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.name = trimmed.isEmpty ? defaultName : trimmed
+        return (add(to: song, name: name, at: time, in: context), true)
     }
 
-    func clearEnd(in context: ModelContext) {
-        endTime = nil
-        song?.lastPracticed = .now
+    /// "Split here": adds a marker rather than moving the boundary, leaving a
+    /// new section between the two. Deliberately doesn't snap, since the user
+    /// asked for a boundary of their own; only a marker at the very same
+    /// time is reused.
+    @discardableResult
+    static func split(
+        _ song: SavedSong,
+        at time: TimeInterval,
+        name: String = "",
+        in context: ModelContext
+    ) -> SongMarker {
+        let time = max(0, time)
+        if let existing = song.sortedMarkers.first(where: { abs($0.startTime - time) < MarkerPlacement.sameTime }) {
+            return existing
+        }
+        return add(to: song, name: name, at: time, in: context)
+    }
+
+    /// Free to move past its neighbours, unlike `nudge`: setting a marker to
+    /// the playhead is a fresh placement.
+    func set(name: String, time: TimeInterval, in context: ModelContext) {
+        apply(name: name, time: time)
         try? context.save()
     }
 
-    static func delete(_ marker: SongMarker, in context: ModelContext) {
+    /// Moves the marker, so both sections it bounds move with it: nudging
+    /// the end of Chorus moves the start of Verse 2. Held short of its
+    /// neighbours so a nudge never reorders sections.
+    func nudge(by offset: TimeInterval, in context: ModelContext) {
+        let lower = (previous?.startTime).map { $0 + MarkerPlacement.minimumNudgedSection } ?? 0
+        let upper = (next?.startTime).map { $0 - MarkerPlacement.minimumNudgedSection } ?? .infinity
+        guard lower <= upper else { return }
+        let target = min(max(startTime + offset, lower), upper)
+        // Already closer to a neighbour than the gap: clamping must not push
+        // it the opposite way to the nudge.
+        guard offset < 0 ? target < startTime : target > startTime else { return }
+        apply(name: name, time: target)
+        try? context.save()
+    }
+
+    /// The section merges into the previous one.
+    @discardableResult
+    static func delete(_ marker: SongMarker, in context: ModelContext) -> Removed {
+        let removed = Removed(name: marker.name, time: marker.startTime)
         marker.song?.lastPracticed = .now
         context.delete(marker)
         try? context.save()
+        return removed
     }
 
-    private var defaultName: String {
-        let kind = isClip ? "Clip" : "Marker"
-        let siblings = song?.markers?.filter { $0 !== self && $0.isClip == isClip }.count ?? 0
-        return "\(kind) \(siblings + 1)"
+    /// Undo for `delete`.
+    @discardableResult
+    static func restore(_ removed: Removed, to song: SavedSong, in context: ModelContext) -> SongMarker {
+        add(to: song, name: removed.name, at: removed.time, in: context)
+    }
+
+    /// Deletes the next marker, so the following section joins this one.
+    /// `nil` when this is the last.
+    @discardableResult
+    static func mergeWithNext(_ marker: SongMarker, in context: ModelContext) -> Removed? {
+        guard let next = marker.next else { return nil }
+        return delete(next, in: context)
+    }
+
+    private func apply(name: String, time: TimeInterval) {
+        song?.lastPracticed = .now
+        startTime = max(0, time)
+        self.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

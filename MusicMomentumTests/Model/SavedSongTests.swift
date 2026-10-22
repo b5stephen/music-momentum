@@ -212,8 +212,8 @@ struct SavedSongTests {
         let older = insertDuplicate("i.1", catalogID: "1440857781", speed: 0.5, lastPracticed: .now.addingTimeInterval(-60))
         let newer = insertDuplicate("i.1", speed: 0.8, lastPracticed: .now)
         insertDuplicate("i.2", speed: 1.0, lastPracticed: .now)
-        SongMarker.add(to: older, name: "Solo", startTime: 60, endTime: 90, in: context)
-        SongMarker.add(to: newer, name: "Intro", startTime: 0, endTime: nil, in: context)
+        SongMarker.add(to: older, name: "Solo", at: 60, in: context)
+        SongMarker.add(to: newer, name: "Intro", at: 0, in: context)
 
         SavedSong.mergeDuplicates(in: context)
 

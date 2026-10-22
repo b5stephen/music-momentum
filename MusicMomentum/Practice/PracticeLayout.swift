@@ -19,7 +19,7 @@ import UIKit
 /// anything gives way.
 ///
 /// Before the wheel has given up much, the screen goes compact: a one-line
-/// header, a transport row of even buttons, and Mark in the clip row instead
+/// header, a transport row of even buttons, and Mark in the marker row instead
 /// of on a caption line. That frees enough height to hand the wheel most of
 /// its size back.
 nonisolated struct PracticeLayout: Equatable {
@@ -68,7 +68,7 @@ nonisolated struct PracticeLayout: Equatable {
         var compactHeader: CGFloat
         var scrubber: CGFloat
         var pillRow: CGFloat
-        /// The loop caption and Mark under the clips.
+        /// The loop caption and Mark under the pills.
         var captionRow: CGFloat
 
         static let standard = Heights(
@@ -107,7 +107,7 @@ nonisolated struct PracticeLayout: Equatable {
     /// shrinking can't unwrap one and feed back into the layout.
     static let maxCover: CGFloat = 72
     /// Without it, the timeline met the top of a landscape phone and the
-    /// clips met its tab bar.
+    /// pills met its tab bar.
     static let widePlayerBreathing: CGFloat = 16
     /// Between the wide playback column's glass panel and its rows.
     static let widePanelPadding: CGFloat = 14

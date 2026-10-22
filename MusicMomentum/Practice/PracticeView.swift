@@ -183,7 +183,7 @@ struct PracticeView: View {
                             marker: marker,
                             duration: duration,
                             controller: controller,
-                            onSave: { name, start, end in update(marker, name: name, start: start, end: end) },
+                            onSave: { name, time in marker.set(name: name, time: time, in: modelContext) },
                             onDelete: { delete(marker) }
                         )
                     }
@@ -423,7 +423,7 @@ struct PracticeView: View {
         return (centred, max(0, (column - centred) / 2))
     }
 
-    /// Playback, then what's being practised: the clips sit under the loop
+    /// Playback, then what's being practised: the markers sit under the loop
     /// button that reshapes them, with the caption saying what's looping.
     /// Every row shares `sideMargin` with the header, so the cover, the
     /// scrubber's ends, the first pill and the outer buttons line up.
@@ -467,7 +467,7 @@ struct PracticeView: View {
 
             if layout.isCompact {
                 // The caption's line is the height compact gives back; the
-                // loop button and the clips' fills still say what's looping.
+                // loop button and the pills' fills still say what's looping.
                 HStack(spacing: 0) {
                     markerPills(trailingInset: 8)
                     markButton(showsTitle: false)
@@ -477,7 +477,7 @@ struct PracticeView: View {
                 markerPills(trailingInset: nil)
 
                 // Mark shares the caption's line rather than taking a pill's
-                // width from the row, which only fitted two and a half clips.
+                // width from the row, which only fitted two and a half pills.
                 HStack(spacing: 12) {
                     Text(loopCaption ?? " ")
                         .font(.footnote.weight(.medium))
@@ -504,10 +504,12 @@ struct PracticeView: View {
             markers: savedSong?.sortedMarkers ?? [],
             inset: Self.sideMargin,
             trailingInset: trailingInset,
-            isLooping: { controller.isLooping($0) },
+            isLooping: { marker in section(of: marker).map { controller.isLooping(start: $0.start, end: $0.end) } ?? false },
             isLoopOn: controller.isLoopOn,
             onTap: { tapped($0) },
-            onPlayLoop: { controller.playOnLoop($0) },
+            onPlayLoop: { marker in
+                if let section = section(of: marker) { controller.playOnLoop(start: section.start, end: section.end) }
+            },
             onJump: { controller.jump(to: $0) },
             onEdit: { markerSheet = .edit($0) },
             onDelete: { delete($0) }
@@ -657,7 +659,7 @@ struct PracticeView: View {
         .accessibilityLabel("Mark this point")
     }
 
-    /// Compact, Mark sits in the clip row, and shorter than the header's 44pt
+    /// Compact, Mark sits in the marker row, and shorter than the header's 44pt
     /// glass so it doesn't tower over the pills; the touch area stays 44pt.
     /// On its own line it's the save prompt's size, so the two read as a pair.
     private static let markGlassSide: CGFloat = 36
@@ -687,73 +689,66 @@ struct PracticeView: View {
     }
 
     private var loopCaption: String? {
-        guard let loop = controller.loop else { return nil }
-        let segments = loop.segments
-        switch segments.count {
-        case 0:
-            return "Looping whole song"
-        case 1:
-            guard let name = marker(for: segments[0].markerID)?.name else { return "Looping one clip" }
-            return "Looping \(name)"
-        default:
-            let total = segments.reduce(0) { $0 + ($1.end - $1.start) }
-            return "Looping \(segments.count) clips · \(PlaybackScrubber.lengthLabel(total))"
+        switch controller.loop {
+        case nil: nil
+        case .wholeSong: "Looping whole song"
+        case .range(let start, let end):
+            if let section = sections.first(where: { controller.isLooping(start: $0.start, end: $0.end) }) {
+                "Looping \(section.displayName)"
+            } else {
+                "Looping \(PlaybackScrubber.timeLabel(start)) – \(PlaybackScrubber.timeLabel(end))"
+            }
         }
     }
 
     /// For VoiceOver: the caption is a separate element to the button.
     private var loopDescription: String {
-        guard let loop = controller.loop else { return "Off" }
-        let clips = loop.segments.count
-        switch clips {
-        case 0: return "Whole song"
-        case 1: return "One clip"
-        default: return "\(clips) clips"
+        switch controller.loop {
+        case nil: "Off"
+        case .wholeSong: "Whole song"
+        case .range: loopCaption ?? "On"
         }
     }
 
     // MARK: - Markers
 
-    /// With the loop off a tap navigates; with it on, a clip tap reshapes the
-    /// scope instead (the menu's Jump to Start still navigates).
+    private var sections: [SongSection<PersistentIdentifier>] {
+        guard let savedSong, let duration = controller.duration else { return [] }
+        return savedSong.sections(duration: duration)
+    }
+
+    private func section(of marker: SongMarker) -> SongSection<PersistentIdentifier>? {
+        sections.first { $0.opening?.id == marker.persistentModelID }
+    }
+
+    /// With the loop off a tap navigates; with it on, it loops the marker's
+    /// section instead (the menu's Jump to Start still navigates).
     private func tapped(_ marker: SongMarker) {
-        if controller.isLoopOn, marker.isClip {
-            controller.toggleLoop(for: marker)
+        if controller.isLoopOn, let section = section(of: marker) {
+            controller.toggleLoop(start: section.start, end: section.end)
         } else {
             controller.jump(to: marker)
         }
     }
 
-    private func marker(for id: AnyHashable) -> SongMarker? {
-        savedSong?.markers?.first { $0.persistentModelID == id as? PersistentIdentifier }
-    }
-
+    /// Points, plus the looping range as a bar.
     private var scrubberMarkers: [PlaybackScrubber.Marker] {
-        (savedSong?.sortedMarkers ?? []).map {
-            .init(
-                id: $0.persistentModelID,
-                name: $0.name,
-                start: $0.startTime,
-                end: $0.endTime,
-                isLooping: controller.isLooping($0)
-            )
+        var markers: [PlaybackScrubber.Marker] = (savedSong?.sortedMarkers ?? []).map {
+            .init(id: $0.persistentModelID, name: $0.name, start: $0.startTime, end: nil)
         }
+        if case .range(let start, let end) = controller.loop {
+            markers.append(.init(id: "loop", start: start, end: end, isLooping: true))
+        }
+        return markers
     }
 
     /// Markers live on the saved entry, so marking an unsaved song saves it.
-    private func addMarker(name: String, start: TimeInterval, end: TimeInterval?) {
+    private func addMarker(name: String, time: TimeInterval) {
         guard let song = savedSong ?? controller.saveCurrentSong() else { return }
-        SongMarker.add(to: song, name: name, startTime: start, endTime: end, in: modelContext)
-    }
-
-    private func update(_ marker: SongMarker, name: String, start: TimeInterval, end: TimeInterval?) {
-        marker.set(name: name, start: start, end: end)
-        try? modelContext.save()
-        controller.markerChanged(marker)
+        SongMarker.add(to: song, name: name, at: time, in: modelContext)
     }
 
     private func delete(_ marker: SongMarker) {
-        controller.markerDeleted(marker)
         SongMarker.delete(marker, in: modelContext)
     }
 
@@ -1291,7 +1286,7 @@ private struct PanelGlass: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(\.inGlassPanel, true)
-            // The clips scroll edge to edge; the panel's corners end them.
+            // The pills scroll edge to edge; the panel's corners end them.
             .clipShape(.rect(cornerRadius: 32))
             .glassEffect(smokedFill.map { Glass.regular.tint($0) } ?? .regular, in: .rect(cornerRadius: 32))
     }
@@ -1498,9 +1493,10 @@ private func loadedPreview(
         songID: "1", title: title, artistName: artistName,
         artworkData: nil, speed: 0.6, in: container.mainContext
     )
-    SongMarker.add(to: song, name: "Intro", startTime: 0, endTime: 22, in: container.mainContext)
-    SongMarker.add(to: song, name: "Solo", startTime: 96, endTime: 112, in: container.mainContext)
-    SongMarker.add(to: song, name: "Verse 2", startTime: 150, endTime: nil, in: container.mainContext)
+    SongMarker.add(to: song, name: "Intro", at: 0, in: container.mainContext)
+    SongMarker.add(to: song, name: "Verse", at: 22, in: container.mainContext)
+    SongMarker.add(to: song, name: "Solo", at: 96, in: container.mainContext)
+    SongMarker.add(to: song, name: "Verse 2", at: 112, in: container.mainContext)
     let controller = PlaybackController()
     controller.playbackRate = rate
     if loopOn { controller.toggleLoop() }

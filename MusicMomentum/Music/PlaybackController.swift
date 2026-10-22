@@ -58,11 +58,11 @@ final class PlaybackController {
     private var lastSeek: ContinuousClock.Instant?
 
     /// `nil` when the loop button is off. Only the button turns looping on and
-    /// off; the pills reshape the scope while it runs.
+    /// off; the pills reshape the range while it runs.
     private(set) var loop: Loop?
-    /// Which segment of a clip chain the playhead was last inside. `nil` after
-    /// a jump or scrub: the ticker waits until it plays back into the chain.
-    private var loopIndex: Int?
+    /// Whether the playhead was last inside the loop's range. Cleared by a
+    /// jump or scrub: the ticker waits until it plays back into the range.
+    private var wasInsideLoop = false
 
     var playbackRate: Double = 1.0 {
         didSet {
@@ -170,23 +170,22 @@ final class PlaybackController {
         // The player can report a hair past the end as a track wraps.
         playbackTime = max(0, min(time, duration ?? time))
 
-        advanceChainIfNeeded()
+        wrapLoopIfNeeded()
     }
 
     /// Whole-song looping isn't here: that's the player's own repeat mode,
     /// which wraps seamlessly instead of up to a poll late.
-    private func advanceChainIfNeeded() {
-        let segments = loop?.segments ?? []
-        guard !segments.isEmpty else { return }
+    private func wrapLoopIfNeeded() {
+        guard case .range(let start, let end) = loop else { return }
 
-        switch Loop.step(segments: segments, time: playbackTime, current: loopIndex) {
-        case .inside(let index):
-            loopIndex = index
-        case .jump(to: let index):
-            // Set before the seek: a half-second clip can be swallowed whole by
-            // the settling window, leaving the chain unsure where it is.
-            loopIndex = index
-            seek(to: segments[index].start)
+        switch Loop.step(start: start, end: end, time: playbackTime, wasInside: wasInsideLoop) {
+        case .inside:
+            wasInsideLoop = true
+        case .jump(to: let time):
+            // Set before the seek: a short range can be swallowed whole by the
+            // settling window, and the next reading past its end must still wrap.
+            wasInsideLoop = true
+            seek(to: time)
         case .wait:
             break
         }
@@ -207,10 +206,10 @@ final class PlaybackController {
         }
     }
 
-    /// Forgets where the playhead was in the chain, so landing past a clip's
-    /// end isn't read as "that clip just finished" and bounced back.
+    /// Forgets the playhead was in the loop, so landing past its end isn't
+    /// read as "the loop just finished" and bounced back.
     private func userSeek(to time: TimeInterval) {
-        loopIndex = nil
+        wasInsideLoop = false
         seek(to: time)
     }
 
@@ -223,10 +222,13 @@ final class PlaybackController {
         isScrubbing = false
     }
 
-    /// Back to the top of what's looping: a chain's first clip, not the one
-    /// the playhead is in, so the whole run is played again.
+    /// Back to the top of what's looping.
     func restart() {
-        userSeek(to: loop?.segments.first?.start ?? 0)
+        if case .range(let start, _) = loop {
+            userSeek(to: start)
+        } else {
+            userSeek(to: 0)
+        }
     }
 
     /// Called when the user reaches for the library, never on launch, so the
@@ -261,7 +263,7 @@ final class PlaybackController {
         rateWarning = nil
         playbackTime = 0
         // The loop button survives a change of song, like repeat in any
-        // player; its scope can't, since those clips belonged to the last track.
+        // player; its range can't, since it belonged to the last track.
         setLoop(loop == nil ? nil : .wholeSong)
         hasPlayed = false
         pendingStart = nil
@@ -350,88 +352,67 @@ final class PlaybackController {
     }
 
     /// Doesn't start or stop playback, and leaves the loop alone: jumping out
-    /// of a running chain is a look around, and the chain picks the playhead
-    /// up again when it plays back into a clip.
+    /// of a running loop is a look around, and the loop picks the playhead
+    /// up again when it plays back into the range.
     func jump(to marker: SongMarker) {
         userSeek(to: marker.startTime)
     }
 
     var isLoopOn: Bool { loop != nil }
 
-    func isLooping(_ marker: SongMarker) -> Bool {
-        loop?.segments.contains { $0.markerID == marker.persistentModelID } ?? false
+    func isLooping(start: TimeInterval, end: TimeInterval) -> Bool {
+        loop?.matches(start: start, end: end) ?? false
     }
 
     /// The only control that starts or stops looping. From off it loops the
-    /// whole song; from on it stops whatever the scope, so one tap ends any chain.
+    /// whole song; from on it stops whatever the range.
     func toggleLoop() {
         setLoop(loop == nil ? .wholeSong : nil)
     }
 
     /// Does nothing with the button off: a pill tap never starts a loop.
-    /// Taking the last clip out widens to the whole song rather than stopping.
-    func toggleLoop(for marker: SongMarker) {
-        guard let loop, let end = marker.endTime else { return }
-        var segments = loop.segments
-        if let existing = segments.firstIndex(where: { $0.markerID == marker.persistentModelID }) {
-            segments.remove(at: existing)
+    /// Tapping the range already looping widens back to the whole song
+    /// rather than stopping.
+    func toggleLoop(start: TimeInterval, end: TimeInterval) {
+        guard loop != nil else { return }
+        if isLooping(start: start, end: end) {
+            setLoop(.wholeSong)
         } else {
-            segments.append(.init(markerID: marker.persistentModelID, start: marker.startTime, end: end))
-            segments.sort { $0.start < $1.start }
+            setRange(start: start, end: end)
         }
-        setScope(segments)
     }
 
     /// The one place a marker starts playback, against the rule everywhere
     /// else that choosing something never does: the user read the words
-    /// "Play on Loop" before tapping. Replaces the scope rather than adding to it.
-    func playOnLoop(_ marker: SongMarker) {
-        guard let end = marker.endTime else { return }
-        setLoop(.clips([.init(markerID: marker.persistentModelID, start: marker.startTime, end: end)]))
-        seek(to: marker.startTime)
+    /// "Play on Loop" before tapping.
+    func playOnLoop(start: TimeInterval, end: TimeInterval) {
+        guard end > start else { return }
+        setLoop(.range(start: start, end: end))
+        seek(to: start)
+        wasInsideLoop = true
         play()
     }
 
-    func markerChanged(_ marker: SongMarker) {
-        guard let loop else { return }
-        var segments = loop.segments
-        guard let index = segments.firstIndex(where: { $0.markerID == marker.persistentModelID }) else { return }
-        if let end = marker.endTime {
-            segments[index] = .init(markerID: marker.persistentModelID, start: marker.startTime, end: end)
-            segments.sort { $0.start < $1.start }
-        } else {
-            segments.remove(at: index)
-        }
-        setScope(segments)
-    }
-
-    /// Deleting the last clip in scope widens to the whole song rather than
-    /// switching off, so an edit can never silently stop a loop the user turned on.
-    func markerDeleted(_ marker: SongMarker) {
-        guard let loop else { return }
-        let segments = loop.segments.filter { $0.markerID != marker.persistentModelID }
-        guard segments.count != loop.segments.count else { return }
-        setScope(segments)
-    }
-
-    /// Arming a clip from outside it moves the playhead in, so the loop starts
-    /// now rather than once the rest of the song has played through.
-    private func setScope(_ segments: [Loop.Segment]) {
-        setLoop(segments.isEmpty ? .wholeSong : .clips(segments))
-        guard !segments.isEmpty,
-              !segments.contains(where: { playbackTime >= $0.start && playbackTime < $0.end })
-        else { return }
-        seek(to: segments[0].start)
+    /// Arming a range from outside it moves the playhead in, so the loop
+    /// starts now rather than once the rest of the song has played through.
+    private func setRange(start: TimeInterval, end: TimeInterval) {
+        guard end > start else { return }
+        setLoop(.range(start: start, end: end))
+        guard !(start..<end).contains(playbackTime) else { return }
+        seek(to: start)
+        // The seek's settling window can outlast a short range; without this
+        // the first reading past its end would read as a user jump and wait.
+        wasInsideLoop = true
     }
 
     /// The one way the loop changes, so the player's repeat mode can't drift.
     private func setLoop(_ new: Loop?) {
         loop = new
-        loopIndex = nil
+        wasInsideLoop = false
         applyRepeatMode()
     }
 
-    /// A clip chain needs repeat off: the ticker drives it, and a track
+    /// A range needs repeat off: the ticker drives it, and a track
     /// repeating underneath would fight it.
     private func applyRepeatMode() {
         player.state.repeatMode = loop == .wholeSong ? .one : MusicPlayer.RepeatMode.none

@@ -13,22 +13,15 @@ struct MarkerEditorView: View {
     let marker: SongMarker?
     let duration: TimeInterval
     let controller: PlaybackController
-    let onSave: (_ name: String, _ start: TimeInterval, _ end: TimeInterval?) -> Void
+    let onSave: (_ name: String, _ time: TimeInterval) -> Void
     var onDelete: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
     @State private var name: String
-    @State private var start: TimeInterval
-    @State private var end: TimeInterval?
+    @State private var time: TimeInterval
     @State private var confirmingDelete = false
-    /// Which time the nudge row and Now act on.
-    @State private var selected: MarkerHandle = .start
 
-    /// How far before the end handle the End cue drops the playhead.
-    private static let leadIn: TimeInterval = 2
-    private static let defaultClipLength: TimeInterval = 4
-    /// Half Practice's 10: here it's for finding a spot, and 10 would leap
-    /// clean across the 5s zoom.
+    /// Half Practice's 10: here it's for finding a spot.
     private static let skipInterval: TimeInterval = 5
 
     init(
@@ -36,7 +29,7 @@ struct MarkerEditorView: View {
         initialStart: TimeInterval = 0,
         duration: TimeInterval,
         controller: PlaybackController,
-        onSave: @escaping (_ name: String, _ start: TimeInterval, _ end: TimeInterval?) -> Void,
+        onSave: @escaping (_ name: String, _ time: TimeInterval) -> Void,
         onDelete: @escaping () -> Void = {}
     ) {
         self.marker = marker
@@ -45,94 +38,23 @@ struct MarkerEditorView: View {
         self.onSave = onSave
         self.onDelete = onDelete
         _name = State(initialValue: marker?.name ?? "")
-        _start = State(initialValue: marker?.startTime ?? initialStart)
-        _end = State(initialValue: marker?.endTime)
-        _selected = State(initialValue: marker?.endTime == nil ? .start : .end)
+        _time = State(initialValue: marker?.startTime ?? initialStart)
     }
 
     private var isEditing: Bool { marker != nil }
-    private var canAddEnd: Bool { start + SongMarker.minimumClipLength <= duration }
-
-    private enum Kind: Hashable {
-        case point, clip
-    }
-
-    private var kind: Binding<Kind> {
-        Binding(
-            get: { end == nil ? .point : .clip },
-            set: { newKind in
-                withAnimation {
-                    switch newKind {
-                    case .point:
-                        end = nil
-                        selected = .start
-                    case .clip:
-                        end = min(duration, start + Self.defaultClipLength)
-                        selected = .end
-                    }
-                }
-            }
-        )
-    }
-
-    /// Writes are dropped once the marker is a point again: a field being
-    /// torn off screen mustn't bring the end back.
-    private var endBinding: Binding<TimeInterval> {
-        Binding(get: { end ?? start }, set: { if end != nil { end = $0 } })
-    }
-
-    private var selectedTime: Binding<TimeInterval> {
-        switch selected {
-        case .end where end != nil: endBinding
-        default: $start
-        }
-    }
-
-    private var startRange: ClosedRange<TimeInterval> {
-        0...max(0, end.map { $0 - SongMarker.minimumClipLength } ?? duration)
-    }
-
-    private var endRange: ClosedRange<TimeInterval> {
-        min(start + SongMarker.minimumClipLength, duration)...duration
-    }
-
-    private var selectedRange: ClosedRange<TimeInterval> {
-        selected == .end && end != nil ? endRange : startRange
-    }
+    private var range: ClosedRange<TimeInterval> { 0...max(0, duration) }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    HStack(spacing: 12) {
-                        TextField(end == nil ? "Marker" : "Clip", text: $name)
-                            .textInputAutocapitalization(.words)
-                        kindSwitch
-                    }
+                    TextField(placeholder, text: $name)
+                        .textInputAutocapitalization(.words)
                 }
 
                 Section {
-                    MarkerRangeEditor(
-                        start: $start,
-                        end: $end,
-                        duration: duration,
-                        playhead: controller.playbackTime,
-                        onGrab: { selected = $0 },
-                        onScrub: { controller.isScrubbing = true },
-                        onSeek: { controller.endScrub(at: $0) }
-                    )
-                    .padding(.vertical, 8)
-                }
-
-                Section {
-                    times
+                    timeColumn
                     nudgeRow
-                } footer: {
-                    if end == nil {
-                        Text(canAddEnd
-                            ? "Switch to Clip to give this an end time you can loop."
-                            : "Too close to the end of the song for a clip.")
-                    }
                 }
 
                 Section {
@@ -166,7 +88,7 @@ struct MarkerEditorView: View {
                     // capsule inside the toolbar's own glass, so it's left to the
                     // toolbar to draw it like Close.
                     Button {
-                        onSave(name, start, end)
+                        onSave(name, time)
                         dismiss()
                     } label: {
                         Image(systemName: "checkmark")
@@ -188,110 +110,37 @@ struct MarkerEditorView: View {
         }
     }
 
-    /// Drawn as the pills themselves, since that's what the choice looks like.
-    private var kindSwitch: some View {
-        HStack(spacing: 6) {
-            kindButton(.point, title: "Point") {
-                Circle().frame(width: 6, height: 6)
-            }
-            kindButton(.clip, title: "Clip") {
-                SpanGlyph()
-            }
-            .disabled(end == nil && !canAddEnd)
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Kind")
+    /// An unnamed marker shows as "Marker N", so the placeholder says so.
+    private var placeholder: String {
+        guard let marker, let song = marker.song else { return "Marker" }
+        return song.displayName(of: marker)
     }
 
-    private func kindButton(
-        _ value: Kind,
-        title: String,
-        @ViewBuilder glyph: () -> some View
-    ) -> some View {
-        let isSelected = kind.wrappedValue == value
-        return Button {
-            kind.wrappedValue = value
-        } label: {
-            HStack(spacing: 5) {
-                glyph()
-                    .opacity(isSelected ? 0.8 : 0.55)
-                Text(title)
-                    .font(.footnote.weight(.medium))
-            }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 7)
-            .background(
-                isSelected ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary),
-                in: Capsule()
-            )
-            .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentText) : AnyShapeStyle(.primary))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-
-    private var times: some View {
-        // No divider: one panel is always tinted, and that separates them.
-        HStack(spacing: 6) {
-            if end != nil {
-                timeColumn("Start", time: $start, range: startRange, handle: .start)
-                timeColumn("End", time: endBinding, range: endRange, handle: .end)
-            } else {
-                timeColumn("Time", time: $start, range: startRange, handle: .start)
-            }
-        }
-        .padding(.vertical, 4)
-    }
-
-    private func timeColumn(
-        _ title: String,
-        time: Binding<TimeInterval>,
-        range: ClosedRange<TimeInterval>,
-        handle: MarkerHandle
-    ) -> some View {
-        let isSelected = selected == handle || end == nil
-        return VStack(alignment: .leading, spacing: 4) {
+    private var timeColumn: some View {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                Circle()
-                    .fill(handle == .start ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear))
-                    .strokeBorder(.tint, lineWidth: 2)
-                    .frame(width: 9, height: 9)
-                Text(title.uppercased())
+                Text("TIME")
                     .font(.caption2.weight(.semibold))
                     .tracking(0.4)
-                    .foregroundStyle(isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
                     .fixedSize()
                     .layoutPriority(1)
                 Spacer(minLength: 4)
-                if isSelected {
-                    playheadChip(for: title)
-                }
+                playheadChip
             }
-            PreciseTimeField(time: time, range: range) { selected = handle }
+            PreciseTimeField(time: $time, range: range)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 8)
         .padding(.horizontal, 10)
-        // A tinted panel rather than tinted text: the big time stays legible in
-        // light mode, and the coral is left to the clip and the handles.
-        .background(
-            isSelected ? AnyShapeStyle(.tint.opacity(0.16)) : AnyShapeStyle(.clear),
-            in: .rect(cornerRadius: 16, style: .continuous)
-        )
-        .contentShape(.rect)
-        .onTapGesture { selected = handle }
+        .background(.tint.opacity(0.16), in: .rect(cornerRadius: 16, style: .continuous))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityLabel("Time")
     }
 
-    /// "Now" read as the clock, not the song. The glyph is the strip's
-    /// playhead in miniature. Half a clip on a mini can't fit both beside the
-    /// column title, so it sheds the glyph, then the word.
-    private func playheadChip(for title: String) -> some View {
+    /// "Now" read as the clock, not the song.
+    private var playheadChip: some View {
         Button {
-            setSelected(controller.playbackTime)
+            setTime(controller.playbackTime)
         } label: {
             ViewThatFits(in: .horizontal) {
                 chipBody { playheadGlyph; Text("Playhead") }
@@ -300,7 +149,7 @@ struct MarkerEditorView: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Set \(title.lowercased()) to the current position")
+        .accessibilityLabel("Set the time to the current position")
     }
 
     private var playheadGlyph: some View {
@@ -334,7 +183,7 @@ struct MarkerEditorView: View {
 
     private func nudge(_ amount: TimeInterval) -> some View {
         Button {
-            setSelected(selectedTime.wrappedValue + amount)
+            setTime(time + amount)
         } label: {
             Text(amount > 0 ? "+\(PreciseTime.nudgeLabel(amount))" : "−\(PreciseTime.nudgeLabel(-amount))")
                 .font(.footnote.monospacedDigit())
@@ -343,13 +192,12 @@ struct MarkerEditorView: View {
         .accessibilityLabel(amount > 0 ? "Later by \(PreciseTime.nudgeLabel(amount))" : "Earlier by \(PreciseTime.nudgeLabel(-amount))")
     }
 
-    private func setSelected(_ value: TimeInterval) {
-        let range = selectedRange
-        selectedTime.wrappedValue = max(range.lowerBound, min(value, range.upperBound))
+    private func setTime(_ value: TimeInterval) {
+        time = max(range.lowerBound, min(value, range.upperBound))
     }
 
-    /// The cue buttons leave the song running: a snippet that stops itself
-    /// can't tell you whether the clip is the right piece of music.
+    /// The cue button leaves the song running: a snippet that stops itself
+    /// can't tell you whether the marker is in the right place.
     private var transportRow: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
@@ -358,21 +206,13 @@ struct MarkerEditorView: View {
                 skipButton(Self.skipInterval)
             }
 
-            // Each cue carries the dot of the time column it plays from.
-            HStack(spacing: 8) {
-                if let end {
-                    cueButton("Play from start", handle: .start, spoken: "Play from the start of the clip") {
-                        controller.playFrom(start)
-                    }
-                    // Before the end, so you hear the clip run into it.
-                    cueButton("Play into end", handle: .end, spoken: "Play into the end of the clip") {
-                        controller.playFrom(max(start, end - Self.leadIn))
-                    }
-                } else {
-                    cueButton("Play from marker", handle: .start, spoken: "Play from the marker") {
-                        controller.playFrom(start)
-                    }
-                }
+            Button {
+                controller.playFrom(time)
+            } label: {
+                Text("Play from marker")
+                    .font(.footnote.weight(.medium))
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, minHeight: 28)
             }
         }
         .buttonStyle(FillButtonStyle())
@@ -401,31 +241,10 @@ struct MarkerEditorView: View {
         .accessibilityLabel(offset < 0 ? "Back \(seconds) seconds" : "Forward \(seconds) seconds")
     }
 
-    private func cueButton(
-        _ title: String,
-        handle: MarkerHandle,
-        spoken: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Label {
-                Text(title)
-            } icon: {
-                Circle()
-                    .fill(handle == .start ? AnyShapeStyle(.secondary) : AnyShapeStyle(.clear))
-                    .strokeBorder(.secondary, lineWidth: 1.5)
-                    .frame(width: 8, height: 8)
-            }
-            .font(.footnote.weight(.medium))
-            .lineLimit(1)
-            .frame(maxWidth: .infinity, minHeight: 28)
-        }
-        .accessibilityLabel(spoken)
-    }
 }
 
 /// The nudge and cue buttons: a capsule on the lightest system fill, which
-/// keeps them quieter than `.bordered` and leaves the coral to the clip.
+/// keeps them quieter than `.bordered` and leaves the coral to the time.
 private struct FillButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
@@ -444,7 +263,6 @@ private struct FillButtonStyle: ButtonStyle {
 private struct PreciseTimeField: View {
     @Binding var time: TimeInterval
     let range: ClosedRange<TimeInterval>
-    var onFocus: () -> Void = {}
 
     @State private var text = ""
     @FocusState private var focused: Bool
@@ -455,7 +273,7 @@ private struct PreciseTimeField: View {
             .keyboardType(.numbersAndPunctuation)
             .focused($focused)
             .onSubmit(commit)
-            .onChange(of: focused) { focused ? onFocus() : commit() }
+            .onChange(of: focused) { if !focused { commit() } }
             .onChange(of: time, initial: true) { if !focused { text = PreciseTime.format(time) } }
             .accessibilityLabel("Time")
             .accessibilityValue(PreciseTime.format(time))
@@ -470,14 +288,15 @@ private struct PreciseTimeField: View {
 }
 
 #Preview("New") {
-    MarkerEditorView(initialStart: 71, duration: 245, controller: PlaybackController()) { _, _, _ in }
+    MarkerEditorView(initialStart: 71, duration: 245, controller: PlaybackController()) { _, _ in }
 }
 
-#Preview("Edit clip") {
+#Preview("Edit unnamed") {
     let container = try! AppSchema.inMemoryContainer()
     let song = SavedSong(songID: "1", speed: 0.8, title: "Little Wing", artistName: "Jimi Hendrix")
     container.mainContext.insert(song)
-    let marker = SongMarker.add(to: song, name: "Solo", startTime: 96, endTime: 112.4, in: container.mainContext)
-    return MarkerEditorView(marker: marker, duration: 245, controller: PlaybackController()) { _, _, _ in }
+    SongMarker.add(to: song, name: "Intro", at: 0, in: container.mainContext)
+    let marker = SongMarker.add(to: song, at: 96, in: container.mainContext)
+    return MarkerEditorView(marker: marker, duration: 245, controller: PlaybackController()) { _, _ in }
         .modelContainer(container)
 }

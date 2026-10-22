@@ -45,13 +45,17 @@ struct RootTabView: View {
             controller.playbackRate = SampleSong.speed(of: id) ?? 1.0
         }
         #endif
-        // Duplicates and another device's library artwork only ever arrive by
-        // sync, so tidying on each import is enough.
+        // Duplicates, clips from a device on an older build and another
+        // device's library artwork only ever arrive by sync, so tidying on
+        // each import is enough. Clips go after merging, which can bring two
+        // devices' copies of a migrated end marker onto one song.
         .task {
             SavedSong.mergeDuplicates(in: modelContext)
+            ClipMigration.run(in: modelContext)
             await ArtworkRepair.run(in: modelContext)
             for await _ in NotificationCenter.default.notifications(named: .NSPersistentStoreRemoteChange) {
                 SavedSong.mergeDuplicates(in: modelContext)
+                ClipMigration.run(in: modelContext)
                 await ArtworkRepair.run(in: modelContext)
             }
         }
@@ -286,8 +290,9 @@ private func previewContainer() -> ModelContainer {
         songID: "1", title: "Count on Me", artistName: "Bruno Mars",
         artworkData: nil, speed: 0.75, in: container.mainContext
     )
-    SongMarker.add(to: song, name: "Intro", startTime: 0, endTime: nil, in: container.mainContext)
-    SongMarker.add(to: song, name: "Chorus", startTime: 82, endTime: 113, in: container.mainContext)
+    SongMarker.add(to: song, name: "Intro", at: 0, in: container.mainContext)
+    SongMarker.add(to: song, name: "Chorus", at: 82, in: container.mainContext)
+    SongMarker.add(to: song, name: "Verse 2", at: 113, in: container.mainContext)
     SavedSong.save(
         songID: "2", title: "Little Wing", artistName: "Jimi Hendrix",
         artworkData: nil, speed: 0.6, in: container.mainContext

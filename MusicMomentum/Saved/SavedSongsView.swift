@@ -215,8 +215,8 @@ struct SavedSongsView: View {
                             marker: marker,
                             duration: duration,
                             controller: controller,
-                            onSave: { name, start, end in
-                                update(marker, name: name, start: start, end: end)
+                            onSave: { name, time in
+                                marker.set(name: name, time: time, in: modelContext)
                             },
                             onDelete: { delete(marker) }
                         )
@@ -225,14 +225,8 @@ struct SavedSongsView: View {
                             initialStart: marking.start,
                             duration: duration,
                             controller: controller
-                        ) { name, start, end in
-                            SongMarker.add(
-                                to: marking.song,
-                                name: name,
-                                startTime: start,
-                                endTime: end,
-                                in: modelContext
-                            )
+                        ) { name, time in
+                            SongMarker.add(to: marking.song, name: name, at: time, in: modelContext)
                         }
                     }
                 }
@@ -362,19 +356,11 @@ struct SavedSongsView: View {
     }
 
     private func delete(_ song: SavedSong) {
-        for marker in song.markers ?? [] { controller.markerDeleted(marker) }
         modelContext.delete(song)
         try? modelContext.save()
     }
 
-    private func update(_ marker: SongMarker, name: String, start: TimeInterval, end: TimeInterval?) {
-        marker.set(name: name, start: start, end: end)
-        try? modelContext.save()
-        controller.markerChanged(marker)
-    }
-
     private func delete(_ marker: SongMarker) {
-        controller.markerDeleted(marker)
         SongMarker.delete(marker, in: modelContext)
     }
 }
@@ -598,8 +584,9 @@ private func previewContainer() -> ModelContainer {
         songID: "2", title: "Little Wing", artistName: "Jimi Hendrix",
         artworkData: nil, speed: 0.6, in: context
     )
-    SongMarker.add(to: littleWing, name: "Intro", startTime: 0, endTime: 22, in: context)
-    SongMarker.add(to: littleWing, name: "", startTime: 95.5, endTime: nil, in: context)
+    SongMarker.add(to: littleWing, name: "Intro", at: 0, in: context)
+    SongMarker.add(to: littleWing, name: "Verse", at: 22, in: context)
+    SongMarker.add(to: littleWing, at: 95.5, in: context)
     SavedSong.save(
         songID: "3", title: "Nothing Else Matters", artistName: "Metallica",
         artworkData: nil, speed: 1.0, in: context

@@ -22,6 +22,8 @@ struct PlaybackScrubber: View {
     var onScrub: (TimeInterval) -> Void = { _ in }
     var onCommit: (TimeInterval) -> Void
 
+    /// A point, or with an `end` a span; Practice passes its markers as
+    /// points and the looping range as the one span.
     nonisolated struct Marker: Identifiable {
         let id: AnyHashable
         var name: String = ""
