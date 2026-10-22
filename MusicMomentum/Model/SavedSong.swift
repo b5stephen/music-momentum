@@ -36,10 +36,6 @@ final class SavedSong {
     var lastPracticed: Date = Date.now
     /// When playback last started. `nil` until the song is first played.
     var practicedAt: Date?
-    /// The timeline the player last showed for this song, so it opens the
-    /// way it was left. A Bool rather than `PlayerMode`'s raw value: CloudKit
-    /// fields can't be retyped, and a new mode would get a field of its own.
-    var opensInLoopMode: Bool = false
     /// Optional because CloudKit requires every relationship to be.
     @Relationship(deleteRule: .cascade, inverse: \SongMarker.song)
     var markers: [SongMarker]? = []
@@ -65,8 +61,6 @@ final class SavedSong {
     }
 
     var percent: Int { Int((speed * 100).rounded()) }
-
-    var playerMode: PlayerMode { opensInLoopMode ? .loop : .play }
 
     var artwork: Artwork? {
         guard let artworkData else { return nil }
@@ -145,15 +139,6 @@ extension SavedSong {
 
     static func markPracticed(_ song: SavedSong, in context: ModelContext) {
         song.practicedAt = .now
-        try? context.save()
-    }
-
-    /// Saved as soon as the mode switches, unlike the speed: it's where the
-    /// user left the screen, not a value they tune. Leaves both dates alone,
-    /// so flicking between modes doesn't reorder the list.
-    static func setPlayerMode(_ mode: PlayerMode, for song: SavedSong, in context: ModelContext) {
-        guard song.playerMode != mode else { return }
-        song.opensInLoopMode = mode == .loop
         try? context.save()
     }
 

@@ -271,27 +271,4 @@ struct SavedSongTests {
         #expect(save("i.1", speed: 0.755).percent == 76)
         #expect(save("i.2", speed: 1.0).percent == 100)
     }
-
-    @Test("Remembers the player mode without touching the dates")
-    func playerMode() throws {
-        let song = save("1")
-        let changed = song.lastPracticed
-        #expect(song.playerMode == .play)
-
-        SavedSong.setPlayerMode(.loop, for: song, in: context)
-        #expect(song.playerMode == .loop)
-        #expect(song.lastPracticed == changed)
-        #expect(try allSongs().first?.opensInLoopMode == true)
-
-        SavedSong.setPlayerMode(.play, for: song, in: context)
-        #expect(song.playerMode == .play)
-    }
-
-    @Test("Saving the speed again keeps the mode")
-    func speedKeepsMode() {
-        let song = save("1", speed: 0.7)
-        SavedSong.setPlayerMode(.loop, for: song, in: context)
-        save("1", speed: 0.8)
-        #expect(song.playerMode == .loop)
-    }
 }

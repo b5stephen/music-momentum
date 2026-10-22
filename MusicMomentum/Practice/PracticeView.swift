@@ -473,7 +473,7 @@ struct PracticeView: View {
 
     private var modePicker: some View {
         ModePicker(selection: controller.mode) { mode in
-            controller.switchMode(to: mode, saved: savedSong)
+            controller.mode = mode
         }
     }
 

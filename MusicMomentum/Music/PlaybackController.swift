@@ -483,7 +483,7 @@ final class PlaybackController {
         case .idle:
             guard duration != nil else { return }
             pendingA = playbackTime
-            if mode == .play { switchMode(to: .loop, saved: saved) }
+            mode = .loop
         case .aSet(let tapped):
             closeLoop(a: tapped, saved: saved)
         case .looping:
@@ -548,23 +548,14 @@ final class PlaybackController {
 
     // MARK: - Persistence
 
-    /// The speed and mode the song was saved with; an unsaved song opens at
-    /// full speed in Play.
+    /// Every song opens in Play, at the speed it was saved with or full speed.
     func loadSavedSettings(songID: String) {
         isLoadingSavedSpeed = true
         defer { isLoadingSavedSpeed = false }
 
         let saved = modelContext.flatMap { SavedSong.find(songID: songID, in: $0) }
         playbackRate = saved?.speed ?? 1.0
-        mode = saved?.playerMode ?? .play
-    }
-
-    /// Saved songs remember the mode straight away; an unsaved one keeps it
-    /// only while it's loaded.
-    func switchMode(to new: PlayerMode, saved: SavedSong?) {
-        mode = new
-        guard let saved, let context = saved.modelContext ?? modelContext else { return }
-        SavedSong.setPlayerMode(new, for: saved, in: context)
+        mode = .play
     }
 
     /// Only saved songs keep a practice date; playing an unsaved one leaves
