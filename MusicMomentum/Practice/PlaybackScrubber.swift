@@ -8,10 +8,11 @@ import SwiftUI
 import UIKit
 #endif
 
-/// Position bar with the markers drawn on it. Only commits a seek on release
-/// — one per gesture, not sixty — so the audio doesn't stutter while dragging.
-/// A quick tap on a marker in the lane jumps to its start; moving or holding
-/// there scrubs as anywhere else.
+/// Play mode's timeline: a position bar with the markers as labelled ticks
+/// above it. Only commits a seek on release — one per gesture, not sixty — so
+/// the audio doesn't stutter while dragging. A quick tap on a tick jumps to
+/// it; holding one hands it to `onHoldMarker` (the editor), or without that
+/// scrubs; moving off it scrubs as anywhere else.
 struct PlaybackScrubber: View {
     let position: TimeInterval
     /// Inert when `nil`.
@@ -20,16 +21,20 @@ struct PlaybackScrubber: View {
     /// Song time a point's name stays up after the playhead crosses it.
     var pointNameDuration: TimeInterval = 3
     var onScrub: (TimeInterval) -> Void = { _ in }
+    var onHoldMarker: ((Marker) -> Void)?
     var onCommit: (TimeInterval) -> Void
 
     /// A point, or with an `end` a span; Practice passes its markers as
     /// points and the looping range as the one span.
     nonisolated struct Marker: Identifiable {
         let id: AnyHashable
+        /// As stored: an unnamed marker's tick has no label.
         var name: String = ""
         let start: TimeInterval
         let end: TimeInterval?
         var isLooping: Bool = false
+        /// What VoiceOver calls it, "Marker 3" for an unnamed one.
+        var spokenName: String?
 
         var isClip: Bool { end != nil }
     }
@@ -40,6 +45,8 @@ struct PlaybackScrubber: View {
     /// A touch that landed on a marker, not yet a tap or a scrub.
     @State private var pendingMarker: Marker?
     @State private var holdTask: Task<Void, Never>?
+    /// A hold has opened the editor; the rest of the touch does nothing.
+    @State private var isHolding = false
 
     private var isDragging: Bool { dragPosition != nil }
     private var displayedPosition: TimeInterval { dragPosition ?? position }
@@ -50,29 +57,33 @@ struct PlaybackScrubber: View {
     }
 
     var body: some View {
-        // The bar's 44pt is touch area around the lane and the track, so the
-        // labels tuck up under the track rather than under the touch area.
+        // The bar's height is touch area round the lane and the track, so the
+        // times tuck up under the track rather than under the touch area.
         VStack(spacing: -4) {
             bar
             labels
+                .accessibilityHidden(true)
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Playback position")
-        .accessibilityValue(Text([Self.timeLabel(displayedPosition), sectionName].compactMap(\.self).joined(separator: ", ")))
-        .accessibilityAdjustableAction { direction in
-            guard duration != nil else { return }
-            let step: TimeInterval = direction == .increment ? 5 : -5
-            onCommit(displayedPosition + step)
-        }
+        .accessibilityElement(children: .contain)
     }
 
+    /// Shared with Loop mode's block row, so the transport doesn't move
+    /// when the mode switches.
+    static let barHeight: CGFloat = 48
+    private static let barTopPadding: CGFloat = 2
+    private static let tickLabelHeight: CGFloat = 16
+    private static let tickLabelGap: CGFloat = 2
     private static let laneHeight: CGFloat = 8
     private static let laneGap: CGFloat = 4
+    /// The track's centre, which Loop mode's blocks centre on too.
+    static let trackCentre: CGFloat = barTopPadding + tickLabelHeight + tickLabelGap + laneHeight + laneGap + draggingTrackHeight / 2
     /// The track's height while a finger is down; it sits in a slot this
     /// tall either way, so growing doesn't nudge the lane above it.
     private static let draggingTrackHeight: CGFloat = 12
     private static let tapSlop: CGFloat = 6
     private static let holdDelay: Duration = .milliseconds(300)
+    /// A long press, as anywhere else in iOS.
+    private static let editDelay: Duration = .milliseconds(500)
 
     /// Markers get a lane of their own above the track. Drawn on the track
     /// they fought the played fill: a clip at track height read as buffering,
@@ -82,12 +93,16 @@ struct PlaybackScrubber: View {
             let width = proxy.size.width
             let trackHeight: CGFloat = isDragging ? Self.draggingTrackHeight : 6
             // Above the track's slot is the lane's; the track below always scrubs.
-            let laneBottom = (proxy.size.height - Self.laneHeight - Self.laneGap - Self.draggingTrackHeight) / 2
-                + Self.laneHeight + Self.laneGap / 2
+            let laneBottom = Self.trackCentre - Self.draggingTrackHeight / 2 - Self.laneGap / 2
 
-            VStack(spacing: Self.laneGap) {
+            VStack(spacing: 0) {
+                tickLabels(width: width)
+                    .frame(height: Self.tickLabelHeight)
+                    .padding(.bottom, Self.tickLabelGap)
+
                 markerLane(width: width)
                     .frame(height: Self.laneHeight)
+                    .padding(.bottom, Self.laneGap)
 
                 ZStack(alignment: .leading) {
                     Capsule()
@@ -99,35 +114,122 @@ struct PlaybackScrubber: View {
                 }
                 .frame(height: trackHeight)
                 .frame(height: Self.draggingTrackHeight)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Playback position")
+                .accessibilityValue(Text([Self.timeLabel(displayedPosition), sectionName].compactMap(\.self).joined(separator: ", ")))
+                .accessibilityAdjustableAction { direction in
+                    guard duration != nil else { return }
+                    let step: TimeInterval = direction == .increment ? 5 : -5
+                    onCommit(displayedPosition + step)
+                }
             }
-            .frame(maxHeight: .infinity)
+            .padding(.top, Self.barTopPadding)
+            .frame(maxHeight: .infinity, alignment: .top)
             .contentShape(.rect)
             .gesture(dragGesture(width: width, laneBottom: laneBottom))
             .animation(.snappy(duration: 0.2), value: isDragging)
+            .overlay(alignment: .topLeading) { tickAccessibility(width: width) }
         }
-        .frame(height: 44)
+        .frame(height: Self.barHeight)
         .disabled(duration == nil)
     }
 
-    /// The looping clip is solid; the rest are translucent, as the pills'
-    /// fills are.
+    private var points: [Marker] { markers.filter { !$0.isClip } }
+
+    /// Each label runs from its tick towards the next, and gives way when
+    /// there's too little room to read; an unnamed marker's tick has none.
+    @ViewBuilder
+    private func tickLabels(width: CGFloat) -> some View {
+        if let duration, duration > 0 {
+            let points = points.sorted { $0.start < $1.start }
+            let xs = points.map { width * min(max($0.start / duration, 0), 1) }
+            let widths = Self.tickLabelWidths(xs: xs, width: width)
+            ZStack(alignment: .topLeading) {
+                ForEach(Array(points.enumerated()), id: \.element.id) { index, marker in
+                    if !marker.name.isEmpty, let labelWidth = widths[index] {
+                        Text(marker.name)
+                            .font(.caption2.weight(.medium))
+                            .lineLimit(1)
+                            .frame(width: labelWidth, alignment: .leading)
+                            .offset(x: xs[index] - 1)
+                    }
+                }
+            }
+            .frame(width: width, alignment: .topLeading)
+            .foregroundStyle(.secondary)
+            .dynamicTypeSize(...DynamicTypeSize.xLarge)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        } else {
+            Color.clear
+        }
+    }
+
+    /// The room each tick's label has, running right from its tick to just
+    /// short of the next tick or the end of the bar; `nil` where that's too
+    /// little to read. `xs` in time order.
+    nonisolated static func tickLabelWidths(
+        xs: [CGFloat],
+        width: CGFloat,
+        spacing: CGFloat = 6,
+        minimum: CGFloat = 24
+    ) -> [CGFloat?] {
+        xs.indices.map { index in
+            let room = index + 1 < xs.count
+                ? xs[index + 1] - xs[index] - spacing
+                : width - xs[index]
+            return room >= minimum ? room : nil
+        }
+    }
+
+    /// VoiceOver can't find a tick by touch, so each is an element of its
+    /// own, over the lane where a finger would find it.
+    @ViewBuilder
+    private func tickAccessibility(width: CGFloat) -> some View {
+        if let duration, duration > 0 {
+            ZStack(alignment: .topLeading) {
+                ForEach(points) { marker in
+                    let x = width * min(max(marker.start / duration, 0), 1)
+                    Color.clear
+                        .frame(width: 44, height: Self.trackCentre - Self.draggingTrackHeight / 2)
+                        .offset(x: x - 22)
+                        .accessibilityElement()
+                        .accessibilityLabel("\(marker.spokenName ?? marker.name), \(Self.timeLabel(marker.start))")
+                        .accessibilityHint("Jumps here")
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction { onCommit(marker.start) }
+                        .accessibilityActions {
+                            if let onHoldMarker {
+                                Button("Edit Marker") { onHoldMarker(marker) }
+                            }
+                        }
+                }
+            }
+            .frame(width: width, alignment: .topLeading)
+            .allowsHitTesting(false)
+        }
+    }
+
+    /// Ticks for points; the looping range, the one span, is solid.
     @ViewBuilder
     private func markerLane(width: CGFloat) -> some View {
         if let duration, duration > 0 {
             ZStack(alignment: .leading) {
-                ForEach(markers) { marker in
+                // Spans first and half height, so the ticks inside a
+                // looping range still stand out of it.
+                ForEach(markers.filter(\.isClip) + points) { marker in
                     let x = width * min(max(marker.start / duration, 0), 1)
                     if let end = marker.end {
                         let span = width * min(max((end - marker.start) / duration, 0), 1)
                         Capsule()
                             .fill(marker.isLooping ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary.opacity(0.35)))
-                            .frame(width: max(Self.laneHeight, span), height: Self.laneHeight)
-                            .offset(x: min(x, width - max(Self.laneHeight, span)))
+                            .frame(width: max(Self.laneHeight / 2, span), height: Self.laneHeight / 2)
+                            .offset(x: min(x, width - max(Self.laneHeight / 2, span)))
                     } else {
-                        Circle()
-                            .fill(.primary.opacity(0.6))
-                            .frame(width: 6, height: 6)
-                            .offset(x: min(max(0, x - 3), width - 6))
+                        Capsule()
+                            .fill(.primary.opacity(0.75))
+                            .frame(width: 2, height: Self.laneHeight)
+                            .offset(x: min(max(0, x - 1), width - 2))
                     }
                 }
             }
@@ -141,16 +243,24 @@ struct PlaybackScrubber: View {
     private func dragGesture(width: CGFloat, laneBottom: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
-                guard let duration, duration > 0, width > 0 else { return }
+                guard let duration, duration > 0, width > 0, !isHolding else { return }
                 if dragPosition == nil, pendingMarker == nil {
                     if value.startLocation.y < laneBottom,
-                       let marker = Self.marker(at: value.startLocation.x, width: width, duration: duration, in: markers) {
+                       let marker = Self.marker(at: value.startLocation.x, width: width, duration: duration, in: points, targetWidth: 44) {
                         pendingMarker = marker
                         holdTask = Task {
-                            try? await Task.sleep(for: Self.holdDelay)
-                            guard !Task.isCancelled, pendingMarker != nil else { return }
+                            try? await Task.sleep(for: onHoldMarker == nil ? Self.holdDelay : Self.editDelay)
+                            guard !Task.isCancelled, let held = pendingMarker else { return }
                             pendingMarker = nil
-                            scrub(to: value.startLocation.x, width: width, duration: duration)
+                            if let onHoldMarker, !held.isClip {
+                                isHolding = true
+                                #if canImport(UIKit)
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                #endif
+                                onHoldMarker(held)
+                            } else {
+                                scrub(to: value.startLocation.x, width: width, duration: duration)
+                            }
                         }
                         return
                     }
@@ -163,6 +273,10 @@ struct PlaybackScrubber: View {
             }
             .onEnded { _ in
                 holdTask?.cancel()
+                if isHolding {
+                    isHolding = false
+                    return
+                }
                 if let marker = pendingMarker {
                     pendingMarker = nil
                     #if canImport(UIKit)

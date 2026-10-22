@@ -17,10 +17,11 @@ The simulator must run iOS ≥ 26.4 or the build is rejected with "doesn't match
 ## Rules the code can't enforce
 
 - `RootTabView` owns the one `PlaybackController`; it's the only thing that talks to `ApplicationMusicPlayer`. Its comments record MusicKit quirks (seek settling, unplayed queues dropping writes, rate changes starting a paused player) — read them before changing it.
-- Choosing something (a song, a marker) never starts playback. The one exception is "Play on Loop", and the comment there explains why.
+- Choosing something (a song, a marker, a section) never starts playback; looping a section only moves the playhead into it.
+- The player has two modes, Play (scrubber with marker ticks) and Loop (section blocks). Only the timeline changes with the mode; the loop carries across. Looping turns on from a block (tap one, drag across several) or the transport's loop button (whole song), and off from that button or by tapping the block that's looping. Loop and mode live on `PlaybackController`, never in view state, so a relayout keeps them.
 - Markers are points; sections (marker to next marker, or to the song's end) are derived by `SongSection.derive`, never stored. Loop state is plain times on `PlaybackController`, not marker references, so editing a marker leaves a running loop where it was. Snap and pre-roll values live in `MarkerPlacement`.
-- Speeds are persisted only on explicit save, never from `playbackRate`'s `didSet`.
-- All model mutation goes through `SongMarker.add/addSnapping/split/set/nudge/delete/restore/mergeWithNext` and `SavedSong.save/touch/markPracticed/setArtwork`, which enforce the invariants and save. Repairs that aren't the user's edit (`mergeDuplicates`, `ClipMigration`) leave the dates alone. New models go in `AppSchema.models`; the app, previews and tests all build from it.
+- Speeds are persisted only on explicit save, never from `playbackRate`'s `didSet`. The player mode is the opposite: a saved song remembers it the moment it switches (`PlaybackController.switchMode`), since it's where the user left the screen, not a value they tune.
+- All model mutation goes through `SongMarker.add/addSnapping/split/set/nudge/delete/restore/mergeWithNext` and `SavedSong.save/touch/markPracticed/setArtwork/setPlayerMode`, which enforce the invariants and save. Repairs that aren't the user's edit (`mergeDuplicates`, `ClipMigration`) leave the dates alone. New models go in `AppSchema.models`; the app, previews and tests all build from it.
 - Storage APIs take plain values, with a `Song` overload on top, because `Song`/`Artwork` have no public initialisers and tests can't construct them.
 
 ## iCloud sync

@@ -57,9 +57,12 @@ final class PlaybackController {
     /// which would yank the bar back to where the user just dragged from.
     private var lastSeek: ContinuousClock.Instant?
 
-    /// `nil` when the loop button is off. Only the button turns looping on and
-    /// off; the pills reshape the range while it runs.
+    /// `nil` when nothing's looping. Here rather than in the screen so a
+    /// relayout (rotating, folding, resizing a window) keeps it.
     private(set) var loop: Loop?
+    /// Which timeline the player shows. Here for the same reason as `loop`;
+    /// a saved song's last mode is loaded with its speed.
+    var mode: PlayerMode = .play
     /// Whether the playhead was last inside the loop's range. Cleared by a
     /// jump or scrub: the ticker waits until it plays back into the range.
     private var wasInsideLoop = false
@@ -258,7 +261,7 @@ final class PlaybackController {
     func select(song: Song) async {
         selectedSong = song
         LastLoadedSong.remember(song)
-        loadSavedSpeed(for: song)
+        loadSavedSettings(songID: song.id.rawValue)
         errorMessage = nil
         rateWarning = nil
         playbackTime = 0
@@ -360,43 +363,50 @@ final class PlaybackController {
 
     var isLoopOn: Bool { loop != nil }
 
+    /// The whole song's range counts as the whole-song loop, so tapping a
+    /// song's only section turns it off again.
     func isLooping(start: TimeInterval, end: TimeInterval) -> Bool {
-        loop?.matches(start: start, end: end) ?? false
+        if loop == .wholeSong { return isWholeSong(start: start, end: end) }
+        return loop?.matches(start: start, end: end) ?? false
     }
 
-    /// The only control that starts or stops looping. From off it loops the
-    /// whole song; from on it stops whatever the range.
+    private func isWholeSong(start: TimeInterval, end: TimeInterval) -> Bool {
+        guard let duration else { return false }
+        return start < MarkerPlacement.sameTime && end > duration - MarkerPlacement.sameTime
+    }
+
+    /// The transport's loop button: from off it loops the whole song; from
+    /// on it stops whatever the range.
     func toggleLoop() {
         setLoop(loop == nil ? .wholeSong : nil)
     }
 
-    /// Does nothing with the button off: a pill tap never starts a loop.
-    /// Tapping the range already looping widens back to the whole song
-    /// rather than stopping.
-    func toggleLoop(start: TimeInterval, end: TimeInterval) {
-        guard loop != nil else { return }
+    /// Tapping a section block: loops the range, or stops looping when it's
+    /// the range already looping. Never starts playback.
+    func toggleLoopRange(start: TimeInterval, end: TimeInterval) {
         if isLooping(start: start, end: end) {
-            setLoop(.wholeSong)
+            stopLooping()
         } else {
-            setRange(start: start, end: end)
+            loopRange(start: start, end: end)
         }
     }
 
-    /// The one place a marker starts playback, against the rule everywhere
-    /// else that choosing something never does: the user read the words
-    /// "Play on Loop" before tapping.
-    func playOnLoop(start: TimeInterval, end: TimeInterval) {
-        guard end > start else { return }
-        setLoop(.range(start: start, end: end))
-        seek(to: start)
-        wasInsideLoop = true
-        play()
+    func stopLooping() {
+        setLoop(nil)
     }
 
-    /// Arming a range from outside it moves the playhead in, so the loop
-    /// starts now rather than once the rest of the song has played through.
-    private func setRange(start: TimeInterval, end: TimeInterval) {
+    /// Turns looping on for the range, whatever was looping before. Arming a
+    /// range from outside it moves the playhead in, so the loop starts now
+    /// rather than once the rest of the song has played through. Doesn't
+    /// start playback.
+    func loopRange(start: TimeInterval, end: TimeInterval) {
         guard end > start else { return }
+        // The player's own repeat wraps the whole song seamlessly; the
+        // ticker would wrap it up to a poll late.
+        if isWholeSong(start: start, end: end) {
+            setLoop(.wholeSong)
+            return
+        }
         setLoop(.range(start: start, end: end))
         guard !(start..<end).contains(playbackTime) else { return }
         seek(to: start)
@@ -437,15 +447,23 @@ final class PlaybackController {
 
     // MARK: - Persistence
 
-    private func loadSavedSpeed(for song: Song) {
+    /// The speed and mode the song was saved with; an unsaved song opens at
+    /// full speed in Play.
+    func loadSavedSettings(songID: String) {
         isLoadingSavedSpeed = true
         defer { isLoadingSavedSpeed = false }
 
-        guard let modelContext else {
-            playbackRate = 1.0
-            return
-        }
-        playbackRate = SavedSong.find(songID: song.id.rawValue, in: modelContext)?.speed ?? 1.0
+        let saved = modelContext.flatMap { SavedSong.find(songID: songID, in: $0) }
+        playbackRate = saved?.speed ?? 1.0
+        mode = saved?.playerMode ?? .play
+    }
+
+    /// Saved songs remember the mode straight away; an unsaved one keeps it
+    /// only while it's loaded.
+    func switchMode(to new: PlayerMode, saved: SavedSong?) {
+        mode = new
+        guard let saved, let context = saved.modelContext ?? modelContext else { return }
+        SavedSong.setPlayerMode(new, for: saved, in: context)
     }
 
     /// Only saved songs keep a practice date; playing an unsaved one leaves

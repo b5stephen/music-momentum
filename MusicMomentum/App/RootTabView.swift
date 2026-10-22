@@ -43,6 +43,9 @@ struct RootTabView: View {
             guard SampleSong.isRequested, let id, let duration = SampleSong.duration(of: id) else { return }
             controller.sampleDuration = duration
             controller.playbackRate = SampleSong.speed(of: id) ?? 1.0
+            controller.mode = SavedSong.find(songID: id, in: modelContext)?.playerMode ?? .play
+            // A range belonged to the last sample, as it would to the last track.
+            controller.stopLooping()
         }
         #endif
         // Duplicates, clips from a device on an older build and another

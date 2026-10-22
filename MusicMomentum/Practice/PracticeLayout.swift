@@ -19,8 +19,8 @@ import UIKit
 /// anything gives way.
 ///
 /// Before the wheel has given up much, the screen goes compact: a one-line
-/// header, a transport row of even buttons, and Mark in the marker row instead
-/// of on a caption line. That frees enough height to hand the wheel most of
+/// header, a transport row of even buttons, and Play | Loop beside Mark at
+/// the bottom instead of over the timeline. That frees enough height to hand the wheel most of
 /// its size back.
 nonisolated struct PracticeLayout: Equatable {
     /// The song and its speed on the left, playback on the right.
@@ -66,14 +66,20 @@ nonisolated struct PracticeLayout: Equatable {
         /// up, and the screen re-laid out every frame without settling.
         var wideTitleBlock: CGFloat
         var compactHeader: CGFloat
+        /// The Play | Loop control and the gap under it. Compact, the
+        /// control shares the bottom row with Mark instead.
+        var modeRow: CGFloat
+        /// Either mode's timeline: they're the same height, so the
+        /// transport holds still when the mode switches.
         var scrubber: CGFloat
-        var pillRow: CGFloat
-        /// The loop caption and Mark under the pills.
+        /// Compact, Play | Loop and Mark's glyph.
+        var compactRow: CGFloat
+        /// The loop caption and Mark.
         var captionRow: CGFloat
 
         static let standard = Heights(
             titleBlock: 54, wideTitleBlock: 54, compactHeader: 44,
-            scrubber: 56, pillRow: 36, captionRow: 52
+            modeRow: 38, scrubber: 60, compactRow: 40, captionRow: 50
         )
     }
 
@@ -107,17 +113,19 @@ nonisolated struct PracticeLayout: Equatable {
     /// shrinking can't unwrap one and feed back into the layout.
     static let maxCover: CGFloat = 72
     /// Without it, the timeline met the top of a landscape phone and the
-    /// pills met its tab bar.
+    /// bottom row met its tab bar.
     static let widePlayerBreathing: CGFloat = 16
     /// Between the wide playback column's glass panel and its rows.
     static let widePanelPadding: CGFloat = 14
     /// The wide layout's top padding.
     static let wideTopPadding: CGFloat = 6
     static let volumeRow: CGFloat = 44
+    /// Between the Play | Loop control and the timeline it switches.
+    static let modeGap: CGFloat = 4
     /// The system's thumbless slider track, near enough the scrubber's.
     private static let volumeTrack: CGFloat = 6
-    /// How far down its 44pt touch area the scrubber's bar ends.
-    private static let scrubberBarBottom: CGFloat = 31
+    /// How far down its touch area the scrubber's bar ends.
+    private static let scrubberBarBottom: CGFloat = 41
     /// The header stops growing here: any larger and a title wraps over
     /// several lines and pushes the wheel down, and the buttons' glyphs
     /// spill out of their 44pt glass.
@@ -321,11 +329,10 @@ nonisolated struct PracticeLayout: Equatable {
     }
 
     func playerHeight(_ heights: Heights) -> CGFloat {
-        scrubberTop + heights.scrubber + scrubberGap
+        scrubberTop + (isCompact ? 0 : heights.modeRow) + heights.scrubber + scrubberGap
             + playSize + transportGap
             + (showsVolume ? volumeGap(heights) + Self.volumeRow : 0)
-            + heights.pillRow
-            + (isCompact ? 0 : heights.captionRow)
+            + (isCompact ? heights.compactRow : heights.captionRow)
     }
 }
 
@@ -341,15 +348,15 @@ extension PracticeLayout.Heights {
         func line(_ style: UIFont.TextStyle, _ traits: UITraitCollection = traits) -> CGFloat {
             UIFont.preferredFont(forTextStyle: style, compatibleWith: traits).lineHeight.rounded(.up)
         }
-        let footnote = UIFontMetrics(forTextStyle: .footnote)
         self.init(
             titleBlock: titleBlock,
             wideTitleBlock: wideTitleBlock,
             compactHeader: max(44, line(.headline, titleTraits) + 2 + line(.subheadline, titleTraits)),
-            // The labels tuck 4pt up under the bar's 44pt touch area.
-            scrubber: 44 + line(.caption1) - 4,
-            pillRow: footnote.scaledValue(for: 32, compatibleWith: traits) + 4,
-            captionRow: 8 + max(44, line(.subheadline) + 16)
+            modeRow: max(34, line(.subheadline, titleTraits) + 8) + PracticeLayout.modeGap,
+            // The times tuck 4pt up under the bar's touch area.
+            scrubber: PlaybackScrubber.barHeight + line(.caption1) - 4,
+            compactRow: max(40, line(.subheadline, titleTraits) + 12),
+            captionRow: 6 + max(44, line(.subheadline) + 16)
         )
     }
 }

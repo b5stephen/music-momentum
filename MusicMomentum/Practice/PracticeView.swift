@@ -423,10 +423,9 @@ struct PracticeView: View {
         return (centred, max(0, (column - centred) / 2))
     }
 
-    /// Playback, then what's being practised: the markers sit under the loop
-    /// button that reshapes them, with the caption saying what's looping.
-    /// Every row shares `sideMargin` with the header, so the cover, the
-    /// scrubber's ends, the first pill and the outer buttons line up.
+    /// Play | Loop over the timeline it switches, then playback, then what's
+    /// looping and Mark. Every row shares `sideMargin` with the header, so
+    /// the cover, the timeline's ends and the outer buttons line up.
     /// Given a `height`, the rows spread towards it: wide, the playback
     /// column runs from the top of the header to the foot of the wheel, as a
     /// tight block centred in empty space it looked stark beside them. The
@@ -436,17 +435,17 @@ struct PracticeView: View {
     private func player(_ layout: PracticeLayout, height: CGFloat? = nil) -> some View {
         let spread = height != nil
         return VStack(spacing: 0) {
-            PlaybackScrubber(
-                position: controller.playbackTime,
-                duration: controller.duration,
-                markers: scrubberMarkers,
-                pointNameDuration: 3 * controller.playbackRate,
-                onScrub: { _ in controller.isScrubbing = true },
-                onCommit: { controller.endScrub(at: $0) }
-            )
-            .padding(.horizontal, Self.sideMargin)
-            .padding(.top, layout.scrubberTop)
-            .padding(.bottom, layout.scrubberGap)
+            if !layout.isCompact {
+                modePicker
+                    .padding(.horizontal, Self.sideMargin)
+                    .padding(.top, layout.scrubberTop)
+                    .padding(.bottom, PracticeLayout.modeGap)
+            }
+
+            timeline
+                .padding(.horizontal, Self.sideMargin)
+                .padding(.top, layout.isCompact ? layout.scrubberTop : 0)
+                .padding(.bottom, layout.scrubberGap)
 
             if spread { Self.spreadGap }
 
@@ -466,30 +465,23 @@ struct PracticeView: View {
             if spread { Self.spreadGap }
 
             if layout.isCompact {
-                // The caption's line is the height compact gives back; the
-                // loop button and the pills' fills still say what's looping.
-                HStack(spacing: 0) {
-                    markerPills(trailingInset: 8)
-                    markButton(showsTitle: false)
-                        .padding(.trailing, Self.sideMargin - (44 - Self.markGlassSide) / 2)
-                }
-            } else {
-                markerPills(trailingInset: nil)
-
-                // Mark shares the caption's line rather than taking a pill's
-                // width from the row, which only fitted two and a half pills.
+                // Short of height, Play | Loop shares Mark's row rather than
+                // taking one of its own over the timeline; the loop button
+                // and the blocks still say what's looping.
                 HStack(spacing: 12) {
-                    Text(loopCaption ?? " ")
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(textTint)
-                        .lineLimit(1)
-                        .opacity(loopCaption == nil ? 0 : 1)
-                        .accessibilityHidden(loopCaption == nil)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
+                    modePicker
+                        .frame(maxWidth: 220)
+                    Spacer(minLength: 0)
+                    markButton(showsTitle: false)
+                }
+                .padding(.leading, Self.sideMargin)
+                .padding(.trailing, Self.sideMargin - (44 - Self.markGlassSide) / 2)
+            } else {
+                HStack(spacing: 12) {
+                    loopCaptionText
                     markButton(showsTitle: true)
                 }
-                .padding(.top, 8)
+                .padding(.top, 6)
                 .padding(.horizontal, Self.sideMargin)
             }
         }
@@ -497,23 +489,56 @@ struct PracticeView: View {
         .frame(height: height)
     }
 
-    /// Always laid out, so switching between songs with and without markers
-    /// doesn't shift the centred stack.
-    private func markerPills(trailingInset: CGFloat?) -> some View {
-        MarkerPills(
-            markers: savedSong?.sortedMarkers ?? [],
-            inset: Self.sideMargin,
-            trailingInset: trailingInset,
-            isLooping: { marker in section(of: marker).map { controller.isLooping(start: $0.start, end: $0.end) } ?? false },
-            isLoopOn: controller.isLoopOn,
-            onTap: { tapped($0) },
-            onPlayLoop: { marker in
-                if let section = section(of: marker) { controller.playOnLoop(start: section.start, end: section.end) }
-            },
-            onJump: { controller.jump(to: $0) },
-            onEdit: { markerSheet = .edit($0) },
-            onDelete: { delete($0) }
-        )
+    private var modePicker: some View {
+        ModePicker(selection: controller.mode) { mode in
+            controller.switchMode(to: mode, saved: savedSong)
+        }
+    }
+
+    /// Loop mode's blocks already say what's looping, under the row itself.
+    private var loopCaptionText: some View {
+        let caption = controller.mode == .play ? loopCaption : nil
+        return Text(caption ?? " ")
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(textTint)
+            .lineLimit(1)
+            .opacity(caption == nil ? 0 : 1)
+            .accessibilityHidden(caption == nil)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The two timelines are the same height and share the space, so
+    /// switching mode moves nothing else on the screen.
+    @ViewBuilder
+    private var timeline: some View {
+        switch controller.mode {
+        case .play:
+            PlaybackScrubber(
+                position: controller.playbackTime,
+                duration: controller.duration,
+                markers: scrubberMarkers,
+                pointNameDuration: 3 * controller.playbackRate,
+                onScrub: { _ in controller.isScrubbing = true },
+                onHoldMarker: { marker in
+                    if let edited = savedMarker(id: marker.id) { markerSheet = .edit(edited) }
+                },
+                onCommit: { controller.endScrub(at: $0) }
+            )
+            .transition(.opacity)
+        case .loop:
+            SectionBlocks(
+                blocks: sectionBlocks,
+                position: controller.playbackTime,
+                duration: controller.duration,
+                loop: loopRange,
+                onTap: { controller.toggleLoopRange(start: $0.lowerBound, end: $0.upperBound) },
+                onDrag: { controller.loopRange(start: $0.lowerBound, end: $0.upperBound) },
+                onHold: { block in
+                    if let edited = savedMarker(id: block.id) { markerSheet = .edit(edited) }
+                }
+            )
+            .transition(.opacity)
+        }
     }
 
     private static let sideMargin: CGFloat = 24
@@ -565,7 +590,7 @@ struct PracticeView: View {
     }
 
     /// Five controls, not six: an odd number puts play/pause dead centre.
-    /// Marking moved under the pill row it adds to.
+    /// Marking has a row of its own at the bottom.
     private func transportControls(_ layout: PracticeLayout) -> some View {
         HStack(spacing: 0) {
             // A size down from the skips, which read as one group with play;
@@ -660,7 +685,7 @@ struct PracticeView: View {
     }
 
     /// Compact, Mark sits in the marker row, and shorter than the header's 44pt
-    /// glass so it doesn't tower over the pills; the touch area stays 44pt.
+    /// glass so it doesn't tower over Play | Loop; the touch area stays 44pt.
     /// On its own line it's the save prompt's size, so the two read as a pair.
     private static let markGlassSide: CGFloat = 36
 
@@ -688,13 +713,16 @@ struct PracticeView: View {
         .accessibilityAddTraits(controller.isLoopOn ? .isSelected : [])
     }
 
+    /// "Looping Chorus", or "Looping Verse – Chorus" for a run of
+    /// sections, the way Loop mode's blocks name it.
     private var loopCaption: String? {
         switch controller.loop {
         case nil: nil
         case .wholeSong: "Looping whole song"
         case .range(let start, let end):
-            if let section = sections.first(where: { controller.isLooping(start: $0.start, end: $0.end) }) {
-                "Looping \(section.displayName)"
+            if let run = SectionBlockLayout(sections: sections.map { $0.start...$0.end }, width: 1)
+                .blocks(matching: start...end) {
+                "Looping \(SectionBlockLayout.name(of: run, names: sections.map(\.displayName)))"
             } else {
                 "Looping \(PlaybackScrubber.timeLabel(start)) – \(PlaybackScrubber.timeLabel(end))"
             }
@@ -717,24 +745,42 @@ struct PracticeView: View {
         return savedSong.sections(duration: duration)
     }
 
-    private func section(of marker: SongMarker) -> SongSection<PersistentIdentifier>? {
-        sections.first { $0.opening?.id == marker.persistentModelID }
+    /// A song without markers is one block, the whole song.
+    private var sectionBlocks: [SectionBlocks.Block] {
+        guard let duration = controller.duration else { return [] }
+        let sections = savedSong?.sections(duration: duration)
+            ?? [SongSection(start: 0, end: duration, opening: nil, isWholeSong: true)]
+        return sections.map { section in
+            SectionBlocks.Block(
+                id: section.opening.map { AnyHashable($0.id) } ?? AnyHashable(section.isWholeSong ? "whole" : "lead"),
+                range: section.start...section.end,
+                name: section.displayName,
+                isEditable: section.opening != nil
+            )
+        }
     }
 
-    /// With the loop off a tap navigates; with it on, it loops the marker's
-    /// section instead (the menu's Jump to Start still navigates).
-    private func tapped(_ marker: SongMarker) {
-        if controller.isLoopOn, let section = section(of: marker) {
-            controller.toggleLoop(start: section.start, end: section.end)
-        } else {
-            controller.jump(to: marker)
+    /// What's looping as a range, the whole song as all of it.
+    private var loopRange: ClosedRange<TimeInterval>? {
+        switch controller.loop {
+        case nil: nil
+        case .wholeSong: controller.duration.map { 0...$0 }
+        case .range(let start, let end): start...end
         }
+    }
+
+    private func savedMarker(id: AnyHashable) -> SongMarker? {
+        savedSong?.sortedMarkers.first { AnyHashable($0.persistentModelID) == id }
     }
 
     /// Points, plus the looping range as a bar.
     private var scrubberMarkers: [PlaybackScrubber.Marker] {
-        var markers: [PlaybackScrubber.Marker] = (savedSong?.sortedMarkers ?? []).map {
-            .init(id: $0.persistentModelID, name: $0.name, start: $0.startTime, end: nil)
+        let sorted = savedSong?.sortedMarkers ?? []
+        var markers: [PlaybackScrubber.Marker] = sorted.enumerated().map { index, marker in
+            .init(
+                id: marker.persistentModelID, name: marker.name, start: marker.startTime, end: nil,
+                spokenName: SongSection<PersistentIdentifier>.markerName(marker.name, index: index)
+            )
         }
         if case .range(let start, let end) = controller.loop {
             markers.append(.init(id: "loop", start: start, end: end, isLooping: true))
@@ -1286,7 +1332,6 @@ private struct PanelGlass: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(\.inGlassPanel, true)
-            // The pills scroll edge to edge; the panel's corners end them.
             .clipShape(.rect(cornerRadius: 32))
             .glassEffect(smokedFill.map { Glass.regular.tint($0) } ?? .regular, in: .rect(cornerRadius: 32))
     }
@@ -1429,6 +1474,30 @@ private struct DialSilhouette: View {
     loadedPreview(palette: nil)
 }
 
+#Preview("Loop mode") {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.13, green: 0.23, blue: 0.29)), mode: .loop)
+}
+
+#Preview("Loop mode, looping") {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.13, green: 0.23, blue: 0.29)), mode: .loop, loop: 58...96)
+}
+
+#Preview("Loop mode, two sections looping") {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.13, green: 0.23, blue: 0.29)), mode: .loop, loop: 22...96)
+}
+
+#Preview("Play mode, looping") {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.13, green: 0.23, blue: 0.29)), loop: 58...96)
+}
+
+#Preview("Loop mode, no markers") {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.20, green: 0.45, blue: 0.48)), mode: .loop, markers: [])
+}
+
+#Preview("Play mode, no markers") {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.20, green: 0.45, blue: 0.48)), markers: [])
+}
+
 #Preview("Landscape", traits: .landscapeLeft) {
     loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)))
 }
@@ -1486,20 +1555,27 @@ private func loadedPreview(
     title: String = "Little Wing",
     artistName: String = "Jimi Hendrix",
     rate: Double = 0.6,
-    loopOn: Bool = false
+    loopOn: Bool = false,
+    mode: PlayerMode = .play,
+    loop: ClosedRange<TimeInterval>? = nil,
+    markers: [(name: String, time: TimeInterval)] = [("Intro", 0), ("Verse", 22), ("Chorus", 58), ("Solo", 96), ("Verse 2", 112)]
 ) -> some View {
     let container = try! AppSchema.inMemoryContainer()
     let song = SavedSong.save(
         songID: "1", title: title, artistName: artistName,
         artworkData: nil, speed: 0.6, in: container.mainContext
     )
-    SongMarker.add(to: song, name: "Intro", at: 0, in: container.mainContext)
-    SongMarker.add(to: song, name: "Verse", at: 22, in: container.mainContext)
-    SongMarker.add(to: song, name: "Solo", at: 96, in: container.mainContext)
-    SongMarker.add(to: song, name: "Verse 2", at: 112, in: container.mainContext)
+    for marker in markers {
+        SongMarker.add(to: song, name: marker.name, at: marker.time, in: container.mainContext)
+    }
     let controller = PlaybackController()
+    #if DEBUG
+    controller.sampleDuration = 145
+    #endif
     controller.playbackRate = rate
+    controller.mode = mode
     if loopOn { controller.toggleLoop() }
+    if let loop { controller.loopRange(start: loop.lowerBound, end: loop.upperBound) }
     return PracticeView(
         controller: controller,
         previewTrack: .init(id: "1", title: title, artistName: artistName, palette: palette)
