@@ -82,11 +82,11 @@ struct RootTabView: View {
             }
         }
         // Coral vanishes on a red or orange cover, so the selected tab takes
-        // the practice screen's text colour while it's showing. That colour is
-        // always light, and the glass turns light over a bright cover, so the
-        // bar is held dark; each tab gets the real scheme back.
-        .tint(tab == .practice ? practicePalette?.foreground : nil)
-        .environment(\.colorScheme, tab == .practice && practicePalette != nil ? .dark : colorScheme)
+        // the practice screen's ink while it's showing, and the bar takes the
+        // scheme that ink is drawn for: dark under light ink, light under the
+        // dark ink of a pale cover. Each tab gets the real scheme back.
+        .tint(tab == .practice ? practicePalette?.ink : nil)
+        .environment(\.colorScheme, tab == .practice ? practicePalette?.colorScheme ?? colorScheme : colorScheme)
     }
 
     /// Landscape, with room for Saved beside the narrowest card and for the

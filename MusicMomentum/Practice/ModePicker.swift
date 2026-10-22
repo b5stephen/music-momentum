@@ -7,7 +7,7 @@ import SwiftUI
 
 /// Play | Loop on the player. Drawn by hand rather than a segmented
 /// `Picker`, which can't take the cover's colours: the selected half is a
-/// solid capsule of the text colour with the ground's colour as its text.
+/// solid capsule of the ink with the ground's colour as its text.
 struct ModePicker: View {
     let selection: PlayerMode
     var onSelect: (PlayerMode) -> Void
@@ -42,7 +42,7 @@ struct ModePicker: View {
             }
         }
         .padding(3)
-        .background(.primary.opacity(0.16), in: .capsule)
+        .background(.primary.opacity(ArtworkPalette.inactiveInk), in: .capsule)
         .dynamicTypeSize(...PracticeLayout.headerTypeLimit)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Timeline")

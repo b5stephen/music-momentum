@@ -14,7 +14,6 @@ import UIKit
 /// ticks, or on the saved speed's dot, jumps straight to it.
 struct SpeedWheelPicker: View {
     @Binding var speed: Double
-    @Environment(\.smokedFill) private var smokedFill
     @Environment(\.colorScheme) private var colorScheme
 
     /// A double tap toggles between this and full speed; with none, it only
@@ -150,13 +149,11 @@ struct SpeedWheelPicker: View {
     }
 
     /// A circle, so the glass never needs to turn; only the markings on it do.
-    /// Smoked on a bright cover, where clear glass would leave the light
-    /// markings on a light ground.
     private func skirt(_ geometry: SpeedKnobGeometry) -> some View {
         Circle()
             .fill(.clear)
             .frame(width: geometry.skirtRadius * 2, height: geometry.skirtRadius * 2)
-            .glassEffect(smokedFill.map { Glass.regular.tint($0) } ?? .regular, in: .circle)
+            .glassEffect(.regular, in: .circle)
     }
 
     /// Drawn pointing up; the caller turns them to the value.
@@ -229,7 +226,7 @@ struct SpeedWheelPicker: View {
         } label: {
             Image(systemName: "arrow.uturn.backward")
                 .font(.system(size: size, weight: .semibold))
-                .foregroundStyle(Color.primary.opacity(0.7))
+                .foregroundStyle(.secondary)
                 .frame(width: 44, height: 44)
                 .contentShape(.circle)
         }

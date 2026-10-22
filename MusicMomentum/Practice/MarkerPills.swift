@@ -39,7 +39,6 @@ struct MarkerPills: View {
     /// more when there is more.
     @State private var clipped: (leading: Bool, trailing: Bool) = (false, false)
     @Environment(\.onAccent) private var onAccent
-    @Environment(\.smokedFill) private var smokedFill
     @Environment(\.inGlassPanel) private var inGlassPanel
     @Environment(\.displayScale) private var displayScale
 
@@ -194,7 +193,7 @@ struct MarkerPills: View {
                 .overlay { Capsule().strokeBorder(.primary.opacity(0.14), lineWidth: 1) }
         } else {
             Color.clear
-                .glassEffect((smokedFill.map { Glass.regular.tint($0) } ?? .regular).interactive(), in: .capsule)
+                .glassEffect(.regular.interactive(), in: .capsule)
         }
     }
 

@@ -65,6 +65,18 @@ nonisolated struct OKLCH: Equatable {
         return (Self.encode(rgb.0), Self.encode(rgb.1), Self.encode(rgb.2))
     }
 
+    /// WCAG's relative luminance, 0 black to 1 white.
+    var luminance: Double {
+        let (r, g, b) = srgb
+        return 0.2126 * Self.linear(r) + 0.7152 * Self.linear(g) + 0.0722 * Self.linear(b)
+    }
+
+    /// WCAG's contrast ratio, 1...21: 4.5 is the floor for small text.
+    func contrast(with other: OKLCH) -> Double {
+        let (x, y) = (luminance, other.luminance)
+        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+
     var cgColor: CGColor {
         let (r, g, b) = srgb
         return CGColor(srgbRed: r, green: g, blue: b, alpha: 1)

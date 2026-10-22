@@ -17,7 +17,7 @@ import SwiftUI
 /// hand-centred slider and one sized to the view's own height still sat
 /// above the speaker icons.
 struct VolumeSlider: View {
-    /// The screen's text colour; UIKit can't see SwiftUI's foreground style.
+    /// The screen's ink; UIKit can't see SwiftUI's foreground style.
     var tint: Color?
 
     var body: some View {

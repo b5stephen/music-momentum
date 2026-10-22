@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import MusicKit
 import Testing
 @testable import MusicMomentum
 
@@ -21,14 +22,14 @@ struct ArtworkPaletteTests {
     }
 
     private func contrast(_ a: OKLCH, _ b: OKLCH) -> Double {
-        func luminance(_ c: OKLCH) -> Double {
-            let linear = [c.srgb.red, c.srgb.green, c.srgb.blue].map {
-                $0 <= 0.04045 ? $0 / 12.92 : pow(($0 + 0.055) / 1.055, 2.4)
-            }
-            return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
-        }
-        let (x, y) = (luminance(a), luminance(b))
-        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+        a.contrast(with: b)
+    }
+
+    @Test("Contrast matches WCAG's figures")
+    func wcagContrast() {
+        #expect(abs(contrast(colour(0xFFFFFF), colour(0x000000)) - 21) < 0.01)
+        #expect(contrast(colour(0x777777), colour(0xFFFFFF)) < 4.5)
+        #expect(contrast(colour(0x767676), colour(0xFFFFFF)) >= 4.5)
     }
 
     @Test("Round-trips sRGB", arguments: [0xE0A30C, 0x87302F, 0x5A92C2, 0x3F3F40] as [UInt32])
@@ -77,14 +78,78 @@ struct ArtworkPaletteTests {
         #expect(abs(ground.mesh[4].h - cover.h) < 1)
         #expect(ground.mesh[4].vividness > cover.vividness)
         #expect(ground.mesh[0].l < cover.l - 0.1)
-        #expect(contrast(ground.text, ground.mesh[4]) >= 4.5)
+        #expect(!ground.inkIsDark)
+        #expect(contrast(ground.ink, ground.mesh[4]) >= 4.5)
     }
 
-    @Test("A white cover stays dark enough for light text")
-    func whiteDarkens() {
+    // MARK: - Ink
+
+    @Test("A white cover stays pale, under dark ink")
+    func whiteTakesDarkInk() {
         let ground = ground(0xFFFFFF)
-        #expect(ground.mesh[0].l <= 0.5)
-        #expect(ground.mesh.allSatisfy { contrast(ground.text, $0) >= 4.5 })
+        #expect(ground.inkIsDark)
+        #expect(ground.ink == ArtworkPalette.darkInk)
+        #expect(ground.mesh[4].l > 0.8)
+    }
+
+    @Test("A pale cream cover takes dark ink, with the ground on solid ink", arguments: [0xE8DCC6, 0xF5EBC8, 0xD8D0C0] as [UInt32])
+    func paleTakesDarkInk(hex: UInt32) {
+        let ground = ground(hex)
+        #expect(ground.inkIsDark)
+        #expect(ground.onInk == ground.mesh[4])
+        #expect(contrast(ground.onInk, ground.ink) >= 4.5)
+    }
+
+    @Test("A dark cover keeps light ink", arguments: [0x213A4A, 0x202830, 0x1A1A1A, 0x2050C0] as [UInt32])
+    func darkKeepsLightInk(hex: UInt32) {
+        let ground = ground(hex)
+        #expect(!ground.inkIsDark)
+        #expect(ground.ink.l > 0.9)
+        #expect(ground.onInk.l < 0.5)
+    }
+
+    @Test("A vivid gold, too bright for light ink, takes dark ink without being lightened")
+    func goldTakesDarkInk() {
+        let unlifted = ArtworkPalette.shade(colour(0xF6CE66))
+        let ground = ground(0xF6CE66)
+        #expect(ground.inkIsDark)
+        #expect(abs(ground.mesh[3].l - (unlifted.l + 0.04)) < 0.01)
+    }
+
+    @Test("Reds and oranges: dark ones keep light ink, bright ones flip", arguments: [
+        (0x973F37, false), (0x87302F, false), (0xC03020, false), (0xFF6640, true), (0xF0A030, true),
+    ] as [(UInt32, Bool)])
+    func redsAndOranges(hex: UInt32, isDark: Bool) {
+        #expect(ground(hex).inkIsDark == isDark)
+    }
+
+    @Test("A mid-grey cover near the switch is lifted until dark ink clears 4.5:1")
+    func nearTheSwitch() {
+        // Light ink falls just short on its middle row, and its darker top
+        // row was too dark for dark ink until lifted.
+        let ground = ground(0xA6A6A6)
+        #expect(ground.inkIsDark)
+        #expect(ground.mesh.allSatisfy { contrast(ArtworkPalette.darkInk, $0) >= 4.5 - 0.001 })
+    }
+
+    @Test("Whatever the cover, the ink clears 4.5:1 on every point of the ground, and on solid ink")
+    func inkAlwaysClears() {
+        let steps = stride(from: 0.0, through: 1.0, by: 0.125)
+        for r in steps {
+            for g in steps {
+                for b in steps {
+                    let cover = OKLCH(red: r, green: g, blue: b)
+                    let ground = ArtworkPalette.ground(for: .init(average: cover, mesh: Array(repeating: cover, count: 9)))
+                    #expect(ground.mesh.allSatisfy { contrast(ground.ink, $0) >= 4.5 - 0.001 }, "\(r) \(g) \(b)")
+                    #expect(contrast(ground.ink, ground.onInk) >= 4.5, "\(r) \(g) \(b)")
+                }
+            }
+        }
+    }
+
+    @Test("A cover without colours has no palette, so Practice keeps the system look and coral")
+    @MainActor func noCover() {
+        #expect(ArtworkPalette(nil as Artwork?) == nil)
     }
 
     @Test("A dark cover isn't darkened into black")
@@ -96,7 +161,7 @@ struct ArtworkPaletteTests {
     func greyStaysGrey() {
         let ground = ground(0x5F5F5F)
         #expect(ground.mesh.allSatisfy { $0.c < 0.005 })
-        #expect(ground.text.c < 0.005)
+        #expect(ground.ink.c < 0.005)
     }
 
     @Test("Each mesh point leans towards the whole cover")

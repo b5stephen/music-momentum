@@ -68,6 +68,12 @@ enum SampleSong {
             ground: (red: 0.20, green: 0.45, blue: 0.48), design: .moon,
             markers: []
         ),
+        // Pale, so the player's dark ink can be seen.
+        Sample(
+            id: "7", title: "Linen Hours", artistName: "Fern & Field", speed: 0.75, duration: 201,
+            ground: (red: 0.91, green: 0.86, blue: 0.77), design: .sun,
+            markers: [("Intro", 0), ("Verse", 20), ("Chorus", 72), ("Bridge", 120), ("Outro", 170)]
+        ),
     ]
 
     static let tracks = samples.map {

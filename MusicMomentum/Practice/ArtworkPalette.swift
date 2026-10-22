@@ -9,27 +9,39 @@ import MusicKit
 import SwiftUI
 
 /// The loaded song's colours, which the practice screen is painted in: the
-/// cover's own colours blurred into a mesh and darkened under light text, the
-/// way Apple Music's Now Playing is.
+/// cover's own colours blurred into a mesh, the way Apple Music's Now Playing
+/// is, under one ink that every control and all the text is drawn in. The
+/// ink is near-white, or dark on a pale ground, so it always clears 4.5:1.
 struct ArtworkPalette: Equatable {
     /// 3×3, row by row from the top left.
     var mesh: [Color]
     var shadow: Color
-    /// What "on" fills put their glyph in.
-    var background: Color
-    var foreground: Color
-    /// Light glass washes out on a bright ground, so controls there take a
-    /// smoked fill instead.
-    var isBright: Bool
+    /// Text, glyphs and fills. `ArtworkGround` makes it the screen's
+    /// foreground and tint, so views draw in `.primary` and `.tint`.
+    var ink: Color
+    /// A glyph or letter on a solid fill of `ink`: the ground's own colour.
+    /// The screen's background style and `onAccent`.
+    var onInk: Color
+    /// The ground is too pale for light ink, so it's dark.
+    var inkIsDark: Bool
 
     private init(ground: Ground) {
         assert(ground.mesh.count == 9, "The mesh is 3×3")
         mesh = ground.mesh.map { Color(cgColor: $0.cgColor) }
         shadow = Color(cgColor: ground.shadow.cgColor)
-        background = Color(cgColor: ground.glyph.cgColor)
-        foreground = Color(cgColor: ground.text.cgColor)
-        isBright = ground.mesh[3...5].map(\.l).reduce(0, +) / 3 > 0.6
+        ink = Color(cgColor: ground.ink.cgColor)
+        onInk = Color(cgColor: ground.onInk.cgColor)
+        inkIsDark = ground.inkIsDark
     }
+
+    /// What system controls and glass under the ink should look like.
+    var colorScheme: ColorScheme { inkIsDark ? .light : .dark }
+
+    /// Ink's opacity for a control that's there but not on: a section block
+    /// not looping, the track behind Play | Loop, Add marker's capsule.
+    nonisolated static let inactiveInk = 0.22
+    /// Ink's opacity for secondary text, which `ArtworkGround` makes `.secondary`.
+    nonisolated static let secondaryInk = 0.75
 
     init(cover: OKLCH) {
         self.init(ground: Self.ground(for: Regions(average: cover, mesh: Array(repeating: cover, count: 9))))
@@ -73,30 +85,63 @@ struct ArtworkPalette: Equatable {
 
     nonisolated struct Ground: Equatable {
         var mesh: [OKLCH]
-        /// What the bottom of the screen darkens towards.
+        /// What the bottom of the screen darkens towards, under light ink.
         var shadow: OKLCH
-        var glyph: OKLCH
-        var text: OKLCH
+        var ink: OKLCH
+        var onInk: OKLCH
+        var inkIsDark: Bool
     }
+
+    /// The spec's dark ink, a warm near-black, for pale grounds.
+    nonisolated static let darkInk = OKLCH(red: 0x1A / 255, green: 0x14 / 255, blue: 0x10 / 255)
+    /// WCAG AA for small text, which the ink holds against every mesh point.
+    nonisolated static let minimumContrast = 4.5
 
     /// Each region keeps only a quarter of its own colour, as Apple's ground
     /// is nearly one colour, and none is less colourful than the average: a
     /// cover's pale parts, darkened, show through as grey patches.
+    ///
+    /// The ink is light unless that falls under 4.5:1 against any point of
+    /// the mesh; then it's `darkInk`, and any point too dark for that is
+    /// lifted until it clears 4.5:1 too. Lifting only touches grounds near
+    /// the switch, whose top row Apple's glow leaves darker.
     nonisolated static func ground(for regions: Regions) -> Ground {
         let average = shade(regions.average)
+        var mesh = regions.mesh.enumerated().map { index, region in
+            let point = mix(average, shade(region), by: 0.25)
+            // A near-grey point's hue is noise, so it takes the cover's.
+            let h = point.c < 0.02 ? average.h : point.h
+            let row = rows[index / 3]
+            return OKLCH(l: point.l + row.lift, c: max(point.c, average.c), h: h - row.warmth * warmth(h))
+        }
+        let lightInk = OKLCH(l: 0.96, c: min(0.06, average.c * 0.5), h: average.h)
+        let inkIsDark = mesh.contains { lightInk.contrast(with: $0) < minimumContrast }
+        if inkIsDark {
+            mesh = mesh.map { lifted($0, clearing: darkInk) }
+        }
         return Ground(
-            mesh: regions.mesh.enumerated().map { index, region in
-                let point = mix(average, shade(region), by: 0.25)
-                // A near-grey point's hue is noise, so it takes the cover's.
-                let h = point.c < 0.02 ? average.h : point.h
-                let row = rows[index / 3]
-                return OKLCH(l: point.l + row.lift, c: max(point.c, average.c), h: h - row.warmth * warmth(h))
-            },
+            mesh: mesh,
             shadow: OKLCH(l: 0.2, c: average.c, h: average.h - 2 * warmth(average.h)),
-            glyph: OKLCH(l: min(0.45, average.l * 0.85), c: average.c, h: average.h - warmth(average.h)),
-            text: OKLCH(l: 0.96, c: min(0.06, average.c * 0.5), h: average.h)
+            ink: inkIsDark ? darkInk : lightInk,
+            onInk: inkIsDark
+                ? mesh[4]
+                : OKLCH(l: min(0.45, average.l * 0.85), c: average.c, h: average.h - warmth(average.h)),
+            inkIsDark: inkIsDark
         )
     }
+
+    /// `point`, lightened just enough to give `ink` 4.5:1.
+    private nonisolated static func lifted(_ point: OKLCH, clearing ink: OKLCH) -> OKLCH {
+        guard ink.contrast(with: point) < minimumContrast else { return point }
+        var (low, high) = (point.l, 1.0)
+        for _ in 0..<20 {
+            let mid = (low + high) / 2
+            if ink.contrast(with: OKLCH(l: mid, c: point.c, h: point.h)) < minimumContrast { low = mid } else { high = mid }
+        }
+        return OKLCH(l: high, c: point.c, h: point.h)
+    }
+
+    private nonisolated static let paleCeiling = 0.86
 
     /// Each row of the mesh, top to bottom: the lightness added, as Apple's
     /// ground is darker along the top edge, where the title sits, and
@@ -106,11 +151,9 @@ struct ArtworkPalette: Equatable {
 
     /// Fitted to Apple Music: a step darker, so a bright cover stays bright,
     /// and a third more saturated relative to what sRGB allows, so it stays
-    /// vivid. Pale and grey covers stop darker, as light text on a light grey
-    /// ground is unreadable and looks washed out.
+    /// vivid. A pale cover stays pale under dark ink, short of glaring white.
     nonisolated static func shade(_ colour: OKLCH) -> OKLCH {
-        let ceiling = 0.5 + 0.3 * colour.vividness
-        let l = min(ceiling, max(min(colour.l, 0.25), colour.l - 0.12))
+        let l = min(paleCeiling, max(min(colour.l, 0.25), colour.l - 0.12))
         return OKLCH(l: l, c: min(1, colour.vividness * 1.3) * OKLCH.maxChroma(l: l, h: colour.h), h: colour.h)
     }
 
@@ -207,12 +250,8 @@ struct ArtworkPalette: Equatable {
 
 extension EnvironmentValues {
     /// Text and glyphs on a solid tint fill. The asset's dark brown everywhere
-    /// but the practice screen, where the tint is the cover's text colour.
+    /// but the practice screen, where the tint is the ink and this `onInk`.
     @Entry var onAccent: Color = .onAccent
-    /// The fill of settled controls (the speed wheel's rim, Practice's chips)
-    /// on a bright cover, where the usual light glass washes out. `nil` keeps
-    /// the light glass.
-    @Entry var smokedFill: Color? = nil
     /// Inside a glass panel, where controls drop their own glass: glass on
     /// glass blurs the panel's blur.
     @Entry var inGlassPanel = false

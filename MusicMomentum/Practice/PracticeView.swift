@@ -77,8 +77,8 @@ struct PracticeView: View {
         )
     }
 
-    /// Tinted text: the cover's text colour, or the coral that stays legible on white.
-    private var textTint: Color { track?.palette?.foreground ?? .accentText }
+    /// Tinted text: the cover's ink, or the coral that stays legible on white.
+    private var textTint: Color { track?.palette?.ink ?? .accentText }
 
     var body: some View {
         // Spacers absorb spare height; the screen only scrolls once they've
@@ -443,7 +443,7 @@ struct PracticeView: View {
             if layout.showsVolume {
                 if spread { Self.spreadGap }
 
-                VolumeSlider(tint: track?.palette?.foreground)
+                VolumeSlider(tint: track?.palette?.ink)
                     .frame(height: PracticeLayout.volumeRow)
                     .padding(.top, layout.volumeGap(layoutHeights))
                     .padding(.horizontal, Self.sideMargin)
@@ -698,7 +698,7 @@ struct PracticeView: View {
             content()
                 .foregroundStyle(.primary)
                 .frame(width: Self.capsuleWidth(layout), height: layout.loopFill)
-                .background(.primary.opacity(0.16), in: .capsule)
+                .background(.primary.opacity(ArtworkPalette.inactiveInk), in: .capsule)
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(.capsule)
         }
@@ -1056,7 +1056,7 @@ struct PracticeView: View {
                 banner(warning, systemImage: "exclamationmark.triangle.fill", icon: .yellow, background: .yellow.opacity(0.18))
             }
             if let error = controller.errorMessage {
-                banner(error, systemImage: "exclamationmark.circle.fill", icon: .accentColor, background: .gray.opacity(0.14))
+                banner(error, systemImage: "exclamationmark.circle.fill", icon: track?.palette?.ink ?? .accentColor, background: .gray.opacity(0.14))
             }
         }
         .padding(.horizontal, 16)
@@ -1185,8 +1185,10 @@ private struct ArrivalState: View {
     }
 }
 
-/// Paints the loaded screen in the cover's colours. Covers without colours
-/// keep the system look and the coral tint.
+/// Paints the loaded screen in the cover's colours, with its ink as the
+/// foreground and tint: `.primary` is the ink, `.secondary` the ink at 75%,
+/// and `.background` the glyph colour on a solid ink fill. Covers without
+/// colours keep the system look and the coral tint.
 private struct ArtworkGround: ViewModifier {
     let palette: ArtworkPalette?
     /// The mesh drifts while the song plays, as Apple Music's does, and holds
@@ -1198,12 +1200,19 @@ private struct ArtworkGround: ViewModifier {
     func body(content: Content) -> some View {
         if let palette {
             content
-                .foregroundStyle(palette.foreground)
-                .tint(palette.foreground)
-                .backgroundStyle(palette.background)
-                .environment(\.onAccent, palette.background)
-                .environment(\.smokedFill, palette.isBright ? palette.shadow.opacity(0.24) : nil)
-                .environment(\.colorScheme, .dark)
+                .foregroundStyle(
+                    palette.ink,
+                    palette.ink.opacity(ArtworkPalette.secondaryInk),
+                    palette.ink.opacity(0.5)
+                )
+                // Three foreground styles turn layered symbols into palette
+                // renders: play.circle.fill drew its disc at 75% under a
+                // solid triangle.
+                .symbolRenderingMode(.monochrome)
+                .tint(palette.ink)
+                .backgroundStyle(palette.onInk)
+                .environment(\.onAccent, palette.onInk)
+                .environment(\.colorScheme, palette.colorScheme)
                 .background { backdrop(palette) }
         } else {
             content
@@ -1212,6 +1221,7 @@ private struct ArtworkGround: ViewModifier {
 
     /// Darkening from a third of the way down, as Apple Music's does,
     /// towards the cover's own colour: black greys it and turns gold olive.
+    /// Not under dark ink, which the darkening would sink into.
     private func backdrop(_ palette: ArtworkPalette) -> some View {
         let drifts = isPlaying && !reduceMotion
         return TimelineView(.animation(minimumInterval: 1 / 30, paused: !drifts)) { context in
@@ -1224,7 +1234,7 @@ private struct ArtworkGround: ViewModifier {
         }
         .overlay {
             LinearGradient(
-                stops: [.init(color: .clear, location: 0.35), .init(color: palette.shadow.opacity(0.55), location: 1)],
+                stops: [.init(color: .clear, location: 0.35), .init(color: palette.shadow.opacity(palette.inkIsDark ? 0 : 0.55), location: 1)],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -1283,10 +1293,8 @@ private struct HeaderButtonsBeside<Buttons: View, Fade: View>: ViewModifier {
     }
 }
 
-/// Glass for Practice's buttons, smoked on a bright cover, where clear glass
-/// under light text washes out. In a glass panel, a flat fill and hairline.
+/// Glass for Practice's buttons. In a glass panel, a flat fill and hairline.
 private struct ButtonGlass: ViewModifier {
-    @Environment(\.smokedFill) private var smokedFill
     @Environment(\.inGlassPanel) private var inGlassPanel
 
     func body(content: Content) -> some View {
@@ -1295,24 +1303,17 @@ private struct ButtonGlass: ViewModifier {
                 .background(.primary.opacity(0.1), in: .capsule)
                 .overlay { Capsule().strokeBorder(.primary.opacity(0.14), lineWidth: 1) }
         } else {
-            content.glassEffect(glass.interactive(), in: .capsule)
+            content.glassEffect(.regular.interactive(), in: .capsule)
         }
-    }
-
-    private var glass: Glass {
-        if let smokedFill { return .regular.tint(smokedFill) }
-        return .regular
     }
 }
 
 private struct PanelGlass: ViewModifier {
-    @Environment(\.smokedFill) private var smokedFill
-
     func body(content: Content) -> some View {
         content
             .environment(\.inGlassPanel, true)
             .clipShape(.rect(cornerRadius: 32))
-            .glassEffect(smokedFill.map { Glass.regular.tint($0) } ?? .regular, in: .rect(cornerRadius: 32))
+            .glassEffect(.regular, in: .rect(cornerRadius: 32))
     }
 }
 
@@ -1483,6 +1484,24 @@ private struct DialSilhouette: View {
 
 #Preview("Play mode, no markers") {
     loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.20, green: 0.45, blue: 0.48)), markers: [])
+}
+
+// A pale cover, under dark ink.
+
+#Preview("Pale cover") {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.91, green: 0.86, blue: 0.77)))
+}
+
+#Preview("Pale cover, Loop mode") {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.91, green: 0.86, blue: 0.77)), mode: .loop)
+}
+
+#Preview("Pale cover, A set") {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.91, green: 0.86, blue: 0.77)), mode: .loop, aTappedAt: 62.3, position: 84)
+}
+
+#Preview("Pale cover, looping") {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.91, green: 0.86, blue: 0.77)), mode: .loop, loop: 58...96)
 }
 
 #Preview("Landscape", traits: .landscapeLeft) {

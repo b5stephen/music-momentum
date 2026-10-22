@@ -8,6 +8,7 @@ The palette and visual language for the app and its website. The app's colours c
 |---|---|---|
 | Coral | `#FF6640` | The accent. `AccentColor` in the asset catalog, the same sRGB `#FF6640` in light and dark, as on the website. Keep it sRGB: Display P3 components with the same numbers render a redder coral on an iPhone. |
 | On-accent | `#1A0A05` | Text and glyphs on a solid coral fill. `OnAccent` in the asset catalog. |
+| Dark ink | `#1A1410` | The player's ink on a pale cover, in place of near-white. `ArtworkPalette.darkInk`. |
 | Accent text | `#C43A12` light, `#FF6640` dark | Coral used as text on a plain background. `AccentText` in the asset catalog. |
 | Amber | `#FFB23E` | Website only. |
 | Rose | `#FF4F8B` | Website only. |
@@ -21,17 +22,21 @@ On the website, each feature gets its own accent: coral for speed, amber for mar
 
 ## Principles
 
-- **One tint.** Coral is the app's only accent. Amber, rose and violet stay on the website; bring one into the app only for a job the tint can't do.
-- **Coral means "on" or "act on this".** The running loop, the looping section, the speed you saved. Never decoration, or it stops meaning anything. Play/pause is the primary colour.
-- **Only one state shouts.** Solid coral is for looping and for graphics (the speed knob's lit scale, the looping range on the timeline). Everything else that's coral is a tint: `.tint` at 12–16% with `AccentText`. Settled things are `.quaternary` with secondary text.
-- **Fill carries state.** Markers are points: labelled ticks in Play mode's marker lane, dots in Saved's pills. In Loop mode, sections are blocks of the text colour at 22%, and what's looping is solid. (Clips, drawn as a short bar, went when markers became points and sections were derived from them.) On Saved, idle pills are a one-pixel `.quaternary` hairline with no fill: a grey pill under every song outweighed the titles.
+- **One tint.** Coral is the app's only accent, on the screens the artwork doesn't paint: Saved, the song picker, settings, sheets, and Practice with nothing loaded or a cover without colours. Amber, rose and violet stay on the website; bring one into the app only for a job the tint can't do.
+- **No coral on the artwork.** Over a cover's colours everything is one ink, near-white or, on a pale cover, dark (see Artwork colour): coral vanishes on a red or orange cover and fights the rest.
+- **Coral means "on" or "act on this".** Where there's coral, the running loop, the looping section, the speed you saved. Never decoration, or it stops meaning anything.
+- **On the player, state is contrast and shape, not colour.** What's on or selected is solid ink with its glyph or letter in the ground's colour (`onInk`): Play | Loop's selected half, the looping blocks and their A and B tabs, A·B while it holds a state, play/pause. What's there but not on is ink at 22% (`ArtworkPalette.inactiveInk`): the other blocks, the Play | Loop track, Add marker's capsule. Secondary text is ink at 75%, which `ArtworkGround` makes `.secondary`.
+- **Only one state shouts.** Where there's coral, solid coral is for looping and for graphics (the speed knob's lit scale, the looping range on the timeline). Everything else that's coral is a tint: `.tint` at 12–16% with `AccentText`. Settled things are `.quaternary` with secondary text.
+- **Fill carries state.** Markers are points: labelled ticks in Play mode's marker lane, dots in Saved's pills. In Loop mode, sections are blocks of the ink at 22%, and what's looping is solid. (Clips, drawn as a short bar, went when markers became points and sections were derived from them.) On Saved, idle pills are a one-pixel `.quaternary` hairline with no fill: a grey pill under every song outweighed the titles.
 - **Neutral controls stay neutral.** Nudge, cue, skip, the volume slider and the like use system fills, not coral. Toolbar glyphs that act on the screen (Saved's add and sort, a sheet's save tick) are `AccentColor` on the toolbar's own glass.
 - **Banners stay away from coral's hue.** Warnings are yellow; errors are neutral grey with a coral icon. No orange or red near the accent; they read as the same colour.
 - **Give text in buttons a concrete colour.** A hierarchical style like `.secondary` resolves against the button's tint and comes out a faded coral. `.bordered` turns grey once its text is recoloured, so tinted chips are drawn by hand.
 
 ## Artwork colour
 
-With a song loaded, Practice is painted in the cover's own colours, the way Apple Music's Now Playing is: the cover blurred into a mesh gradient, darkened, always with light text. Coral steps aside there, since it vanishes on a red or orange cover; "on" becomes a solid fill of the text colour. Covers without colours, and the screen with nothing loaded, keep the system background and coral. How the colours are tuned is recorded in `ArtworkPalette`.
+With a song loaded, Practice is painted in the cover's own colours, the way Apple Music's Now Playing is: the cover blurred into a mesh gradient, a step darker, with one ink for every control and all the text. Coral steps aside there; "on" is a solid fill of the ink. Covers without colours, and the screen with nothing loaded, keep the system background and coral.
+
+The ink is near-white, unless that falls under 4.5:1 against any point of the ground; then it's dark ink, `#1A1410`, at the same opacities, and the screen's colour scheme turns light so glass, the tab bar and the volume slider follow. Pale covers stay pale under it, short of glaring white, and bright golds and oranges take it too. Near the switch, a ground's darker top row can be too dark for dark ink as well, so any point under 4.5:1 is lifted until it clears it. Under dark ink the bottom of the screen doesn't darken. Both choices are made once, in `ArtworkPalette`, and views draw in `.primary`, `.secondary`, `.background` and `.tint`, never a colour of their own. How the colours are tuned is recorded there.
 
 ## Wide iPad
 
@@ -43,17 +48,17 @@ Practice's save and change-song buttons are glass too, so they take on the cover
 
 ## Play and Loop
 
-The player has two modes, switched by a Play | Loop control over the timeline: a track of the text colour at about 16%, the selected half a solid capsule of the text colour with the ground's colour as its label. It's a mode of one screen, not a tab or a page, and only the timeline changes with it: the song, the wheel and the transport hold still, so both timelines are the same height. Play's timeline is the scrubber, with each marker a tick and its name above, running towards the next tick and dropped where there's too little room. Loop's is the song's sections as a row of blocks, as wide as they're long with small gaps between, no labels on a phone, and under them the playhead's time, the time left and what's looping (or "Tap a section to loop it"). The playhead is a short line through the blocks: the ground's colour on a lit block, the text colour on the rest. Compact, the control goes in the row under the transport rather than taking a row of its own over the timeline; an iPhone SE has no height for both. A song opens in the mode it was left in.
+The player has two modes, switched by a Play | Loop control over the timeline: a track of the ink at 22%, the selected half a solid capsule of the ink with the ground's colour as its label. It's a mode of one screen, not a tab or a page, and only the timeline changes with it: the song, the wheel and the transport hold still, so both timelines are the same height. Play's timeline is the scrubber, with each marker a tick and its name above, running towards the next tick and dropped where there's too little room. Loop's is the song's sections as a row of blocks of the ink at 22%, as wide as they're long with small gaps between, no labels on a phone, and under them the playhead's time, the time left and what's looping (or "Tap a section to loop it"). The playhead is a short line through the blocks: the ground's colour on a lit block, the ink on the rest. Compact, the control goes in the row under the transport rather than taking a row of its own over the timeline; an iPhone SE has no height for both. A song opens in the mode it was left in.
 
 ## Transport and A·B
 
-The transport is A·B · back 5 s · play/pause · forward 5 s · Add marker: five, so play/pause sits dead centre, with the two buttons that change the song's shape as capsules at the ends. A·B carries the loop's state in its fill, like the blocks: an outlined "A·B" with nothing looping, a solid "B" while A waits, solid with the loop glyph while anything loops. Add marker is a bookmark with a plus on a 16% capsule, the same quiet fill as Play | Loop's track, since adding isn't a state; while A waits, a cancel ✕ takes its place. There's no restart: back 5 s and a loop's own wrap cover it.
+The transport is A·B · back 5 s · play/pause · forward 5 s · Add marker: five, so play/pause sits dead centre, with the two buttons that change the song's shape as capsules at the ends. A·B carries the loop's state in its fill, like the blocks: an outlined "A·B" with nothing looping, a solid "B" while A waits, solid with the loop glyph while anything loops. Add marker is a bookmark with a plus on a 22% capsule, the same quiet fill as Play | Loop's track, since adding isn't a state; while A waits, a cancel ✕ takes its place. There's no restart: back 5 s and a loop's own wrap cover it.
 
-While A waits, the blocks are shaded at half the text colour from A to the playhead, under a small "A" tab, with "Tap B to close the loop" between A's time and the playhead's. While looping, "A" and "B" tabs, solid text colour with the ground's colour as their letter, sit over the loop's ends, and the caption under the blocks becomes ‹ A 1:04.8 › · what's looping · ‹ B 1:15.4 ›, in tenths so a 0.1 s nudge shows. Holding the B tab offers Split Here.
+While A waits, the blocks are shaded at half the ink from A to the playhead, under a small "A" tab, with "Tap B to close the loop" between A's time and the playhead's. While looping, "A" and "B" tabs, solid ink with the ground's colour as their letter, sit over the loop's ends, and the caption under the blocks becomes ‹ A 1:04.8 › · what's looping · ‹ B 1:15.4 ›, in tenths so a 0.1 s nudge shows. Holding the B tab offers Split Here.
 
 ## Volume
 
-Practice's volume is the system's, the level the side buttons set: Apple's own `MPVolumeView` under the transport in every layout, its native slider and thumb, tinted the text colour, not coral, since volume isn't a state; the transport sits midway between it and the scrubber, so the two bars frame it as a pair. Stacked, it's the first thing to go when the screen runs short of height, before the controls shrink: the side buttons do the same job.
+Practice's volume is the system's, the level the side buttons set: Apple's own `MPVolumeView` under the transport in every layout, its native slider and thumb, tinted the ink, not coral, since volume isn't a state; the transport sits midway between it and the scrubber, so the two bars frame it as a pair. Stacked, it's the first thing to go when the screen runs short of height, before the controls shrink: the side buttons do the same job.
 
 Wide, the cover sits beside the title as it does stacked, the pair centred over the wheel with the save prompt and Change Song centred on a row of their own under it: in a column that narrow, the prompt growing over the title left only its first word. The playback column holds nothing but playback, and spreads, within limits, to run from the header's top to the wheel's foot, but never closer than 16pt to the top of a landscape phone or its tab bar. Held short by the tab bar, it still starts level with the header and stops short at the bottom; only when that leaves too little room for its rows is it centred on the wheel's column instead. It sits on a glass panel, so the screen is two objects, the knob and the panel, under the title; bare, its rows floated apart and the volume thumb was the heaviest thing on screen. The transport is held to 360pt there: spread across the column, its buttons were 190pt apart and read as a toolbar.
 
@@ -65,11 +70,13 @@ Wide, the cover sits beside the title as it does stacked, the pair centred over 
 ## Contrast
 
 - Coral is about 7:1 on black but 2.9:1 on white, so coral *text* uses `AccentText`, which darkens to about 5.3:1 in light mode. Fills keep the bright coral.
-- White on coral is 2.9:1, too faint for small text. Text on solid coral uses `OnAccent` (about 6.5:1). On an artwork-coloured screen the same job falls to a darker shade of the ground.
+- White on coral is 2.9:1, too faint for small text. Text on solid coral uses `OnAccent` (about 6.5:1). On an artwork-coloured screen the same job falls to `onInk`: a darker shade of the ground under light ink, the ground itself under dark ink.
+- On the artwork, the ink holds at least 4.5:1 against every point of the ground and against `onInk`; `ArtworkPaletteTests` checks it across the sRGB cube. Secondary text at 75% and inactive fills at 22% sit below that by design: they're the quieter half of a pair whose louder half clears it.
 - Touch targets are at least 44pt.
 
 ## Tried and dropped
 
+- **Always-light text on the artwork, with pale covers darkened to suit it** and glass smoked on a bright cover: a cream cover came out a murky khaki, and a gold one carried white text at about 2:1. Pale and bright covers take dark ink now, and plain glass.
 - **Amber for markers:** read as out of place beside coral.
 - **A solid coral confirm button:** beside tinted chips it read as a different, brighter coral. Sheets use a plain toolbar tick in `AccentColor` instead.
 - **The cover drawn into Practice's background,** faded from the top: no fade looked right across every cover.

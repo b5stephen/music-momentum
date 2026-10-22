@@ -104,7 +104,7 @@ struct SectionBlocks: View {
                 let width = frame.upperBound - frame.lowerBound
                 let lit = active.flatMap { layout.activeSpan(of: index, loop: $0) }
                 RoundedRectangle(cornerRadius: Self.cornerRadius)
-                    .fill(.primary.opacity(0.22))
+                    .fill(.primary.opacity(ArtworkPalette.inactiveInk))
                     .overlay(alignment: .leading) {
                         if let lit {
                             Rectangle()
