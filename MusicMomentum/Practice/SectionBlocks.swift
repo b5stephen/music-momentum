@@ -49,6 +49,10 @@ struct SectionBlocks: View {
     @State private var holdTask: Task<Void, Never>?
     @State private var isHolding = false
     @State private var hasMoved = false
+    /// A hold that opens the Edit Marker sheet has its touch cancelled by
+    /// the presentation, so `onEnded` never runs; without this the next
+    /// touch only cleared the hold and a tap on the blocks did nothing.
+    @GestureState private var isTouching = false
 
     private static let blockHeight: CGFloat = 24
     /// The row stops 4pt short of the scrubber's bar, as that bar's times
@@ -77,6 +81,12 @@ struct SectionBlocks: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .contentShape(.rect)
                     .gesture(gesture(layout))
+                    .onChange(of: isTouching) { _, touching in
+                        guard !touching, isHolding else { return }
+                        isHolding = false
+                        drag = nil
+                        hasMoved = false
+                    }
                     .overlay(alignment: .topLeading) { accessibilityBlocks(layout) }
                     .overlay(alignment: .topLeading) { tabs(layout, width: proxy.size.width) }
             }
@@ -329,6 +339,7 @@ struct SectionBlocks: View {
 
     private func gesture(_ layout: SectionBlockLayout) -> some Gesture {
         DragGesture(minimumDistance: 0)
+            .updating($isTouching) { _, touching, _ in touching = true }
             .onChanged { value in
                 guard !isHolding, let current = layout.index(at: value.location.x) else { return }
                 guard let drag else {

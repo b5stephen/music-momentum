@@ -26,7 +26,7 @@ On the website, each feature gets its own accent: coral for speed, amber for mar
 - **No coral on the artwork.** Over a cover's colours everything is one ink, near-white or, on a pale cover, dark (see Artwork colour): coral vanishes on a red or orange cover and fights the rest.
 - **Coral means "on" or "act on this".** Where there's coral, the running loop, the looping section, the speed you saved. Never decoration, or it stops meaning anything.
 - **On the player, state is contrast and shape, not colour.** What's on or selected is solid ink with its glyph or letter in the ground's colour (`onInk`): Play | Loop's selected half, the looping blocks and their A and B tabs, A·B while it holds a state, play/pause. What's there but not on is ink at 22% (`ArtworkPalette.inactiveInk`): the other blocks, the Play | Loop track, Add marker's capsule. Secondary text is ink at 75%, which `ArtworkGround` makes `.secondary`.
-- **Only one state shouts.** Where there's coral, solid coral is for looping and for graphics (the speed knob's lit scale, the looping range on the timeline). Everything else that's coral is a tint: `.tint` at 12–16% with `AccentText`. Settled things are `.quaternary` with secondary text.
+- **Only one state shouts.** Where there's coral, solid coral is for looping, for graphics (the speed knob's lit scale, the looping range on the timeline) and for a sheet's one primary action (Edit Marker's Preview from marker, with `OnAccent` text). Everything else that's coral is a tint: `.tint` at 12–16% with `AccentText`. Settled things are `.quaternary` with secondary text.
 - **Fill carries state.** Markers are points: labelled ticks in Play mode's marker lane, dots in Saved's pills. In Loop mode, sections are blocks of the ink at 22%, and what's looping is solid. (Clips, drawn as a short bar, went when markers became points and sections were derived from them.) On Saved, idle pills are a one-pixel `.quaternary` hairline with no fill: a grey pill under every song outweighed the titles.
 - **Neutral controls stay neutral.** Nudge, cue, skip, the volume slider and the like use system fills, not coral. Toolbar glyphs that act on the screen (Saved's add and sort, a sheet's save tick) are `AccentColor` on the toolbar's own glass.
 - **Banners stay away from coral's hue.** Warnings are yellow; errors are neutral grey with a coral icon. No orange or red near the accent; they read as the same colour.
@@ -56,6 +56,12 @@ The transport is A·B · back 5 s · play/pause · forward 5 s · Add marker: fi
 
 While A waits, the blocks are shaded at half the ink from A to the playhead, under a small "A" tab, with "Tap B to close the loop" between A's time and the playhead's. While looping, "A" and "B" tabs, solid ink with the ground's colour as their letter, sit over the loop's ends, and the caption under the blocks becomes ‹ A 1:04.8 › · what's looping · ‹ B 1:15.4 ›, in tenths so a 0.1 s nudge shows. Holding the B tab offers Split Here.
 
+## Edit Marker
+
+Long-pressing a tick or block opens Edit Marker: a popover pointing at it where there's room, a half-height sheet on a phone, so the player keeps playing above it and its transport stands in for the sheet's old one. It's a system sheet, so coral: the header's ✕ and a plain coral ✓, a Name card whose quick-pick chips (Intro, Verse, Chorus, Bridge, Solo, Outro) are drawn by hand, the chosen one a 14% coral tint with `AccentText`, the rest `tertiarySystemFill`; a Starts at card with the time large in monospaced digits, a tinted Set to playhead chip, four neutral nudge capsules and a caption saying where the section runs to; the solid coral Preview button; Delete Marker in red text, which merges the section into the one before with an Undo toast rather than a question.
+
+On the player, what floats over it is in the ink, not coral: the "Name it?" prompt after a new marker and the "Deleted Chorus · Undo" toast sit just over the timeline on the ground's own darker shade (`onInk`) with a hairline of the ink, and the prompt's chips are the ink at 22%. Glass there let Play | Loop show through and read as clutter.
+
 ## Volume
 
 Practice's volume is the system's, the level the side buttons set: Apple's own `MPVolumeView` under the transport in every layout, its native slider and thumb, tinted the ink, not coral, since volume isn't a state; the transport sits midway between it and the scrubber, so the two bars frame it as a pair. Stacked, it's the first thing to go when the screen runs short of height, before the controls shrink: the side buttons do the same job.
@@ -78,7 +84,7 @@ Wide, the cover sits beside the title as it does stacked, the pair centred over 
 
 - **Always-light text on the artwork, with pale covers darkened to suit it** and glass smoked on a bright cover: a cream cover came out a murky khaki, and a gold one carried white text at about 2:1. Pale and bright covers take dark ink now, and plain glass.
 - **Amber for markers:** read as out of place beside coral.
-- **A solid coral confirm button:** beside tinted chips it read as a different, brighter coral. Sheets use a plain toolbar tick in `AccentColor` instead.
+- **A solid coral confirm button:** beside tinted chips it read as a different, brighter coral. Sheets use a plain toolbar tick in `AccentColor` instead. (The Edit Marker redesign brought solid coral back for Preview from marker, the sheet's one primary action, as a full-width button away from the chips, not as the confirm; the tick stays plain.)
 - **The cover drawn into Practice's background,** faded from the top: no fade looked right across every cover.
 - **The single colour MusicKit ships with artwork** as the ground: it's often the cover's border, not its average.
 - **Coral or grey chips beside the floating card:** coral clashed with the cover; grey read as disabled. Hence glass.

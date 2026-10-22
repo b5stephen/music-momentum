@@ -186,3 +186,30 @@ struct ABLoopMarkerTests {
         #expect(song.sections(duration: 145).contains { abs($0.start - nudged.upperBound) < 1e-9 && $0.end == 96 })
     }
 }
+
+/// Saving a marker at a new time in the Edit Marker sheet must carry a loop
+/// that ends on it, or the loop keeps playing bars the marker no longer bounds.
+@Suite("A loop following an edited marker")
+struct ABLoopFollowingTests {
+    @Test("A loop starting on the marker starts where it went")
+    func start() {
+        #expect(ABLoop.following(58...96, markerMovedFrom: 58, to: 60.5) == 60.5...96)
+    }
+
+    @Test("A loop ending on the marker ends where it went")
+    func end() {
+        #expect(ABLoop.following(58...96, markerMovedFrom: 96, to: 94) == 58...94)
+    }
+
+    @Test("A loop the marker doesn't bound, or a marker that didn't move, leaves it alone")
+    func untouched() {
+        #expect(ABLoop.following(58...96, markerMovedFrom: 22, to: 30) == nil)
+        #expect(ABLoop.following(58...96, markerMovedFrom: 58, to: 58) == nil)
+    }
+
+    @Test("Moving an end past the other leaves the loop where it was")
+    func inverted() {
+        #expect(ABLoop.following(58...96, markerMovedFrom: 58, to: 100) == nil)
+        #expect(ABLoop.following(58...96, markerMovedFrom: 96, to: 58.05) == nil)
+    }
+}

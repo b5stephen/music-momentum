@@ -210,25 +210,33 @@ struct SavedSongsView: View {
             }
             .sheet(item: $marking) { marking in
                 if let duration = controller.duration {
-                    if let marker = marking.marker {
-                        MarkerEditorView(
-                            marker: marker,
-                            duration: duration,
-                            controller: controller,
-                            onSave: { name, time in
-                                marker.set(name: name, time: time, in: modelContext)
-                            },
-                            onDelete: { delete(marker) }
-                        )
-                    } else {
-                        MarkerEditorView(
-                            initialStart: marking.start,
-                            duration: duration,
-                            controller: controller
-                        ) { name, time in
-                            SongMarker.add(to: marking.song, name: name, at: time, in: modelContext)
+                    Group {
+                        if let marker = marking.marker {
+                            MarkerEditorView(
+                                marker: marker,
+                                duration: duration,
+                                controller: controller,
+                                confirmsDelete: true,
+                                onSave: { name, time in
+                                    let old = marker.startTime
+                                    marker.set(name: name, time: time, in: modelContext)
+                                    controller.markerMoved(from: old, to: marker.startTime)
+                                },
+                                onDelete: { delete(marker) }
+                            )
+                        } else {
+                            MarkerEditorView(
+                                newIn: marking.song,
+                                at: marking.start,
+                                duration: duration,
+                                controller: controller
+                            ) { name, time in
+                                SongMarker.add(to: marking.song, name: name, at: time, in: modelContext)
+                            }
                         }
                     }
+                    .presentationDetents([.medium, .large])
+                    .presentationContentInteraction(.scrolls)
                 }
             }
             .sheet(item: $editing) { song in

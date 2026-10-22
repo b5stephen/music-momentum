@@ -47,6 +47,10 @@ struct PlaybackScrubber: View {
     @State private var holdTask: Task<Void, Never>?
     /// A hold has opened the editor; the rest of the touch does nothing.
     @State private var isHolding = false
+    /// A hold that opens the Edit Marker sheet has its touch cancelled by
+    /// the presentation, so `onEnded` never runs; without this the next
+    /// touch only cleared the hold and did nothing.
+    @GestureState private var isTouching = false
 
     private var isDragging: Bool { dragPosition != nil }
     private var displayedPosition: TimeInterval { dragPosition ?? position }
@@ -127,6 +131,9 @@ struct PlaybackScrubber: View {
             .frame(maxHeight: .infinity, alignment: .top)
             .contentShape(.rect)
             .gesture(dragGesture(width: width, laneBottom: laneBottom))
+            .onChange(of: isTouching) { _, touching in
+                if !touching, isHolding { isHolding = false }
+            }
             .animation(.snappy(duration: 0.2), value: isDragging)
             .overlay(alignment: .topLeading) { tickAccessibility(width: width) }
         }
@@ -242,6 +249,7 @@ struct PlaybackScrubber: View {
 
     private func dragGesture(width: CGFloat, laneBottom: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 0)
+            .updating($isTouching) { _, touching, _ in touching = true }
             .onChanged { value in
                 guard let duration, duration > 0, width > 0, !isHolding else { return }
                 if dragPosition == nil, pendingMarker == nil {

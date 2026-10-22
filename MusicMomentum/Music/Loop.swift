@@ -6,8 +6,9 @@
 import Foundation
 
 /// What's looping: the whole song, or one A→B range. Plain times, not
-/// markers, so the loop belongs to the player: editing or deleting a marker
-/// leaves a running loop where it was.
+/// markers, so the loop belongs to the player: deleting a marker leaves a
+/// running loop where it was. Moving a marker the loop ends on carries the
+/// loop with it; see `ABLoop.following`.
 nonisolated enum Loop: Hashable, Sendable {
     case wholeSong
     case range(start: TimeInterval, end: TimeInterval)

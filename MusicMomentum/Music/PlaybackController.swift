@@ -351,6 +351,15 @@ final class PlaybackController {
         play()
     }
 
+    /// The Edit Marker sheet saved a marker at a new time: a loop ending on
+    /// it follows, as it does a nudge. See `ABLoop.following`.
+    func markerMoved(from old: TimeInterval, to new: TimeInterval) {
+        guard case .range(let start, let end) = loop,
+              let followed = ABLoop.following(start...end, markerMovedFrom: old, to: new)
+        else { return }
+        loopRange(start: followed.lowerBound, end: followed.upperBound)
+    }
+
     /// Doesn't start or stop playback, and leaves the loop alone: jumping out
     /// of a running loop is a look around, and the loop picks the playhead
     /// up again when it plays back into the range.

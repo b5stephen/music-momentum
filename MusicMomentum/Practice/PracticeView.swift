@@ -42,6 +42,15 @@ struct PracticeView: View {
     /// Measured, so the wide layout's cover takes exactly what the player leaves.
     /// Measured, so the title fades out just short of a save prompt growing over it.
     @State private var headerButtonsWidth: CGFloat = 0
+    /// The last marker the Edit Marker sheet deleted, for the Undo toast.
+    @State private var undo: Undo?
+
+    private struct Undo: Identifiable {
+        let id = UUID()
+        let removed: SongMarker.Removed
+        let song: SavedSong
+        let name: String
+    }
 
     /// Editing carries the marker's identity so switching straight from one
     /// marker to another rebuilds the sheet.
@@ -142,6 +151,10 @@ struct PracticeView: View {
             }
         }
         .modifier(ArtworkGround(palette: track?.palette, isPlaying: controller.isPlaying))
+        .overlayPreferenceValue(TimelineBounds.self, markerEditorAnchor)
+        .onChange(of: markerSheet?.id) { _, id in
+            if id != nil { controller.dismissCreatedMarkers() }
+        }
         .task(id: controller.selectedSong?.id) {
             guard let song = controller.selectedSong else { return }
             if palette?.songID != song.id.rawValue {
@@ -161,27 +174,6 @@ struct PracticeView: View {
             SongPickerView { song in
                 Task { await controller.select(song: song) }
             }
-            .tint(nil as Color?)
-        }
-        .sheet(item: $markerSheet) { sheet in
-            Group {
-                if let duration = controller.duration {
-                    switch sheet {
-                    case .edit(let marker):
-                        MarkerEditorView(
-                            marker: marker,
-                            duration: duration,
-                            controller: controller,
-                            onSave: { name, time in marker.set(name: name, time: time, in: modelContext) },
-                            onDelete: { delete(marker) }
-                        )
-                    }
-                }
-            }
-            // `RootTabView` tints the tab bar with the cover's near-white text
-            // colour, and sheets inherit it; on a light sheet it all but vanishes.
-            // Cleared rather than set to the accent: an explicit tint also turns
-            // the toolbar's Close coral, which a sheet from Saved doesn't do.
             .tint(nil as Color?)
         }
         .onChange(of: scenePhase) { _, phase in
@@ -491,8 +483,56 @@ struct PracticeView: View {
 
     /// The two timelines are the same height and share the space, so
     /// switching mode moves nothing else on the screen.
-    @ViewBuilder
     private var timeline: some View {
+        timelineContent
+            .anchorPreference(key: TimelineBounds.self, value: .bounds) { $0 }
+            .overlay(alignment: .top) { notice }
+    }
+
+    /// Where the timeline is, so the Edit Marker popover can point at a
+    /// tick or block from outside `ArtworkGround`: presented from inside
+    /// it, the sheet took the cover's ink as its text colour.
+    private struct TimelineBounds: PreferenceKey {
+        static let defaultValue: Anchor<CGRect>? = nil
+        static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+            value = value ?? nextValue()
+        }
+    }
+
+    /// A popover pointing at the tick or block where there's room; on a
+    /// phone, a sheet at half height, which leaves the player playing behind
+    /// it and the top of the screen in reach.
+    private func markerEditorAnchor(_ bounds: Anchor<CGRect>?) -> some View {
+        GeometryReader { proxy in
+            if let bounds {
+                let frame = proxy[bounds]
+                Color.clear
+                    .frame(width: frame.width, height: frame.height)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                    .popover(
+                        item: $markerSheet,
+                        attachmentAnchor: .rect(.rect(anchorRect(for: markerSheet, in: frame.size))),
+                        arrowEdge: .bottom
+                    ) { sheet in
+                        markerEditor(sheet)
+                            .presentationCompactAdaptation(.sheet)
+                            .presentationDetents([.medium, .large])
+                            .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+                            // Delete sits below the fold at half height;
+                            // a swipe should reach it, not grow the sheet.
+                            .presentationContentInteraction(.scrolls)
+                            .frame(idealWidth: 400, idealHeight: 560)
+                    }
+                    // Padding, not an offset, so the popover finds it there.
+                    .padding(.leading, max(0, frame.minX))
+                    .padding(.top, max(0, frame.minY))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var timelineContent: some View {
         switch controller.mode {
         case .play:
             PlaybackScrubber(
@@ -773,8 +813,104 @@ struct PracticeView: View {
         return markers
     }
 
+    // MARK: - Editing markers
+
+    @ViewBuilder
+    private func markerEditor(_ sheet: MarkerSheet) -> some View {
+        if let duration = controller.duration {
+            switch sheet {
+            case .edit(let marker):
+                MarkerEditorView(
+                    marker: marker,
+                    duration: duration,
+                    controller: controller,
+                    onSave: { name, time in
+                        let old = marker.startTime
+                        marker.set(name: name, time: time, in: modelContext)
+                        controller.markerMoved(from: old, to: marker.startTime)
+                    },
+                    onDelete: { delete(marker) }
+                )
+                // `RootTabView` tints the tab bar with the cover's ink, and
+                // sheets inherit it; on a light sheet it all but vanishes.
+                // Cleared rather than set to the accent: an explicit tint also
+                // turns the toolbar's Close coral, which Saved's doesn't do.
+                .tint(nil as Color?)
+            }
+        }
+    }
+
+    /// The marker's tick in Play mode, its section's block in Loop mode, in
+    /// the timeline's own space.
+    private func anchorRect(for sheet: MarkerSheet?, in size: CGSize) -> CGRect {
+        guard case .edit(let marker) = sheet, let duration = controller.duration, duration > 0 else {
+            return CGRect(x: size.width / 2, y: 0, width: 1, height: 1)
+        }
+        let x = { (time: TimeInterval) in CGFloat(min(max(time / duration, 0), 1)) * size.width }
+        let start = x(marker.startTime)
+        let end = controller.mode == .loop ? x(marker.next?.startTime ?? duration) : start
+        return CGRect(x: start, y: 0, width: max(1, end - start), height: max(1, size.height / 2))
+    }
+
+    /// The section merges into the previous one; the toast puts it back.
     private func delete(_ marker: SongMarker) {
-        SongMarker.delete(marker, in: modelContext)
+        guard let song = marker.song else { return }
+        let name = song.displayName(of: marker)
+        let removed = SongMarker.delete(marker, in: modelContext)
+        withAnimation(.snappy) {
+            undo = Undo(removed: removed, song: song, name: name)
+        }
+    }
+
+    /// The Undo toast, or the "Name it?" prompt for a marker just made,
+    /// floating just over the timeline. The toast wins: it's the newer of
+    /// the two, and Undo can't wait.
+    @ViewBuilder
+    private var notice: some View {
+        Group {
+            if let undo {
+                UndoToast(
+                    message: "Deleted \(undo.name)",
+                    onUndo: {
+                        SongMarker.restore(undo.removed, to: undo.song, in: modelContext)
+                        withAnimation(.snappy) { self.undo = nil }
+                    },
+                    onExpire: { withAnimation(.snappy) { if self.undo?.id == undo.id { self.undo = nil } } }
+                )
+                .id(undo.id)
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            } else if let created = controller.createdMarkers,
+                      let marker = namingTarget(created),
+                      let song = marker.song {
+                NamingPrompt(
+                    markerName: song.displayName(of: marker),
+                    onPick: { chip in
+                        let taken = song.sortedMarkers.filter { $0 !== marker }.map(\.name)
+                        marker.set(name: QuickName.name(for: chip, taken: taken), time: marker.startTime, in: modelContext)
+                        withAnimation(.snappy) { controller.dismissCreatedMarkers() }
+                    },
+                    onSkip: {
+                        withAnimation(.snappy) {
+                            if controller.createdMarkers?.id == created.id { controller.dismissCreatedMarkers() }
+                        }
+                    }
+                )
+                .id(created.id)
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
+        }
+        // Grows up from the timeline's top edge, over what's above it.
+        .alignmentGuide(.top) { $0[.bottom] + 2 }
+        .animation(.snappy, value: controller.createdMarkers?.id)
+    }
+
+    /// The earliest marker made: for A·B that's A's when A got a new one,
+    /// so the name goes to the section being looped. A marker deleted since
+    /// isn't offered.
+    private func namingTarget(_ created: PlaybackController.CreatedMarkers) -> SongMarker? {
+        created.markers
+            .filter { $0.modelContext != nil && !$0.isDeleted }
+            .min { $0.startTime < $1.startTime }
     }
 
     private func transportButton(

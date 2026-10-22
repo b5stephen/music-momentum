@@ -106,6 +106,24 @@ nonisolated enum ABLoop {
         return moved ? target : nil
     }
 
+    /// The loop after a marker it ends on was moved in the Edit Marker
+    /// sheet, carried along the way a nudge carries it. `nil` when neither
+    /// end was on the marker, or when following it would leave the loop
+    /// shorter than a nudge allows; the loop then stays where it was.
+    static func following(
+        _ loop: ClosedRange<TimeInterval>,
+        markerMovedFrom old: TimeInterval,
+        to new: TimeInterval
+    ) -> ClosedRange<TimeInterval>? {
+        let onStart = abs(loop.lowerBound - old) < MarkerPlacement.sameTime
+        let onEnd = abs(loop.upperBound - old) < MarkerPlacement.sameTime
+        guard onStart || onEnd, abs(new - old) >= MarkerPlacement.sameTime else { return nil }
+        let start = onStart ? new : loop.lowerBound
+        let end = onEnd ? new : loop.upperBound
+        guard end - start >= MarkerPlacement.minimumNudgedSection - MarkerPlacement.sameTime else { return nil }
+        return start...end
+    }
+
     /// "Split here" on B: a marker of B's own, so nudging B no longer moves
     /// the next section's start. B on a marker or the song's end gets one a
     /// nudge short of it, leaving a gap section that nudging B back widens;
