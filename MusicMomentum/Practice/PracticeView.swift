@@ -46,12 +46,10 @@ struct PracticeView: View {
     /// Editing carries the marker's identity so switching straight from one
     /// marker to another rebuilds the sheet.
     private enum MarkerSheet: Identifiable {
-        case new(start: TimeInterval)
         case edit(SongMarker)
 
         var id: String {
             switch self {
-            case .new: "new"
             case .edit(let marker): "edit-\(marker.persistentModelID.hashValue)"
             }
         }
@@ -81,8 +79,6 @@ struct PracticeView: View {
 
     /// Tinted text: the cover's text colour, or the coral that stays legible on white.
     private var textTint: Color { track?.palette?.foreground ?? .accentText }
-
-    private var onAccent: Color { track?.palette?.background ?? .onAccent }
 
     var body: some View {
         // Spacers absorb spare height; the screen only scrolls once they've
@@ -171,13 +167,6 @@ struct PracticeView: View {
             Group {
                 if let duration = controller.duration {
                     switch sheet {
-                    case .new(let start):
-                        MarkerEditorView(
-                            initialStart: start,
-                            duration: duration,
-                            controller: controller,
-                            onSave: addMarker
-                        )
                     case .edit(let marker):
                         MarkerEditorView(
                             marker: marker,
@@ -424,7 +413,7 @@ struct PracticeView: View {
     }
 
     /// Play | Loop over the timeline it switches, then playback, then what's
-    /// looping and Mark. Every row shares `sideMargin` with the header, so
+    /// looping. Every row shares `sideMargin` with the header, so
     /// the cover, the timeline's ends and the outer buttons line up.
     /// Given a `height`, the rows spread towards it: wide, the playback
     /// column runs from the top of the header to the foot of the wheel, as a
@@ -465,24 +454,17 @@ struct PracticeView: View {
             if spread { Self.spreadGap }
 
             if layout.isCompact {
-                // Short of height, Play | Loop shares Mark's row rather than
-                // taking one of its own over the timeline; the loop button
-                // and the blocks still say what's looping.
-                HStack(spacing: 12) {
-                    modePicker
-                        .frame(maxWidth: 220)
-                    Spacer(minLength: 0)
-                    markButton(showsTitle: false)
-                }
-                .padding(.leading, Self.sideMargin)
-                .padding(.trailing, Self.sideMargin - (44 - Self.markGlassSide) / 2)
+                // Short of height, Play | Loop goes under the transport
+                // rather than taking a row of its own over the timeline; the
+                // A·B button and the blocks still say what's looping.
+                modePicker
+                    .frame(maxWidth: 220)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, Self.sideMargin)
             } else {
-                HStack(spacing: 12) {
-                    loopCaptionText
-                    markButton(showsTitle: true)
-                }
-                .padding(.top, 6)
-                .padding(.horizontal, Self.sideMargin)
+                loopCaptionText
+                    .padding(.top, 6)
+                    .padding(.horizontal, Self.sideMargin)
             }
         }
         .frame(maxWidth: Self.playerWidth)
@@ -530,12 +512,15 @@ struct PracticeView: View {
                 blocks: sectionBlocks,
                 position: controller.playbackTime,
                 duration: controller.duration,
-                loop: loopRange,
+                loop: controller.loopBounds,
                 onTap: { controller.toggleLoopRange(start: $0.lowerBound, end: $0.upperBound) },
                 onDrag: { controller.loopRange(start: $0.lowerBound, end: $0.upperBound) },
                 onHold: { block in
                     if let edited = savedMarker(id: block.id) { markerSheet = .edit(edited) }
-                }
+                },
+                pendingA: pendingAStart,
+                onNudge: { controller.nudgeLoop($0, by: $1, saved: savedSong) },
+                onSplit: { controller.splitLoopEnd(saved: savedSong) }
             )
             .transition(.opacity)
         }
@@ -589,24 +574,19 @@ struct PracticeView: View {
         #endif
     }
 
-    /// Five controls, not six: an odd number puts play/pause dead centre.
-    /// Marking has a row of its own at the bottom.
+    /// A·B, back, play/pause, forward, Add marker: five, so play/pause sits
+    /// dead centre, with the two that change the song's shape at the ends.
+    /// While A waits for B, cancelling it takes Add marker's place. No
+    /// restart: back 5 s and a loop's own wrap cover it, and six buttons
+    /// pushed play off the centre line.
     private func transportControls(_ layout: PracticeLayout) -> some View {
         HStack(spacing: 0) {
-            // A size down from the skips, which read as one group with play;
-            // the same size, four circular arrows looked alike at a glance.
-            transportButton(
-                "gobackward",
-                size: layout.transportGlyph * 0.88,
-                label: controller.isLoopOn ? "Restart loop" : "Restart"
-            ) {
-                controller.restart()
-            }
+            abButton(layout)
 
             Spacer(minLength: 0)
 
-            transportButton("gobackward.10", size: layout.transportGlyph, label: "Back 10 seconds") {
-                controller.skip(by: -10)
+            transportButton("gobackward.5", size: layout.transportGlyph, label: "Back 5 seconds") {
+                controller.skip(by: -5)
             }
 
             Spacer(minLength: 0)
@@ -615,25 +595,38 @@ struct PracticeView: View {
 
             Spacer(minLength: 0)
 
-            transportButton("goforward.10", size: layout.transportGlyph, label: "Forward 10 seconds") {
-                controller.skip(by: 10)
+            transportButton("goforward.5", size: layout.transportGlyph, label: "Forward 5 seconds") {
+                controller.skip(by: 5)
             }
 
             Spacer(minLength: 0)
 
-            loopButton(layout)
+            if case .aSet = controller.abPhase {
+                capsuleButton(layout, label: "Cancel Loop Start") {
+                    controller.cancelA()
+                } content: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: layout.transportGlyph * 0.8, weight: .semibold))
+                }
+            } else {
+                capsuleButton(layout, label: "Add Marker") {
+                    controller.addMarker(saved: savedSong)
+                } content: {
+                    AddMarkerGlyph()
+                        .frame(width: layout.transportGlyph, height: layout.transportGlyph)
+                }
+                .disabled(controller.duration == nil)
+            }
         }
-        // Symmetric, so play/pause stays on the centre line. Inset by the
-        // touch area's slack so the glyphs, not their 44pt frames, meet the
-        // scrubber's ends.
-        .padding(.horizontal, Self.sideMargin - 10)
+        // The capsules' edges, not their touch areas, meet the timeline's ends.
+        .padding(.horizontal, Self.sideMargin)
         // Wide, spread across the column they were 190pt apart and read as a
         // toolbar rather than one control.
         .frame(maxWidth: layout.isWide ? 360 : nil)
+        .animation(.snappy(duration: 0.2), value: controller.abPhase)
     }
 
-    /// Compact, a bare glyph: as a disc the size of the other buttons it
-    /// looked the same as the loop button switched on.
+    /// Compact, a bare glyph: as a disc it outweighed the capsules beside it.
     private func playButton(_ layout: PracticeLayout) -> some View {
         Button {
             controller.togglePlayPause()
@@ -652,65 +645,75 @@ struct PracticeView: View {
         .accessibilityLabel(controller.isPlaying ? "Pause" : "Play")
     }
 
-    private func markButton(showsTitle: Bool) -> some View {
-        Button {
-            markerSheet = .new(start: controller.pauseForMarking())
+    /// Outlined "A·B" with no loop, solid "B" while A waits, and solid with
+    /// the loop glyph while anything loops: state is fill, as on the blocks.
+    private func abButton(_ layout: PracticeLayout) -> some View {
+        let phase = controller.abPhase
+        let isSolid = phase != .idle
+        let label = switch phase {
+        case .idle: "Set Loop Start"
+        case .aSet: "Set Loop End"
+        case .looping: "Stop Looping"
+        }
+        return Button {
+            controller.tapAB(saved: savedSong)
         } label: {
             Group {
-                if showsTitle {
-                    Label {
-                        Text("Mark")
-                    } icon: {
-                        MarkGlyph()
-                            .frame(width: 17, height: 17)
-                    }
-                    .padding(.horizontal, 14)
-                    .frame(minHeight: Self.headerButtonSide)
-                } else {
-                    MarkGlyph()
-                        .frame(width: 20, height: 20)
-                        .frame(width: Self.markGlassSide, height: Self.markGlassSide)
+                switch phase {
+                case .idle: Text("A·B")
+                case .aSet: Text("B")
+                case .looping:
+                    Image(systemName: "repeat")
+                        .font(.system(size: layout.transportGlyph * 0.8, weight: .semibold))
                 }
             }
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(Color.primary)
-            .modifier(ButtonGlass())
+            .font(.system(size: layout.transportGlyph * 0.75, weight: .bold))
+            .foregroundStyle(isSolid ? AnyShapeStyle(.background) : AnyShapeStyle(.primary))
+            .frame(width: Self.capsuleWidth(layout), height: layout.loopFill)
+            .background {
+                if isSolid {
+                    Capsule().fill(.primary)
+                } else {
+                    Capsule().strokeBorder(.primary, lineWidth: 2)
+                }
+            }
             .frame(minWidth: 44, minHeight: 44)
-            .contentShape(.rect)
+            .contentShape(.capsule)
         }
         .buttonStyle(.plain)
-        .fixedSize()
         .disabled(controller.duration == nil)
-        .accessibilityLabel("Mark this point")
+        .accessibilityLabel(label)
+        .accessibilityValue(phase == .looping ? (loopCaption ?? "") : "")
     }
 
-    /// Compact, Mark sits in the marker row, and shorter than the header's 44pt
-    /// glass so it doesn't tower over Play | Loop; the touch area stays 44pt.
-    /// On its own line it's the save prompt's size, so the two read as a pair.
-    private static let markGlassSide: CGFloat = 36
-
-    /// Plain like its neighbours until it's on, when it's the one control that
-    /// fills: looping is the state that shouts.
-    private func loopButton(_ layout: PracticeLayout) -> some View {
-        Button {
-            controller.toggleLoop()
-        } label: {
-            Image(systemName: "repeat")
-                // Sized with its neighbours, not its fill: shrinking with the
-                // play button left it smaller than them whenever it was off.
-                .font(.system(size: layout.transportGlyph * 20 / 24, weight: .semibold))
-                .frame(width: layout.loopFill, height: layout.loopFill)
-                .background {
-                    if controller.isLoopOn { Circle().fill(.tint) }
-                }
-                .foregroundStyle(controller.isLoopOn ? AnyShapeStyle(onAccent) : AnyShapeStyle(.primary))
-                .frame(width: 44, height: 44)
-                .contentShape(.circle)
+    /// Add marker and cancel: the A·B button's shape at a quiet fill, since
+    /// neither is a state.
+    private func capsuleButton<Content: View>(
+        _ layout: PracticeLayout,
+        label: String,
+        action: @escaping () -> Void,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        Button(action: action) {
+            content()
+                .foregroundStyle(.primary)
+                .frame(width: Self.capsuleWidth(layout), height: layout.loopFill)
+                .background(.primary.opacity(0.16), in: .capsule)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(.capsule)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Loop")
-        .accessibilityValue(loopDescription)
-        .accessibilityAddTraits(controller.isLoopOn ? .isSelected : [])
+        .accessibilityLabel(label)
+    }
+
+    private static func capsuleWidth(_ layout: PracticeLayout) -> CGFloat {
+        (layout.loopFill * 1.4).rounded()
+    }
+
+    /// A's start as the blocks show it, with pre-roll.
+    private var pendingAStart: TimeInterval? {
+        guard case .aSet(let tapped) = controller.abPhase else { return nil }
+        return ABLoop.start(tapped: tapped)
     }
 
     /// "Looping Chorus", or "Looping Verse – Chorus" for a run of
@@ -726,15 +729,6 @@ struct PracticeView: View {
             } else {
                 "Looping \(PlaybackScrubber.timeLabel(start)) – \(PlaybackScrubber.timeLabel(end))"
             }
-        }
-    }
-
-    /// For VoiceOver: the caption is a separate element to the button.
-    private var loopDescription: String {
-        switch controller.loop {
-        case nil: "Off"
-        case .wholeSong: "Whole song"
-        case .range: loopCaption ?? "On"
         }
     }
 
@@ -760,15 +754,6 @@ struct PracticeView: View {
         }
     }
 
-    /// What's looping as a range, the whole song as all of it.
-    private var loopRange: ClosedRange<TimeInterval>? {
-        switch controller.loop {
-        case nil: nil
-        case .wholeSong: controller.duration.map { 0...$0 }
-        case .range(let start, let end): start...end
-        }
-    }
-
     private func savedMarker(id: AnyHashable) -> SongMarker? {
         savedSong?.sortedMarkers.first { AnyHashable($0.persistentModelID) == id }
     }
@@ -786,12 +771,6 @@ struct PracticeView: View {
             markers.append(.init(id: "loop", start: start, end: end, isLooping: true))
         }
         return markers
-    }
-
-    /// Markers live on the saved entry, so marking an unsaved song saves it.
-    private func addMarker(name: String, time: TimeInterval) {
-        guard let song = savedSong ?? controller.saveCurrentSong() else { return }
-        SongMarker.add(to: song, name: name, at: time, in: modelContext)
     }
 
     private func delete(_ marker: SongMarker) {
@@ -1482,6 +1461,14 @@ private struct DialSilhouette: View {
     loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.13, green: 0.23, blue: 0.29)), mode: .loop, loop: 58...96)
 }
 
+#Preview("A set") {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.13, green: 0.23, blue: 0.29)), mode: .loop, aTappedAt: 62.3, position: 84)
+}
+
+#Preview("A set, no markers") {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.20, green: 0.45, blue: 0.48)), mode: .loop, aTappedAt: 40.3, position: 52, markers: [])
+}
+
 #Preview("Loop mode, two sections looping") {
     loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.13, green: 0.23, blue: 0.29)), mode: .loop, loop: 22...96)
 }
@@ -1507,7 +1494,7 @@ private struct DialSilhouette: View {
 // screen gets, not whole devices.
 
 #Preview("iPhone SE", traits: .fixedLayout(width: 375, height: 580)) {
-    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)), rate: 0.72, loopOn: true)
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)), rate: 0.72, loop: 0...145)
 }
 
 #Preview("Controls giving way", traits: .fixedLayout(width: 402, height: 660)) {
@@ -1515,11 +1502,11 @@ private struct DialSilhouette: View {
 }
 
 #Preview("Compact, short window", traits: .fixedLayout(width: 500, height: 436)) {
-    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.25, green: 0.25, blue: 0.25)), rate: 0.72, loopOn: true)
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.25, green: 0.25, blue: 0.25)), rate: 0.72, loop: 0...145)
 }
 
 #Preview("Compact, landscape phone", traits: .fixedLayout(width: 750, height: 350)) {
-    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)), rate: 0.72, loopOn: true)
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)), rate: 0.72, loop: 0...145)
 }
 
 #Preview("iPad window, wide", traits: .fixedLayout(width: 880, height: 640)) {
@@ -1555,9 +1542,10 @@ private func loadedPreview(
     title: String = "Little Wing",
     artistName: String = "Jimi Hendrix",
     rate: Double = 0.6,
-    loopOn: Bool = false,
     mode: PlayerMode = .play,
     loop: ClosedRange<TimeInterval>? = nil,
+    aTappedAt: TimeInterval? = nil,
+    position: TimeInterval = 70,
     markers: [(name: String, time: TimeInterval)] = [("Intro", 0), ("Verse", 22), ("Chorus", 58), ("Solo", 96), ("Verse 2", 112)]
 ) -> some View {
     let container = try! AppSchema.inMemoryContainer()
@@ -1574,8 +1562,14 @@ private func loadedPreview(
     #endif
     controller.playbackRate = rate
     controller.mode = mode
-    if loopOn { controller.toggleLoop() }
     if let loop { controller.loopRange(start: loop.lowerBound, end: loop.upperBound) }
+    #if DEBUG
+    if let aTappedAt {
+        controller.previewPlaybackTime = aTappedAt
+        controller.tapAB(saved: song)
+    }
+    controller.previewPlaybackTime = position
+    #endif
     return PracticeView(
         controller: controller,
         previewTrack: .init(id: "1", title: title, artistName: artistName, palette: palette)

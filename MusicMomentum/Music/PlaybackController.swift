@@ -45,6 +45,12 @@ final class PlaybackController {
     #if DEBUG
     /// The loaded `SampleSong`'s length, so it can be marked up.
     var sampleDuration: TimeInterval?
+
+    /// Places the playhead for a preview, which has no player to seek.
+    var previewPlaybackTime: TimeInterval {
+        get { playbackTime }
+        set { playbackTime = newValue }
+    }
     #endif
     /// Suspends the ticker so the thumb doesn't fight the playhead.
     var isScrubbing = false
@@ -225,15 +231,6 @@ final class PlaybackController {
         isScrubbing = false
     }
 
-    /// Back to the top of what's looping.
-    func restart() {
-        if case .range(let start, _) = loop {
-            userSeek(to: start)
-        } else {
-            userSeek(to: 0)
-        }
-    }
-
     /// Called when the user reaches for the library, never on launch, so the
     /// system prompt turns up with a reason attached.
     @discardableResult
@@ -361,8 +358,6 @@ final class PlaybackController {
         userSeek(to: marker.startTime)
     }
 
-    var isLoopOn: Bool { loop != nil }
-
     /// The whole song's range counts as the whole-song loop, so tapping a
     /// song's only section turns it off again.
     func isLooping(start: TimeInterval, end: TimeInterval) -> Bool {
@@ -373,12 +368,6 @@ final class PlaybackController {
     private func isWholeSong(start: TimeInterval, end: TimeInterval) -> Bool {
         guard let duration else { return false }
         return start < MarkerPlacement.sameTime && end > duration - MarkerPlacement.sameTime
-    }
-
-    /// The transport's loop button: from off it loops the whole song; from
-    /// on it stops whatever the range.
-    func toggleLoop() {
-        setLoop(loop == nil ? .wholeSong : nil)
     }
 
     /// Tapping a section block: loops the range, or stops looping when it's
@@ -408,16 +397,20 @@ final class PlaybackController {
             return
         }
         setLoop(.range(start: start, end: end))
-        guard !(start..<end).contains(playbackTime) else { return }
-        seek(to: start)
-        // The seek's settling window can outlast a short range; without this
-        // the first reading past its end would read as a user jump and wait.
+        if !(start..<end).contains(playbackTime) {
+            seek(to: start)
+        }
+        // The seek's settling window can outlast a short range, and a nudge
+        // can leave the playhead just short of the new end; either way the
+        // first reading past the end must wrap, not read as a user jump.
         wasInsideLoop = true
     }
 
     /// The one way the loop changes, so the player's repeat mode can't drift.
+    /// Any new loop, or none, supersedes a pending A.
     private func setLoop(_ new: Loop?) {
         loop = new
+        pendingA = nil
         wasInsideLoop = false
         applyRepeatMode()
     }
@@ -443,6 +436,114 @@ final class PlaybackController {
         } else {
             rateWarning = nil
         }
+    }
+
+    // MARK: - A·B
+
+    /// The playhead when A was tapped, waiting for B. Here rather than in
+    /// the screen so a relayout keeps it.
+    private(set) var pendingA: TimeInterval?
+
+    var abPhase: ABLoop.Phase {
+        ABLoop.phase(pendingA: pendingA, isLooping: loop != nil)
+    }
+
+    /// What's looping as a range, the whole song as all of it.
+    var loopBounds: ClosedRange<TimeInterval>? {
+        switch loop {
+        case nil: nil
+        case .wholeSong: duration.map { 0...$0 }
+        case .range(let start, let end): start...end
+        }
+    }
+
+    /// A batch of markers just made by Add marker, A·B or Split, so the
+    /// screen can offer to name them. Replaced by the next batch.
+    struct CreatedMarkers: Identifiable {
+        let id = UUID()
+        let markers: [SongMarker]
+    }
+
+    private(set) var createdMarkers: CreatedMarkers?
+
+    func dismissCreatedMarkers() {
+        createdMarkers = nil
+    }
+
+    private func announce(_ markers: [SongMarker]) {
+        guard !markers.isEmpty else { return }
+        createdMarkers = CreatedMarkers(markers: markers)
+    }
+
+    /// Never starts or stops playback. From idle it sets A, and switches to
+    /// Loop mode so the blocks can show it; with A set it closes the loop at
+    /// the playhead; while anything loops it stops it.
+    func tapAB(saved: SavedSong?) {
+        switch abPhase {
+        case .idle:
+            guard duration != nil else { return }
+            pendingA = playbackTime
+            if mode == .play { switchMode(to: .loop, saved: saved) }
+        case .aSet(let tapped):
+            closeLoop(a: tapped, saved: saved)
+        case .looping:
+            stopLooping()
+        }
+    }
+
+    func cancelA() {
+        pendingA = nil
+    }
+
+    /// Ends without a marker within the snap threshold get one, which saves
+    /// an unsaved song as marking it does.
+    private func closeLoop(a: TimeInterval, saved: SavedSong?) {
+        guard let duration else { return }
+        let song = saved ?? saveCurrentSong()
+        guard let closed = ABLoop.close(
+            a: a, b: playbackTime, duration: duration,
+            song: song, in: song?.modelContext ?? modelContext
+        ) else { return }
+        loopRange(start: closed.loop.lowerBound, end: closed.loop.upperBound)
+        announce(closed.created)
+    }
+
+    /// A marker at the playhead, less pre-roll, unless one is already within
+    /// the snap threshold. Doesn't pause: naming it can wait.
+    func addMarker(saved: SavedSong?) {
+        guard duration != nil, let song = saved ?? saveCurrentSong(),
+              let context = song.modelContext ?? modelContext
+        else { return }
+        let added = SongMarker.addSnapping(
+            to: song,
+            at: MarkerPlacement.compensatedStart(playbackTime),
+            in: context
+        )
+        if added.created { announce([added.marker]) }
+    }
+
+    /// Nudging an end on a marker moves the marker, and with it the next
+    /// or previous section; the loop follows. See `ABLoop.nudge`.
+    func nudgeLoop(_ end: ABLoop.End, by offset: TimeInterval, saved: SavedSong?) {
+        guard let duration, let bounds = loopBounds,
+              let nudged = ABLoop.nudge(
+                  end, of: bounds, by: offset, duration: duration,
+                  song: saved, in: saved?.modelContext ?? modelContext
+              )
+        else { return }
+        loopRange(start: nudged.lowerBound, end: nudged.upperBound)
+    }
+
+    /// "Split here" on B: gives B a marker of its own, so nudging it leaves
+    /// the next section's start where it is. See `ABLoop.splitTime`.
+    func splitLoopEnd(saved: SavedSong?) {
+        guard let duration, let bounds = loopBounds,
+              let song = saved ?? saveCurrentSong(),
+              let context = song.modelContext ?? modelContext,
+              let split = ABLoop.split(bounds, duration: duration, song: song, in: context)
+        else { return }
+        loopRange(start: split.loop.lowerBound, end: split.loop.upperBound)
+        if let created = split.created { announce([created]) }
     }
 
     // MARK: - Persistence

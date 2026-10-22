@@ -12,6 +12,11 @@ import UIKit
 /// they are long. A tap loops a block, or stops it if it's the one looping;
 /// a drag across several loops them together; holding one opens its marker.
 /// The loop itself is the caller's, so it survives the row being rebuilt.
+///
+/// While A·B waits for B, the stretch from A to the playhead is shaded under
+/// an A tab. While looping, A and B tabs sit over the loop's ends, and the
+/// caption becomes nudge controls for them; holding the B tab offers "Split
+/// Here".
 struct SectionBlocks: View {
     struct Block: Identifiable {
         let id: AnyHashable
@@ -33,6 +38,11 @@ struct SectionBlocks: View {
     var onTap: (ClosedRange<TimeInterval>) -> Void
     var onDrag: (ClosedRange<TimeInterval>) -> Void
     var onHold: ((Block) -> Void)?
+    /// A·B's A, with pre-roll, while it waits for B.
+    var pendingA: TimeInterval? = nil
+    /// ◀ ▶ under a loop; without it the caption stays as it is.
+    var onNudge: ((ABLoop.End, TimeInterval) -> Void)? = nil
+    var onSplit: (() -> Void)? = nil
 
     /// The blocks a finger is on: where it landed and where it is now.
     @State private var drag: (anchor: Int, current: Int)?
@@ -68,10 +78,15 @@ struct SectionBlocks: View {
                     .contentShape(.rect)
                     .gesture(gesture(layout))
                     .overlay(alignment: .topLeading) { accessibilityBlocks(layout) }
+                    .overlay(alignment: .topLeading) { tabs(layout, width: proxy.size.width) }
             }
             .frame(height: Self.rowHeight)
 
-            caption
+            if let loop, let onNudge, pendingA == nil {
+                nudgeRow(loop, onNudge: onNudge)
+            } else {
+                caption
+            }
         }
         .disabled(duration == nil)
         .accessibilityElement(children: .contain)
@@ -103,6 +118,17 @@ struct SectionBlocks: View {
                     .offset(x: frame.lowerBound, y: Self.blockTop)
             }
 
+            if let pendingA, let a = layout.x(for: pendingA), let x = layout.x(for: position) {
+                Rectangle()
+                    .fill(.primary.opacity(0.5))
+                    .frame(width: abs(x - a), height: Self.blockHeight)
+                    .offset(x: min(a, x), y: Self.blockTop)
+                Capsule()
+                    .fill(.primary)
+                    .frame(width: 2, height: Self.blockHeight + 4)
+                    .offset(x: a - 1, y: Self.blockTop - 2)
+            }
+
             if duration != nil, let x = layout.x(for: position) {
                 // Dark on a lit block, light on the rest, so it shows on both.
                 let onLit = active?.contains(position) ?? false
@@ -123,15 +149,75 @@ struct SectionBlocks: View {
         return loop
     }
 
+    // MARK: - A and B
+
+    private static let tabSize = CGSize(width: 18, height: 16)
+
+    /// Above the blocks, in the room the row leaves for them.
+    @ViewBuilder
+    private func tabs(_ layout: SectionBlockLayout, width: CGFloat) -> some View {
+        if let pendingA, let a = layout.x(for: pendingA) {
+            tab("A")
+                .offset(tabOrigin(a, width: width))
+                .allowsHitTesting(false)
+        } else if let loop, drag == nil,
+                  let a = layout.x(for: loop.lowerBound), let b = layout.x(for: loop.upperBound) {
+            let slack = CGSize(width: (44 - Self.tabSize.width) / 2, height: 6)
+            let origin = tabOrigin(b, width: width)
+            ZStack(alignment: .topLeading) {
+                tab("A")
+                    .offset(tabOrigin(a, width: width))
+                    .allowsHitTesting(false)
+                tab("B")
+                    .padding(.horizontal, slack.width)
+                    .padding(.vertical, slack.height)
+                    .contentShape(.interaction, .rect)
+                    .contentShape(.contextMenuPreview, .rect(cornerRadius: 8))
+                    .contextMenu {
+                        if let onSplit {
+                            Button("Split Here", systemImage: "scissors", action: onSplit)
+                        }
+                    }
+                    .offset(x: origin.width - slack.width, y: origin.height - slack.height)
+                    .allowsHitTesting(onSplit != nil)
+            }
+        }
+    }
+
+    private func tab(_ letter: String) -> some View {
+        Text(letter)
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(.background)
+            .frame(width: Self.tabSize.width, height: Self.tabSize.height)
+            .background(.primary, in: .rect(cornerRadius: 4))
+            .dynamicTypeSize(...DynamicTypeSize.large)
+            .accessibilityHidden(true)
+    }
+
+    /// Kept inside the row, so a tab over the song's first or last moment
+    /// doesn't hang off the edge.
+    private func tabOrigin(_ x: CGFloat, width: CGFloat) -> CGSize {
+        CGSize(
+            width: min(max(0, x - Self.tabSize.width / 2), max(0, width - Self.tabSize.width)),
+            height: Self.blockTop - Self.tabSize.height - 2
+        )
+    }
+
     // MARK: - Caption
 
     /// The playhead and the time left either side, as Play mode has, with
     /// what's looping (or would be, mid-drag) between them.
     private var caption: some View {
         HStack {
-            Text(PlaybackScrubber.timeLabel(position))
+            if let pendingA {
+                Text("A \(PlaybackScrubber.timeLabel(pendingA))")
+            } else {
+                Text(PlaybackScrubber.timeLabel(position))
+            }
             Spacer()
-            if let duration {
+            if pendingA != nil {
+                Text(PlaybackScrubber.timeLabel(position))
+            } else if let duration {
                 Text("-" + PlaybackScrubber.timeLabel(max(0, duration - position)))
             }
         }
@@ -150,7 +236,7 @@ struct SectionBlocks: View {
     }
 
     private var captionText: (text: String, isName: Bool) {
-        let layout = SectionBlockLayout(sections: blocks.map(\.range), width: 1)
+        if pendingA != nil { return ("Tap B to close the loop", false) }
         let names = blocks.map(\.name)
         if let drag, hasMoved, !isHolding {
             let run = min(drag.anchor, drag.current)...max(drag.anchor, drag.current)
@@ -159,11 +245,84 @@ struct SectionBlocks: View {
         guard let loop else {
             return (blocks.count > 1 ? "Tap a section to loop it" : "Tap to loop the song", false)
         }
+        return (loopName(loop), true)
+    }
+
+    /// "Chorus", "Verse – Chorus", or the times for a loop that isn't made
+    /// of whole sections.
+    private func loopName(_ loop: ClosedRange<TimeInterval>) -> String {
+        let layout = SectionBlockLayout(sections: blocks.map(\.range), width: 1)
+        let names = blocks.map(\.name)
         if let run = layout.blocks(matching: loop) {
             let isWholeSong = run == 0...(blocks.count - 1)
-            return (isWholeSong ? "Whole song" : SectionBlockLayout.name(of: run, names: names), true)
+            return isWholeSong ? "Whole song" : SectionBlockLayout.name(of: run, names: names)
         }
-        return ("\(PlaybackScrubber.timeLabel(loop.lowerBound)) – \(PlaybackScrubber.timeLabel(loop.upperBound))", true)
+        return "\(PlaybackScrubber.timeLabel(loop.lowerBound)) – \(PlaybackScrubber.timeLabel(loop.upperBound))"
+    }
+
+    // MARK: - Nudging
+
+    /// ◀ A ▶ · what's looping · ◀ B ▶. Tenths, so a 0.1 s nudge shows. The
+    /// arrows' touch areas reach past the caption line to 44pt.
+    private func nudgeRow(
+        _ loop: ClosedRange<TimeInterval>,
+        onNudge: @escaping (ABLoop.End, TimeInterval) -> Void
+    ) -> some View {
+        HStack(spacing: 0) {
+            nudgeControl(.start, letter: "A", time: loop.lowerBound, onNudge: onNudge)
+            Text(loopName(loop))
+                .fontWeight(.semibold)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity)
+                .contentTransition(.opacity)
+            nudgeControl(.end, letter: "B", time: loop.upperBound, onNudge: onNudge)
+        }
+        .font(.caption.monospacedDigit())
+    }
+
+    private func nudgeControl(
+        _ end: ABLoop.End,
+        letter: String,
+        time: TimeInterval,
+        onNudge: @escaping (ABLoop.End, TimeInterval) -> Void
+    ) -> some View {
+        let name = end == .start ? "Loop start" : "Loop end"
+        return HStack(spacing: 0) {
+            nudgeArrow("chevron.left", label: "\(name) earlier") { onNudge(end, -ABLoop.nudgeStep) }
+            Text("\(letter) \(PreciseTime.format(time))")
+                .fontWeight(.semibold)
+                .fixedSize()
+                .accessibilityElement()
+                .accessibilityLabel(name)
+                .accessibilityValue(PreciseTime.format(time))
+                .accessibilityAdjustableAction { direction in
+                    switch direction {
+                    case .increment: onNudge(end, ABLoop.nudgeStep)
+                    case .decrement: onNudge(end, -ABLoop.nudgeStep)
+                    @unknown default: break
+                    }
+                }
+                .accessibilityActions {
+                    if end == .end, let onSplit {
+                        Button("Split Here", action: onSplit)
+                    }
+                }
+            nudgeArrow("chevron.right", label: "\(name) later") { onNudge(end, ABLoop.nudgeStep) }
+        }
+        .foregroundStyle(.primary)
+    }
+
+    private func nudgeArrow(_ systemImage: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.caption.weight(.bold))
+                .frame(width: 28, height: 16)
+                .contentShape(.rect.inset(by: -14))
+        }
+        .buttonStyle(.plain)
+        .buttonRepeatBehavior(.enabled)
+        .accessibilityLabel(label)
     }
 
     // MARK: - Touch
@@ -273,6 +432,27 @@ private let previewBlocks: [SectionBlocks.Block] = [
 #Preview("Looping one section") {
     SectionBlocks(blocks: previewBlocks, position: 70, duration: 145, loop: 58...96, onTap: { _ in }, onDrag: { _ in })
         .padding(.horizontal, 24)
+}
+
+#Preview("A set") {
+    SectionBlocks(blocks: previewBlocks, position: 84, duration: 145, loop: nil, onTap: { _ in }, onDrag: { _ in }, pendingA: 62)
+        .padding(.horizontal, 24)
+}
+
+#Preview("Looping, with nudges") {
+    SectionBlocks(
+        blocks: previewBlocks, position: 70, duration: 145, loop: 58...96,
+        onTap: { _ in }, onDrag: { _ in }, onNudge: { _, _ in }, onSplit: {}
+    )
+    .padding(.horizontal, 24)
+}
+
+#Preview("Looping the last section, with nudges") {
+    SectionBlocks(
+        blocks: previewBlocks, position: 120, duration: 145, loop: 112...145,
+        onTap: { _ in }, onDrag: { _ in }, onNudge: { _, _ in }, onSplit: {}
+    )
+    .padding(.horizontal, 24)
 }
 
 #Preview("Looping two sections") {

@@ -19,8 +19,8 @@ import UIKit
 /// anything gives way.
 ///
 /// Before the wheel has given up much, the screen goes compact: a one-line
-/// header, a transport row of even buttons, and Play | Loop beside Mark at
-/// the bottom instead of over the timeline. That frees enough height to hand the wheel most of
+/// header, a transport row of even buttons, and Play | Loop at the bottom
+/// instead of over the timeline. That frees enough height to hand the wheel most of
 /// its size back.
 nonisolated struct PracticeLayout: Equatable {
     /// The song and its speed on the left, playback on the right.
@@ -32,7 +32,8 @@ nonisolated struct PracticeLayout: Equatable {
     /// 44pt frame and this is that frame.
     var playSize: CGFloat
     var transportGlyph: CGFloat
-    /// The loop button's fill when it's on. Its touch area stays 44pt.
+    /// The height of the transport's end capsules, A·B and Add marker.
+    /// Their touch areas stay at least 44pt.
     var loopFill: CGFloat
     var coverSide: CGFloat
     /// Stacked, the header holds this from the top and the player holds
@@ -67,14 +68,15 @@ nonisolated struct PracticeLayout: Equatable {
         var wideTitleBlock: CGFloat
         var compactHeader: CGFloat
         /// The Play | Loop control and the gap under it. Compact, the
-        /// control shares the bottom row with Mark instead.
+        /// control goes in the bottom row instead.
         var modeRow: CGFloat
         /// Either mode's timeline: they're the same height, so the
         /// transport holds still when the mode switches.
         var scrubber: CGFloat
-        /// Compact, Play | Loop and Mark's glyph.
+        /// Compact, Play | Loop.
         var compactRow: CGFloat
-        /// The loop caption and Mark.
+        /// The loop caption, still 44pt tall from when Mark shared it: the
+        /// give-way stages were tuned with it.
         var captionRow: CGFloat
 
         static let standard = Heights(
@@ -264,7 +266,7 @@ nonisolated struct PracticeLayout: Equatable {
         } else {
             playSize = play
             transportGlyph = glyph
-            // Scales with play so the two filled circles keep their proportion.
+            // Scales with play so the capsules keep their proportion to it.
             loopFill = 44 * play / 68
             coverSide = cover
         }
