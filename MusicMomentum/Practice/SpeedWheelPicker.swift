@@ -12,6 +12,7 @@ import UIKit
 /// Where it points is the speed: it stops dead at either limit, and the
 /// scale around it lights up to the pointer. A tap on one of the scale's
 /// ticks, or on the saved speed's dot, jumps straight to it.
+/// A two-finger scroll over it, or a mouse wheel, turns it too.
 struct SpeedWheelPicker: View {
     @Binding var speed: Double
     @Environment(\.smokedFill) private var smokedFill
@@ -50,6 +51,9 @@ struct SpeedWheelPicker: View {
             .frame(width: diameter, height: diameter)
             .contentShape(.circle)
             .gesture(rotationGesture)
+            #if canImport(UIKit)
+            .gesture(TrackpadScroll(onChanged: scroll(by:), onEnded: endScroll))
+            #endif
             // The drag gesture has `minimumDistance: 0`, so a plain
             // `.onTapGesture` never fires. The drag a double tap also
             // triggers moves no distance and commits the value unchanged.
@@ -285,6 +289,21 @@ struct SpeedWheelPicker: View {
             }
     }
 
+    /// Up or right is faster, in whichever direction the system's natural
+    /// scrolling setting reports the fingers moving.
+    private func scroll(by translation: CGSize) {
+        if dragPercent == nil { dragPercent = Double(currentPercent) }
+        update(by: (translation.width - translation.height) / Self.scrollPointsPerPercent)
+    }
+
+    private func endScroll() {
+        if let dragPercent { commit(dragPercent) }
+        dragPercent = nil
+    }
+
+    /// The whole range in about one long swipe across a Magic Keyboard's trackpad.
+    private static let scrollPointsPerPercent: CGFloat = 4
+
     /// Wrapped into ±180 so crossing the 3 o'clock seam isn't a full turn back.
     private func shortestDelta(from previous: Double, to current: Double) -> Double {
         var delta = current - previous
@@ -367,6 +386,36 @@ struct SpeedWheelPicker: View {
         speed = Double(percent) / 100
     }
 }
+
+#if canImport(UIKit)
+/// Two-finger trackpad scrolls and mouse wheels only: with no touch types
+/// allowed, a finger on the glass, or a trackpad click-drag, still goes to
+/// the rotation gesture.
+private struct TrackpadScroll: UIGestureRecognizerRepresentable {
+    var onChanged: (CGSize) -> Void
+    var onEnded: () -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let recognizer = UIPanGestureRecognizer()
+        recognizer.allowedScrollTypesMask = .all
+        recognizer.allowedTouchTypes = []
+        return recognizer
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        switch recognizer.state {
+        case .began, .changed:
+            let translation = recognizer.translation(in: recognizer.view)
+            recognizer.setTranslation(.zero, in: recognizer.view)
+            onChanged(CGSize(width: translation.x, height: translation.y))
+        case .ended, .cancelled, .failed:
+            onEnded()
+        default:
+            break
+        }
+    }
+}
+#endif
 
 #Preview("Phone") {
     @Previewable @State var speed = 0.7
