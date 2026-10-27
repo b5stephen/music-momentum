@@ -14,11 +14,16 @@ extension GeometryProxy {
     /// 35pt low and the header was indented in split screen. An iPad window's
     /// controls report 66×53 against a 22pt corner.
     nonisolated var windowControls: CGSize {
+        #if os(macOS)
+        // The traffic lights sit in the title bar, above the content.
+        return .zero
+        #else
         let inset = containerCornerInsets.topLeading
         if #available(iOS 27.0, *), let radius = concentricCornerRadii?.topLeading,
            inset.width <= radius, inset.height <= radius {
             return .zero
         }
         return inset
+        #endif
     }
 }

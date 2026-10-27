@@ -366,7 +366,9 @@ private struct PagedLibraryList<Item: MusicItem & Identifiable, Row: View>: View
             }
         }
         .navigationTitle(title)
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .task { await loadFirstBatch() }
     }
 
@@ -527,7 +529,9 @@ private extension Track {
     return NavigationStack {
         LibraryBrowseView { _ in }
             .navigationTitle("Choose Song")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
     }
     .modelContainer(container)
 }

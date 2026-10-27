@@ -8,6 +8,8 @@ import SwiftData
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
+#else
+import AppKit
 #endif
 
 struct PracticeView: View {
@@ -22,7 +24,9 @@ struct PracticeView: View {
     var onPalette: (ArtworkPalette?) -> Void = { _ in }
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.modelContext) private var modelContext
+    #if os(iOS)
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    #endif
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Query private var savedSongs: [SavedSong]
     @State private var showPicker = false
@@ -90,7 +94,7 @@ struct PracticeView: View {
         GeometryReader { proxy in
             let placement = controlsPlacement(proxy)
             let controlsClearance = placement.drop
-            let tabBarInset = verticalSizeClass == .compact ? proxy.safeAreaInsets.bottom : 0
+            let tabBarInset = tabBarInset(proxy)
             let layout = PracticeLayout(
                 size: CGSize(width: proxy.size.width, height: proxy.size.height - controlsClearance),
                 heights: layoutHeights,
@@ -301,10 +305,20 @@ struct PracticeView: View {
         }
     }
 
+    /// A Mac has no tab bar in the window's bottom inset.
+    private func tabBarInset(_ proxy: GeometryProxy) -> CGFloat {
+        #if os(iOS)
+        verticalSizeClass == .compact ? proxy.safeAreaInsets.bottom : 0
+        #else
+        0
+        #endif
+    }
+
     /// A bent foldable's crease across the screen, as the band it reserves,
     /// margins included. Flat, the region is inactive and the stack lays
     /// out as one; a crease down the screen is left to the floating layout.
     private func horizontalCrease(_ proxy: GeometryProxy) -> ClosedRange<CGFloat>? {
+        #if os(iOS)
         guard #available(iOS 27.1, *),
               let region = proxy.reservedRegions(kind: .division).first(where: {
                   $0.isActive && $0.frame.width > $0.frame.height
@@ -312,6 +326,9 @@ struct PracticeView: View {
               })
         else { return nil }
         return region.frame.minY...region.frame.maxY
+        #else
+        return nil
+        #endif
     }
 
     private func creaseSplit(
@@ -1017,14 +1034,26 @@ struct PracticeView: View {
             headline: "Apple Music access needed",
             detail: "Music Momentum plays songs from your own library and Apple Music. It can't reach either one until you allow it.",
             actionTitle: "Open Settings",
-            footnote: "Settings › Music Momentum › Media & Apple Music"
+            footnote: Self.accessSettingsPath
         ) {
             #if canImport(UIKit)
             if let url = URL(string: UIApplication.openSettingsURLString) {
                 UIApplication.shared.open(url)
             }
+            #elseif os(macOS)
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Media") {
+                NSWorkspace.shared.open(url)
+            }
             #endif
         }
+    }
+
+    private static var accessSettingsPath: String {
+        #if os(macOS)
+        "System Settings › Privacy & Security › Media & Apple Music"
+        #else
+        "Settings › Music Momentum › Media & Apple Music"
+        #endif
     }
 
     // MARK: - Messages

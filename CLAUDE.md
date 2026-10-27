@@ -5,10 +5,11 @@
 ```sh
 xcodebuild build -scheme MusicMomentum -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5'
 xcodebuild test  -scheme MusicMomentum -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' -only-testing:MusicMomentumTests
+xcodebuild build -scheme MusicMomentum -destination 'platform=macOS'
 # narrower: -only-testing:MusicMomentumTests/LoopChainTests[/testName]
 ```
 
-The simulator must run iOS ≥ 26.4 or the build is rejected with "doesn't match deployment target"; `xcrun simctl list devices available` if the one above is gone. Playback, `SongLookup` and the pickers need a real device with a subscription; the simulator builds and runs unit tests only, and unit tests must never need MusicKit.
+The simulator must run iOS ≥ 26.4 or the build is rejected with "doesn't match deployment target"; `xcrun simctl list devices available` if the one above is gone. Playback, `SongLookup` and the pickers need a real device with a subscription; the simulator builds and runs unit tests only, and unit tests must never need MusicKit. The app target also builds natively for macOS; unit tests run on the iOS simulator only. Guard iOS-only API with `#if os(iOS)` (or `canImport(UIKit)` beside an existing guard), and UIKit's semantic colours go through `Color+System`.
 
 ## Layout
 
@@ -25,7 +26,7 @@ The simulator must run iOS ≥ 26.4 or the build is rejected with "doesn't match
 
 ## iCloud sync
 
-- SwiftData mirrors the store into the private database of `iCloud.dev.etched.music-momentum`, named in both `MusicMomentum.entitlements` and `AppSchema.cloudKitContainer`. CloudKit forbids `#Unique` and needs every relationship optional and every attribute optional or defaulted; `SavedSong.mergeDuplicates` stands in for the missing uniqueness on `songID`.
+- SwiftData mirrors the store into the private database of `iCloud.dev.etched.music-momentum`, named in `MusicMomentum.entitlements`, `MusicMomentum-macOS.entitlements` and `AppSchema.cloudKitContainer`. CloudKit forbids `#Unique` and needs every relationship optional and every attribute optional or defaulted; `SavedSong.mergeDuplicates` stands in for the missing uniqueness on `songID`.
 - The schema is additive-only once it's in Production: add models and properties, never rename, delete or retype one, or builds already installed stop syncing. Change a shape by adding a new property beside the old one.
 - **Remind the user to deploy the CloudKit schema** whenever a change adds or alters a model property or `AppSchema.models`: say so when committing it, and again before any TestFlight/App Store build that follows it. Production never creates record types or fields itself, and Development only learns a field once a record carrying a non-nil value for it has been exported, so a property left nil throughout testing is missing from both and Development-vs-Production shows no diff. Steps, from a debug build signed into iCloud (the simulator is fine): Saved tab → hammer menu → **Validate CloudKit Schema** (dry run, prints the schema to the Xcode console), then **Push CloudKit Schema (Dev)**, which uploads every entity and attribute from the model via `CloudKitSchemaInitializer`, then CloudKit Console → Schema → **Deploy Schema Changes**. Skipping it shows up on the client as a bare `CKErrorDomain error 2` (`partialFailure`).
 - The simulator gets no CloudKit pushes; remote changes only arrive on real devices.

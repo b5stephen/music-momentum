@@ -19,6 +19,9 @@ struct RootTabView: View {
     @State private var tab: TabID = .practice
     @State private var practicePalette: ArtworkPalette?
     @State private var floats = false
+    #if os(macOS)
+    @State private var displayAwake: (any NSObjectProtocol)?
+    #endif
 
     private enum TabID {
         case practice, saved
@@ -58,7 +61,16 @@ struct RootTabView: View {
         // Hands are on the guitar, not the screen. iOS ignores this while
         // the app is in the background, so it needs no scene-phase check.
         .onChange(of: controller.isPlaying, initial: true) { _, playing in
+            #if os(iOS)
             UIApplication.shared.isIdleTimerDisabled = playing
+            #elseif os(macOS)
+            if playing, displayAwake == nil {
+                displayAwake = ProcessInfo.processInfo.beginActivity(options: .idleDisplaySleepDisabled, reason: "Practising")
+            } else if !playing, let displayAwake {
+                ProcessInfo.processInfo.endActivity(displayAwake)
+                self.displayAwake = nil
+            }
+            #endif
         }
     }
 
@@ -156,7 +168,7 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
                 // Stands in for a phone's status bar and tab bar, so the
                 // header sits as far from the card's top as from its side.
                 .safeAreaPadding(.vertical, Self.contentInset)
-                .background(Color(.secondarySystemGroupedBackground))
+                .background(Color.secondarySystemGroupedBackground)
                 .clipShape(.rect(cornerRadius: Self.radius))
                 .overlay {
                     RoundedRectangle(cornerRadius: Self.radius)
@@ -181,9 +193,10 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
                     .offset(x: Self.margin + cardWidth)
             }
         }
-        .background(Color(.systemBackground))
+        .background(Color.systemBackground)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
         .onGeometryChange(for: ClosedRange<CGFloat>?.self) { proxy in
+            #if os(iOS)
             guard #available(iOS 27.1, *),
                   let region = proxy.reservedRegions(kind: .division).first(where: {
                       $0.isActive && $0.frame.height > $0.frame.width
@@ -191,6 +204,9 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
                   region.frame.minX >= narrowestCardEdge
             else { return nil }
             return region.frame.minX...region.frame.maxX
+            #else
+            return nil
+            #endif
         } action: { crease in
             withAnimation(.snappy) { self.crease = crease }
         }
@@ -218,7 +234,9 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
             .frame(width: 5, height: 44)
             .frame(width: Self.margin, height: 120)
             .contentShape(.rect)
+            #if os(iOS)
             .hoverEffect(.highlight)
+            #endif
             .gesture(
                 // Global, because the handle moves with the width it sets: measured
                 // locally, each step shifts the frame the next translation is read in.

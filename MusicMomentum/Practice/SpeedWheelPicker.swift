@@ -6,6 +6,8 @@
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
+#else
+import AppKit
 #endif
 
 /// An amp-style knob for practice speed, one haptic detent per percent.
@@ -53,6 +55,8 @@ struct SpeedWheelPicker: View {
             .gesture(rotationGesture)
             #if canImport(UIKit)
             .gesture(TrackpadScroll(onChanged: scroll(by:), onEnded: endScroll))
+            #elseif os(macOS)
+            .modifier(ScrollWheel(onChanged: scroll(by:), onEnded: endScroll))
             #endif
             // The drag gesture has `minimumDistance: 0`, so a plain
             // `.onTapGesture` never fires. The drag a double tap also
@@ -413,6 +417,49 @@ private struct TrackpadScroll: UIGestureRecognizerRepresentable {
         default:
             break
         }
+    }
+}
+#elseif os(macOS)
+/// SwiftUI on the Mac has no scroll-wheel gesture, so scrolls are read off
+/// the window's event stream while the pointer is over the knob, and
+/// swallowed there so the page doesn't scroll as well. Deltas come in the
+/// same direction as UIKit's pan translation.
+private struct ScrollWheel: ViewModifier {
+    var onChanged: (CGSize) -> Void
+    var onEnded: () -> Void
+    @State private var isHovering = false
+    @State private var monitor: Any?
+
+    /// A mouse wheel reports lines, not points.
+    private static let pointsPerLine: CGFloat = 10
+
+    func body(content: Content) -> some View {
+        content
+            .onHover { isHovering = $0 }
+            .onAppear {
+                monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+                    let handled = MainActor.assumeIsolated { handle(event) }
+                    return handled ? nil : event
+                }
+            }
+            .onDisappear {
+                if let monitor { NSEvent.removeMonitor(monitor) }
+                monitor = nil
+            }
+    }
+
+    private func handle(_ event: NSEvent) -> Bool {
+        guard isHovering else { return false }
+        // Momentum after the fingers lift would fling the speed past
+        // where they stopped it.
+        guard event.momentumPhase.isEmpty else { return true }
+        let scale = event.hasPreciseScrollingDeltas ? 1 : Self.pointsPerLine
+        onChanged(CGSize(width: event.scrollingDeltaX * scale, height: event.scrollingDeltaY * scale))
+        // A mouse wheel's clicks have no phase; each is a whole scroll.
+        if event.phase.isEmpty || event.phase.contains(.ended) || event.phase.contains(.cancelled) {
+            onEnded()
+        }
+        return true
     }
 }
 #endif

@@ -3,7 +3,9 @@
 //  MusicMomentum
 //
 
+#if canImport(UIKit)
 import MediaPlayer
+#endif
 import SwiftUI
 
 /// The system volume, the level the side buttons set. MusicKit has no
@@ -21,6 +23,10 @@ struct VolumeSlider: View {
     var tint: Color?
 
     var body: some View {
+        #if os(macOS)
+        // The Mac has no `MPVolumeView`, and MusicKit no volume to set.
+        Color.clear
+        #else
         HStack(spacing: 10) {
             Image(systemName: "speaker.fill")
             slider
@@ -29,8 +35,10 @@ struct VolumeSlider: View {
         .font(.system(size: 12))
         .foregroundStyle(.secondary)
         .accessibilityElement(children: .contain)
+        #endif
     }
 
+    #if canImport(UIKit)
     @ViewBuilder
     private var slider: some View {
         #if targetEnvironment(simulator)
@@ -65,6 +73,7 @@ private final class CentredVolumeView: MPVolumeView {
         return rect
     }
 }
+#endif
 
 #Preview("Light") {
     VolumeSlider()

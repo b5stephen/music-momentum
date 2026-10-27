@@ -144,11 +144,13 @@ struct SavedSongsView: View {
             // Beside the card, the stack's own opaque background (and the
             // rows', cleared above) would box the list off from the cover's glow.
             .containerBackground(
-                isBesidePractice ? AnyShapeStyle(.clear) : AnyShapeStyle(Color(.systemBackground)),
+                isBesidePractice ? AnyShapeStyle(.clear) : AnyShapeStyle(Color.systemBackground),
                 for: .navigation
             )
             .navigationTitle(isBesidePractice ? "" : "Saved")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(isBesidePractice ? .inline : .automatic)
+            #endif
             .toolbar {
                 // Hidden rather than disabled: a greyed glyph beside Add read
                 // as a second, broken add button.
@@ -175,7 +177,7 @@ struct SavedSongsView: View {
                     } label: {
                         // Recoloured by hand, so it has to grey itself when disabled.
                         Image(systemName: "plus")
-                            .foregroundStyle(controller.canUseMusic ? Color.accentColor : Color(.tertiaryLabel))
+                            .foregroundStyle(controller.canUseMusic ? Color.accentColor : Color.tertiaryLabel)
                     }
                     .accessibilityLabel("Add Song")
                     .disabled(!controller.canUseMusic)
@@ -551,7 +553,9 @@ private struct SpeedEditorSheet: View {
             }
             .padding()
             .navigationTitle("Practice Speed")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(role: .close) { dismiss() }
@@ -649,6 +653,7 @@ private struct AroundCrease<Whole: View, Above: View, Below: View>: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onGeometryChange(for: ClosedRange<CGFloat>?.self) { proxy in
+            #if os(iOS)
             guard #available(iOS 27.1, *),
                   let crease = proxy.reservedRegions(kind: .division).first(where: {
                       $0.isActive && $0.frame.width > $0.frame.height
@@ -656,6 +661,9 @@ private struct AroundCrease<Whole: View, Above: View, Below: View>: View {
                   })?.frame
             else { return nil }
             return crease.minY...crease.maxY
+            #else
+            return nil
+            #endif
         } action: { crease = $0 }
     }
 }

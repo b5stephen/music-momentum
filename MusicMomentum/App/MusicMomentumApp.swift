@@ -34,5 +34,9 @@ struct MusicMomentumApp: App {
             #endif
         }
         .modelContainer(container)
+        #if os(macOS)
+        // Wide enough to float Practice over Saved, as on an iPad.
+        .defaultSize(width: 1180, height: 820)
+        #endif
     }
 }
