@@ -28,6 +28,7 @@ struct SavedSongsView: View {
     /// Beside the card, the rows end as far from the window edge as the card
     /// sits from every edge, so the page reads as one set of margins.
     private var trailingInset: CGFloat { isBesidePractice ? 28 : 16 }
+    static let rowTopPadding: CGFloat = 10
 
     @State private var showPicker = false
     @State private var editing: SavedSong?
@@ -96,7 +97,7 @@ struct SavedSongsView: View {
                             // Padding rather than row insets, so a separator
                             // drawn here spans the cell like the pill row's.
                             .padding(EdgeInsets(
-                                top: 10, leading: 16, bottom: markers.isEmpty ? 10 : 0, trailing: trailingInset
+                                top: Self.rowTopPadding, leading: 16, bottom: markers.isEmpty ? 10 : 0, trailing: trailingInset
                             ))
                             .listRowInsets(EdgeInsets())
                             .listRowSeparator(.hidden)

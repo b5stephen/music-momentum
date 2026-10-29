@@ -180,11 +180,25 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
                     y: colorScheme == .dark ? 24 : 16
                 )
                 .frame(width: cardWidth)
+                #if os(macOS)
+                // Level with the first saved row's artwork under the toolbar.
+                .padding(EdgeInsets(
+                    top: SavedSongsView.rowTopPadding, leading: Self.margin,
+                    bottom: Self.margin, trailing: Self.margin
+                ))
+                #else
                 .padding(Self.margin)
                 .padding(.top, max(0, windowControlsHeight + Self.contentInset - Self.margin))
+                #endif
                 // The status bar and home indicator are shorter than the
                 // margin, so the card can measure from the screen's edges.
+                // A Mac's top inset is the title bar and toolbar, which the
+                // card would slide under.
+                #if os(macOS)
+                .ignoresSafeArea(edges: .bottom)
+                #else
                 .ignoresSafeArea(edges: .vertical)
+                #endif
                 .onGeometryChange(for: CGFloat.self) { $0.windowControls.height } action: { windowControlsHeight = $0 }
 
             // Bent, the crease sets the width.
