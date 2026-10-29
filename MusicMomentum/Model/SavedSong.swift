@@ -75,11 +75,35 @@ final class SavedSong {
 // MARK: - Storage
 
 extension SavedSong {
-    static func find(songID: String, in context: ModelContext) -> SavedSong? {
-        let descriptor = FetchDescriptor<SavedSong>(
-            predicate: #Predicate { $0.songID == songID }
+    /// Falls back to the catalog ID because a library ID saved on one device
+    /// doesn't resolve on another (a Mac looks up the iPhone's `i.…` ID and
+    /// gets nothing), so the song loads from the catalog under its catalog ID.
+    /// Matching on `songID` alone, the Mac showed saved songs as unsaved,
+    /// without their markers, and saving one again duplicated it.
+    static func find(songID: String, catalogID: String? = nil, in context: ModelContext) -> SavedSong? {
+        let byID = FetchDescriptor<SavedSong>(predicate: #Predicate { $0.songID == songID })
+        if let song = try? context.fetch(byID).first { return song }
+        guard let catalogID else { return nil }
+        let wanted: String? = catalogID
+        let byCatalog = FetchDescriptor<SavedSong>(
+            predicate: #Predicate { $0.catalogID == wanted || $0.songID == catalogID }
         )
-        return try? context.fetch(descriptor).first
+        return try? context.fetch(byCatalog).first
+    }
+
+    static func find(song: Song, in context: ModelContext) -> SavedSong? {
+        find(songID: song.id.rawValue, catalogID: song.catalogID, in: context)
+    }
+
+    /// `find`'s rule, for code holding a `@Query` result rather than a context.
+    func matches(songID: String, catalogID: String?) -> Bool {
+        if self.songID == songID { return true }
+        guard let catalogID else { return false }
+        return self.catalogID == catalogID || self.songID == catalogID
+    }
+
+    func matches(_ song: Song) -> Bool {
+        matches(songID: song.id.rawValue, catalogID: song.catalogID)
     }
 
     /// Upserts. Takes plain values rather than a `Song` because MusicKit's
@@ -95,7 +119,8 @@ extension SavedSong {
         in context: ModelContext
     ) -> SavedSong {
         let song: SavedSong
-        if let existing = find(songID: songID, in: context) {
+        // Keeps the stored `songID`: it's the ID the saving device resolves.
+        if let existing = find(songID: songID, catalogID: catalogID, in: context) {
             existing.speed = speed
             // Refresh metadata too: tracks get retitled and artwork replaced.
             existing.title = title

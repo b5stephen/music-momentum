@@ -279,10 +279,10 @@ struct MarkerRangeEditor: View {
             }
         }
         .font(.footnote.weight(.semibold).monospacedDigit())
-        .foregroundStyle(Color(.systemBackground))
+        .foregroundStyle(Color.systemBackground)
         .padding(.horizontal, 10)
         .frame(height: Self.bubbleHeight)
-        .background(Color(.label), in: Capsule())
+        .background(Color.label, in: Capsule())
         .fixedSize()
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { bubbleWidth = $0 }
         .offset(
@@ -320,7 +320,7 @@ struct MarkerRangeEditor: View {
     /// clip doesn't show through it.
     private func handle(at position: CGFloat, filled: Bool) -> some View {
         Circle()
-            .fill(filled ? AnyShapeStyle(.tint) : AnyShapeStyle(Color(.secondarySystemGroupedBackground)))
+            .fill(filled ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.secondarySystemGroupedBackground))
             .overlay(Circle().strokeBorder(.tint, lineWidth: 3))
             .frame(width: Self.handleSize, height: Self.handleSize)
             .offset(x: position - Self.handleSize / 2, y: (Self.barHeight - Self.handleSize) / 2)

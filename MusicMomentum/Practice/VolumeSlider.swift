@@ -3,13 +3,16 @@
 //  MusicMomentum
 //
 
+#if canImport(UIKit)
 import MediaPlayer
+#endif
 import SwiftUI
 
 /// The system volume, the level the side buttons set. MusicKit has no
 /// volume of its own, and `MPVolumeView` is what Apple points every
 /// deprecated volume API to. It keeps itself in step with the side buttons,
-/// and while it's on screen the system's volume HUD stays away.
+/// and while it's on screen the system's volume HUD stays away. The Mac has
+/// no `MPVolumeView`, so there it's a plain slider on `SystemVolume`.
 ///
 /// The native slider, tinted and centred through `MPVolumeView`'s own API
 /// and nothing else. Its slider is a private subclass: forced into iOS 26's
@@ -19,6 +22,11 @@ import SwiftUI
 struct VolumeSlider: View {
     /// The screen's text colour; UIKit can't see SwiftUI's foreground style.
     var tint: Color?
+    #if os(macOS)
+    /// Made on appear: `@State` evaluates its initial value on every init,
+    /// and each one would register CoreAudio listeners.
+    @State private var volume: SystemVolume?
+    #endif
 
     var body: some View {
         HStack(spacing: 10) {
@@ -29,11 +37,24 @@ struct VolumeSlider: View {
         .font(.system(size: 12))
         .foregroundStyle(.secondary)
         .accessibilityElement(children: .contain)
+        #if os(macOS)
+        .onAppear { if volume == nil { volume = SystemVolume() } }
+        #endif
     }
 
     @ViewBuilder
     private var slider: some View {
-        #if targetEnvironment(simulator)
+        #if os(macOS)
+        Slider(
+            value: Binding(
+                get: { Double(volume?.level ?? 0) },
+                set: { volume?.set(Float($0)) }
+            )
+        )
+        .tint(tint ?? .primary)
+        .disabled(volume?.isSettable != true)
+        .accessibilityLabel("Volume")
+        #elseif targetEnvironment(simulator)
         // The simulator has no output volume and `MPVolumeView` draws
         // nothing there; previews would show a gap.
         Slider(value: .constant(0.6))
@@ -44,6 +65,7 @@ struct VolumeSlider: View {
     }
 }
 
+#if canImport(UIKit)
 private struct SystemVolumeView: UIViewRepresentable {
     var tint: Color?
 
@@ -65,6 +87,7 @@ private final class CentredVolumeView: MPVolumeView {
         return rect
     }
 }
+#endif
 
 #Preview("Light") {
     VolumeSlider()

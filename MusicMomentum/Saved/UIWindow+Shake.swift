@@ -5,12 +5,15 @@
 
 #if DEBUG
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 extension Notification.Name {
     static let deviceDidShake = Notification.Name("deviceDidShake")
 }
 
+#if canImport(UIKit)
 /// SwiftUI has no shake gesture; the window is where an unhandled shake ends
 /// up. In the simulator it's Device ▸ Shake, ⌃⌘Z, or with no Simulator window
 /// `xcrun simctl spawn booted notifyutil -p com.apple.UIKit.SimulatorShake`.
@@ -22,7 +25,10 @@ extension UIWindow {
         super.motionEnded(motion, with: event)
     }
 }
+#endif
 
+// Nothing posts it on a Mac, so there the debug menu stays as sample mode
+// left it.
 extension View {
     func onShake(perform action: @escaping () -> Void) -> some View {
         onReceive(NotificationCenter.default.publisher(for: .deviceDidShake)) { _ in action() }

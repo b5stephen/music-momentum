@@ -106,7 +106,9 @@ struct MarkerEditorView: View {
                 Section {
                     HStack(spacing: 12) {
                         TextField(end == nil ? "Marker" : "Clip", text: $name)
+                            #if os(iOS)
                             .textInputAutocapitalization(.words)
+                            #endif
                         kindSwitch
                     }
                 }
@@ -152,10 +154,14 @@ struct MarkerEditorView: View {
                     }
                 }
             }
+            #if os(iOS)
             .listSectionSpacing(20)
+            #endif
             .contentMargins(.top, 4, for: .scrollContent)
             .navigationTitle(isEditing ? "Edit Marker" : "New Marker")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(role: .close) { dismiss() }
@@ -317,7 +323,7 @@ struct MarkerEditorView: View {
             .padding(.horizontal, 9)
             .padding(.vertical, 3)
             // The cell's colour, so it stands off the tinted panel it sits in.
-            .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+            .background(Color.secondarySystemGroupedBackground, in: Capsule())
             .foregroundStyle(Color.accentText)
     }
 
@@ -432,7 +438,7 @@ private struct FillButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .padding(.vertical, 6)
-            .background(Color(.tertiarySystemFill), in: Capsule())
+            .background(Color.tertiarySystemFill, in: Capsule())
             .foregroundStyle(.primary)
             .opacity(configuration.isPressed ? 0.5 : isEnabled ? 1 : 0.4)
     }
@@ -452,7 +458,9 @@ private struct PreciseTimeField: View {
     var body: some View {
         TextField("0:00.0", text: $text)
             .font(.system(size: 32, weight: .semibold, design: .rounded).monospacedDigit())
+            #if os(iOS)
             .keyboardType(.numbersAndPunctuation)
+            #endif
             .focused($focused)
             .onSubmit(commit)
             .onChange(of: focused) { focused ? onFocus() : commit() }

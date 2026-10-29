@@ -88,6 +88,37 @@ struct SavedSongTests {
         #expect(try allSongs()[0].catalogID == "1440857781")
     }
 
+    /// Another device can't resolve the saving device's library ID, so the
+    /// song arrives from the catalog under its catalog ID.
+    @Test("A song loaded by its catalog ID finds the one saved by library ID")
+    func findsByCatalogID() throws {
+        let saved = save("i.1", catalogID: "1440857781")
+
+        #expect(SavedSong.find(songID: "1440857781", catalogID: "1440857781", in: context) === saved)
+        #expect(saved.matches(songID: "1440857781", catalogID: "1440857781"))
+        #expect(SavedSong.find(songID: "i.2", catalogID: "999", in: context) == nil)
+        #expect(!saved.matches(songID: "i.2", catalogID: "999"))
+    }
+
+    @Test("A catalog song saved directly is found from its catalog ID")
+    func findsCatalogSavedSong() throws {
+        let saved = save("1440857781")
+
+        #expect(SavedSong.find(songID: "i.9", catalogID: "1440857781", in: context) === saved)
+        #expect(saved.matches(songID: "i.9", catalogID: "1440857781"))
+    }
+
+    @Test("Saving from the catalog updates the song saved by library ID")
+    func reSaveByCatalogIDUpdatesInPlace() throws {
+        save("i.1", catalogID: "1440857781", speed: 1.0)
+        save("1440857781", catalogID: "1440857781", speed: 0.5)
+
+        let songs = try allSongs()
+        #expect(songs.count == 1)
+        #expect(songs[0].songID == "i.1")
+        #expect(songs[0].speed == 0.5)
+    }
+
     /// The rule behind `SavedSongsView.add`.
     @Test("Adding an already-saved song keeps its tuned speed")
     func addingExistingSongKeepsSpeed() throws {

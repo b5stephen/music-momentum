@@ -6,12 +6,15 @@
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
+#else
+import AppKit
 #endif
 
 /// An amp-style knob for practice speed, one haptic detent per percent.
 /// Where it points is the speed: it stops dead at either limit, and the
 /// scale around it lights up to the pointer. A tap on one of the scale's
 /// ticks, or on the saved speed's dot, jumps straight to it.
+/// A two-finger scroll over it, or a mouse wheel, turns it too.
 struct SpeedWheelPicker: View {
     @Binding var speed: Double
     @Environment(\.smokedFill) private var smokedFill
@@ -50,6 +53,11 @@ struct SpeedWheelPicker: View {
             .frame(width: diameter, height: diameter)
             .contentShape(.circle)
             .gesture(rotationGesture)
+            #if canImport(UIKit)
+            .gesture(TrackpadScroll(onChanged: scroll(by:), onEnded: endScroll))
+            #elseif os(macOS)
+            .modifier(ScrollWheel(onChanged: scroll(by:), onEnded: endScroll))
+            #endif
             // The drag gesture has `minimumDistance: 0`, so a plain
             // `.onTapGesture` never fires. The drag a double tap also
             // triggers moves no distance and commits the value unchanged.
@@ -285,6 +293,21 @@ struct SpeedWheelPicker: View {
             }
     }
 
+    /// Up or right is faster, in whichever direction the system's natural
+    /// scrolling setting reports the fingers moving.
+    private func scroll(by translation: CGSize) {
+        if dragPercent == nil { dragPercent = Double(currentPercent) }
+        update(by: (translation.width - translation.height) / Self.scrollPointsPerPercent)
+    }
+
+    private func endScroll() {
+        if let dragPercent { commit(dragPercent) }
+        dragPercent = nil
+    }
+
+    /// The whole range in about one long swipe across a Magic Keyboard's trackpad.
+    private static let scrollPointsPerPercent: CGFloat = 4
+
     /// Wrapped into ±180 so crossing the 3 o'clock seam isn't a full turn back.
     private func shortestDelta(from previous: Double, to current: Double) -> Double {
         var delta = current - previous
@@ -367,6 +390,79 @@ struct SpeedWheelPicker: View {
         speed = Double(percent) / 100
     }
 }
+
+#if canImport(UIKit)
+/// Two-finger trackpad scrolls and mouse wheels only: with no touch types
+/// allowed, a finger on the glass, or a trackpad click-drag, still goes to
+/// the rotation gesture.
+private struct TrackpadScroll: UIGestureRecognizerRepresentable {
+    var onChanged: (CGSize) -> Void
+    var onEnded: () -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let recognizer = UIPanGestureRecognizer()
+        recognizer.allowedScrollTypesMask = .all
+        recognizer.allowedTouchTypes = []
+        return recognizer
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        switch recognizer.state {
+        case .began, .changed:
+            let translation = recognizer.translation(in: recognizer.view)
+            recognizer.setTranslation(.zero, in: recognizer.view)
+            onChanged(CGSize(width: translation.x, height: translation.y))
+        case .ended, .cancelled, .failed:
+            onEnded()
+        default:
+            break
+        }
+    }
+}
+#elseif os(macOS)
+/// SwiftUI on the Mac has no scroll-wheel gesture, so scrolls are read off
+/// the window's event stream while the pointer is over the knob, and
+/// swallowed there so the page doesn't scroll as well. Deltas come in the
+/// same direction as UIKit's pan translation.
+private struct ScrollWheel: ViewModifier {
+    var onChanged: (CGSize) -> Void
+    var onEnded: () -> Void
+    @State private var isHovering = false
+    @State private var monitor: Any?
+
+    /// A mouse wheel reports lines, not points.
+    private static let pointsPerLine: CGFloat = 10
+
+    func body(content: Content) -> some View {
+        content
+            .onHover { isHovering = $0 }
+            .onAppear {
+                monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+                    let handled = MainActor.assumeIsolated { handle(event) }
+                    return handled ? nil : event
+                }
+            }
+            .onDisappear {
+                if let monitor { NSEvent.removeMonitor(monitor) }
+                monitor = nil
+            }
+    }
+
+    private func handle(_ event: NSEvent) -> Bool {
+        guard isHovering else { return false }
+        // Momentum after the fingers lift would fling the speed past
+        // where they stopped it.
+        guard event.momentumPhase.isEmpty else { return true }
+        let scale = event.hasPreciseScrollingDeltas ? 1 : Self.pointsPerLine
+        onChanged(CGSize(width: event.scrollingDeltaX * scale, height: event.scrollingDeltaY * scale))
+        // A mouse wheel's clicks have no phase; each is a whole scroll.
+        if event.phase.isEmpty || event.phase.contains(.ended) || event.phase.contains(.cancelled) {
+            onEnded()
+        }
+        return true
+    }
+}
+#endif
 
 #Preview("Phone") {
     @Previewable @State var speed = 0.7

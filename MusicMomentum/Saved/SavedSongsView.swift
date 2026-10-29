@@ -28,6 +28,7 @@ struct SavedSongsView: View {
     /// Beside the card, the rows end as far from the window edge as the card
     /// sits from every edge, so the page reads as one set of margins.
     private var trailingInset: CGFloat { isBesidePractice ? 28 : 16 }
+    static let rowTopPadding: CGFloat = 10
 
     @State private var showPicker = false
     @State private var editing: SavedSong?
@@ -83,7 +84,7 @@ struct SavedSongsView: View {
                     List {
                         ForEach(songs) { song in
                             let markers = song.sortedMarkers
-                            let isCurrent = (controller.selectedSong?.id.rawValue ?? previewCurrentID) == song.songID
+                            let isCurrent = isLoaded(song)
                             SavedSongRow(
                                 song: song,
                                 isLoading: loadingID == song.songID,
@@ -96,7 +97,7 @@ struct SavedSongsView: View {
                             // Padding rather than row insets, so a separator
                             // drawn here spans the cell like the pill row's.
                             .padding(EdgeInsets(
-                                top: 10, leading: 16, bottom: markers.isEmpty ? 10 : 0, trailing: trailingInset
+                                top: Self.rowTopPadding, leading: 16, bottom: markers.isEmpty ? 10 : 0, trailing: trailingInset
                             ))
                             .listRowInsets(EdgeInsets())
                             .listRowSeparator(.hidden)
@@ -143,12 +144,16 @@ struct SavedSongsView: View {
             }
             // Beside the card, the stack's own opaque background (and the
             // rows', cleared above) would box the list off from the cover's glow.
+            #if os(iOS)
             .containerBackground(
-                isBesidePractice ? AnyShapeStyle(.clear) : AnyShapeStyle(Color(.systemBackground)),
+                isBesidePractice ? AnyShapeStyle(.clear) : AnyShapeStyle(Color.systemBackground),
                 for: .navigation
             )
+            #endif
             .navigationTitle(isBesidePractice ? "" : "Saved")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(isBesidePractice ? .inline : .automatic)
+            #endif
             .toolbar {
                 // Hidden rather than disabled: a greyed glyph beside Add read
                 // as a second, broken add button.
@@ -175,7 +180,7 @@ struct SavedSongsView: View {
                     } label: {
                         // Recoloured by hand, so it has to grey itself when disabled.
                         Image(systemName: "plus")
-                            .foregroundStyle(controller.canUseMusic ? Color.accentColor : Color(.tertiaryLabel))
+                            .foregroundStyle(controller.canUseMusic ? Color.accentColor : Color.tertiaryLabel)
                     }
                     .accessibilityLabel("Add Song")
                     .disabled(!controller.canUseMusic)
@@ -281,7 +286,7 @@ struct SavedSongsView: View {
 
     /// Re-adding a song keeps its tuned speed rather than resetting to 100%.
     private func add(_ song: Song) {
-        if let existing = SavedSong.find(songID: song.id.rawValue, in: modelContext) {
+        if let existing = SavedSong.find(song: song, in: modelContext) {
             SavedSong.touch(existing, in: modelContext)
         } else {
             SavedSong.save(song: song, speed: 1.0, in: modelContext)
@@ -312,10 +317,15 @@ struct SavedSongsView: View {
         }
     }
 
+    private func isLoaded(_ song: SavedSong) -> Bool {
+        if let selected = controller.selectedSong { return song.matches(selected) }
+        return previewCurrentID == song.songID
+    }
+
     /// The song has to reach the player first (the editor plays the passage),
     /// but the tab stays put.
     private func openEditor(_ song: SavedSong, marker: SongMarker? = nil) {
-        guard (controller.selectedSong?.id.rawValue ?? previewCurrentID) != song.songID else {
+        guard !isLoaded(song) else {
             present(song, marker: marker)
             return
         }
@@ -356,7 +366,7 @@ struct SavedSongsView: View {
     private func save(_ speed: Double, for song: SavedSong) {
         song.speed = speed
         SavedSong.touch(song, in: modelContext)
-        if controller.selectedSong?.id.rawValue == song.songID {
+        if let selected = controller.selectedSong, song.matches(selected) {
             controller.playbackRate = speed
         }
     }
@@ -551,7 +561,9 @@ private struct SpeedEditorSheet: View {
             }
             .padding()
             .navigationTitle("Practice Speed")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(role: .close) { dismiss() }
@@ -649,6 +661,7 @@ private struct AroundCrease<Whole: View, Above: View, Below: View>: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onGeometryChange(for: ClosedRange<CGFloat>?.self) { proxy in
+            #if os(iOS)
             guard #available(iOS 27.1, *),
                   let crease = proxy.reservedRegions(kind: .division).first(where: {
                       $0.isActive && $0.frame.width > $0.frame.height
@@ -656,6 +669,9 @@ private struct AroundCrease<Whole: View, Above: View, Below: View>: View {
                   })?.frame
             else { return nil }
             return crease.minY...crease.maxY
+            #else
+            return nil
+            #endif
         } action: { crease = $0 }
     }
 }
