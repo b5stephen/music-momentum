@@ -84,7 +84,7 @@ struct SavedSongsView: View {
                     List {
                         ForEach(songs) { song in
                             let markers = song.sortedMarkers
-                            let isCurrent = (controller.selectedSong?.id.rawValue ?? previewCurrentID) == song.songID
+                            let isCurrent = isLoaded(song)
                             SavedSongRow(
                                 song: song,
                                 isLoading: loadingID == song.songID,
@@ -286,7 +286,7 @@ struct SavedSongsView: View {
 
     /// Re-adding a song keeps its tuned speed rather than resetting to 100%.
     private func add(_ song: Song) {
-        if let existing = SavedSong.find(songID: song.id.rawValue, in: modelContext) {
+        if let existing = SavedSong.find(song: song, in: modelContext) {
             SavedSong.touch(existing, in: modelContext)
         } else {
             SavedSong.save(song: song, speed: 1.0, in: modelContext)
@@ -317,10 +317,15 @@ struct SavedSongsView: View {
         }
     }
 
+    private func isLoaded(_ song: SavedSong) -> Bool {
+        if let selected = controller.selectedSong { return song.matches(selected) }
+        return previewCurrentID == song.songID
+    }
+
     /// The song has to reach the player first (the editor plays the passage),
     /// but the tab stays put.
     private func openEditor(_ song: SavedSong, marker: SongMarker? = nil) {
-        guard (controller.selectedSong?.id.rawValue ?? previewCurrentID) != song.songID else {
+        guard !isLoaded(song) else {
             present(song, marker: marker)
             return
         }
@@ -361,7 +366,7 @@ struct SavedSongsView: View {
     private func save(_ speed: Double, for song: SavedSong) {
         song.speed = speed
         SavedSong.touch(song, in: modelContext)
-        if controller.selectedSong?.id.rawValue == song.songID {
+        if let selected = controller.selectedSong, song.matches(selected) {
             controller.playbackRate = speed
         }
     }

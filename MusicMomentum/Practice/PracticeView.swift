@@ -64,6 +64,7 @@ struct PracticeView: View {
     /// What the loaded screen shows of the song.
     struct Track {
         var id: String
+        var catalogID: String? = nil
         var title: String
         var artistName: String
         var palette: ArtworkPalette?
@@ -74,6 +75,7 @@ struct PracticeView: View {
         guard let song = controller.selectedSong else { return previewTrack }
         return Track(
             id: song.id.rawValue,
+            catalogID: song.catalogID,
             title: song.title,
             artistName: song.artistName,
             palette: palette?.songID == song.id.rawValue
@@ -998,8 +1000,8 @@ struct PracticeView: View {
     /// Reads the `@Query` results rather than fetching, so the save button restyles
     /// the moment the store changes — including from the Saved tab.
     private var savedSong: SavedSong? {
-        guard let songID = track?.id else { return nil }
-        return savedSongs.first { $0.songID == songID }
+        guard let track else { return nil }
+        return savedSongs.first { $0.matches(songID: track.id, catalogID: track.catalogID) }
     }
 
     // MARK: - Arriving
