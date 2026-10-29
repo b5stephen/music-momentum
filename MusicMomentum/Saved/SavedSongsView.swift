@@ -143,10 +143,12 @@ struct SavedSongsView: View {
             }
             // Beside the card, the stack's own opaque background (and the
             // rows', cleared above) would box the list off from the cover's glow.
+            #if os(iOS)
             .containerBackground(
                 isBesidePractice ? AnyShapeStyle(.clear) : AnyShapeStyle(Color.systemBackground),
                 for: .navigation
             )
+            #endif
             .navigationTitle(isBesidePractice ? "" : "Saved")
             #if os(iOS)
             .navigationBarTitleDisplayMode(isBesidePractice ? .inline : .automatic)

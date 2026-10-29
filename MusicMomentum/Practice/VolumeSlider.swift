@@ -50,8 +50,10 @@ struct VolumeSlider: View {
         SystemVolumeView(tint: tint)
         #endif
     }
+    #endif
 }
 
+#if canImport(UIKit)
 private struct SystemVolumeView: UIViewRepresentable {
     var tint: Color?
 
