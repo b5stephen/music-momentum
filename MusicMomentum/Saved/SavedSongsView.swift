@@ -372,9 +372,7 @@ struct SavedSongsView: View {
     }
 
     private func delete(_ song: SavedSong) {
-        for marker in song.markers ?? [] { controller.markerDeleted(marker) }
-        modelContext.delete(song)
-        try? modelContext.save()
+        controller.delete(song, in: modelContext)
     }
 
     private func update(_ marker: SongMarker, name: String, start: TimeInterval, end: TimeInterval?) {

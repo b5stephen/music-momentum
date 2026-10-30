@@ -53,6 +53,9 @@ struct MacWindow: View {
         ZStack(alignment: .leading) {
             NavigationSplitView(columnVisibility: $columns) {
                 sidebar
+                    // A shade darker than the mesh behind it; with no cover
+                    // colours the system's own sidebar look stands.
+                    .background { if palette != nil { Color.black.opacity(0.22) } }
                     .navigationSplitViewColumnWidth(Self.sidebarWidth)
             } detail: {
                 PracticeView(
@@ -76,7 +79,16 @@ struct MacWindow: View {
                 sidebar
                     .frame(width: Self.sidebarWidth)
                     .frame(maxHeight: .infinity)
-                    .background(.regularMaterial)
+                    .background {
+                        // Over Practice it needs to be solid enough to read
+                        // against: the cover's dark shade, mostly opaque.
+                        if let palette {
+                            Rectangle().fill(.ultraThinMaterial)
+                                .overlay { palette.background.opacity(0.86) }
+                        } else {
+                            Rectangle().fill(.regularMaterial)
+                        }
+                    }
                     .overlay(alignment: .trailing) {
                         Rectangle().fill(.primary.opacity(0.08)).frame(width: 1)
                     }

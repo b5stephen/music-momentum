@@ -43,7 +43,7 @@ Practice's save, change-song and Mark buttons and its clip pills are glass too, 
 
 ## Mac
 
-The Mac window is the iPad's wide layout turned into a window rather than a new app. The cover's mesh fills the whole window, title bar and sidebar included, so loading a song re-tints everything; covers without colours and the empty state keep the system look and coral. Saved is the sidebar: translucent over the mesh, with a pill search field, a small "Saved" header carrying Sort and Add as bare glyphs, and 36pt rows with the saved speed as quiet trailing text. The loaded song gets a speaker glyph, not a highlight, for the same reason as on iOS. Hover is the only fill a row ever gets.
+The Mac window is the iPad's wide layout turned into a window rather than a new app. The cover's mesh fills the whole window, title bar and sidebar included, so loading a song re-tints everything; covers without colours and the empty state keep the system look and coral. Saved is the sidebar: a column a shade darker than the mesh (black at 22%), or, slid over Practice, the cover's dark shade at 86% over a blur, with a pill search field, a small "Saved" header carrying Sort and Add as bare glyphs, and 36pt rows with the saved speed as quiet trailing text. The loaded song gets a speaker glyph, not a highlight, for the same reason as on iOS. Hover is the only fill a row ever gets.
 
 The toolbar has no title, since Practice's song title is the title. Change Song is a labelled glass capsule ("change" and "add" are different actions, so the label stays), the mini player is a glass icon at the trailing end, and the sidebar toggle joins them when the sidebar is collapsed. Below about 1180pt the sidebar slides over Practice with a 32% dim instead of squeezing it; the dim closes it.
 
@@ -102,7 +102,6 @@ Wide, the cover sits beside the title as it does stacked, the pair centred over 
 - **The wide playback column as a tight block** centred beside the header and wheel: it looked stark. Stretched the whole height, an iPad window's rows drifted apart, so each gap grows by at most 28pt.
 - **The cover over the playback column in the wide layout,** up to 180pt: it was the only thing the volume row could take height from, and on a landscape phone it shrank to 76pt.
 - **⏮ for restart:** a triangle-and-bar beside the skip buttons' circular arrows looked like a different set, and reads as "previous track". Restart uses `gobackward`, the skip arrow without a number.
-
 - **The mesh drawn behind the Mac's split view:** the columns cover anything behind them, so the window stayed white. It is the window's own container background instead.
 - **A picked song in the Mac sheet filled with the accent or system blue:** coral there meant "on", and blue is a second tint. The pick is a neutral 14% fill.
 

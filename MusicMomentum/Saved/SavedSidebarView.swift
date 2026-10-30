@@ -62,6 +62,9 @@ struct SavedSidebarView: View {
                         isLoaded: isLoaded(song),
                         isPlaying: controller.isPlaying
                     ) { practice(song) }
+                    .contextMenu {
+                        Button("Delete", role: .destructive) { controller.delete(song, in: modelContext) }
+                    }
                     .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
