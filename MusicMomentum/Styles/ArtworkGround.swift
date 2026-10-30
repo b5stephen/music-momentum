@@ -37,8 +37,10 @@ struct ArtworkGround: ViewModifier {
                 .foregroundStyle(palette.map { AnyShapeStyle($0.foreground) } ?? AnyShapeStyle(.primary))
                 .tint(palette?.foreground)
                 .environment(\.colorScheme, palette == nil ? systemScheme : .dark)
+                // Empty, the window turned see-through until a cover's
+                // colours arrived.
                 .containerBackground(for: .window) {
-                    if let palette { backdrop(palette) }
+                    if let palette { backdrop(palette) } else { Color.systemBackground }
                 }
         } else {
             branching(content)

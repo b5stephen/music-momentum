@@ -108,6 +108,7 @@ Wide, the cover sits beside the title as it does stacked, the pair centred over 
 - **The wide playback column as a tight block** centred beside the header and wheel: it looked stark. Stretched the whole height, an iPad window's rows drifted apart, so each gap grows by at most 28pt.
 - **The cover over the playback column in the wide layout,** up to 180pt: it was the only thing the volume row could take height from, and on a landscape phone it shrank to 76pt.
 - **⏮ for restart:** a triangle-and-bar beside the skip buttons' circular arrows looked like a different set, and reads as "previous track". Restart uses `gobackward`, the skip arrow without a number.
+- **A resize (↕) pointer over the Mac's speed knob,** to say it drags up and down: it looked out of place over a round control. The pointer stays the arrow and the tooltip says how to turn it.
 - **⌘-click keeping the loop menu open** to chain several clips in one go: a SwiftUI `Menu` closes on every click. The menu reads `NSEvent.modifierFlags` in the item's action, so ⌘-click still adds or removes a clip, but the menu closes each time; the lane is the place to chain.
 - **The mesh drawn behind the Mac's split view:** the columns cover anything behind them, so the window stayed white. It is the window's own container background instead.
 - **A picked song in the Mac sheet filled with the accent or system blue:** coral there meant "on", and blue is a second tint. The pick is a neutral 14% fill.
