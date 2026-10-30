@@ -21,11 +21,12 @@ struct PlaybackScrubber: View {
     var pointNameDuration: TimeInterval = 3
     var onScrub: (TimeInterval) -> Void = { _ in }
     #if os(macOS)
-    /// The lane's clicks: a clip (⌘-click is `chaining`) or a point. The
-    /// scrubber only reports them; what they mean is Practice's call.
+    /// What a click on the lane does depends on it: with looping off a click
+    /// can only jump.
     var isLoopOn = false
-    var onClip: (Marker, _ chaining: Bool) -> Void = { _, _ in }
-    var onPoint: (Marker) -> Void = { _ in }
+    /// The lane's clicks and menu. The scrubber only reports them; what they
+    /// mean is Practice's call.
+    var laneActions = MarkerLaneActions()
     #endif
     var onCommit: (TimeInterval) -> Void
 
@@ -45,6 +46,10 @@ struct PlaybackScrubber: View {
     /// A touch that landed on a marker, not yet a tap or a scrub.
     @State private var pendingMarker: Marker?
     @State private var holdTask: Task<Void, Never>?
+    #if os(macOS)
+    /// Where the pointer is over the track, for the time bubble.
+    @State private var hoverX: CGFloat?
+    #endif
 
     private var isDragging: Bool { dragPosition != nil }
     private var displayedPosition: TimeInterval { dragPosition ?? position }
@@ -73,9 +78,10 @@ struct PlaybackScrubber: View {
                     markers: markers,
                     duration: duration,
                     isLoopOn: isLoopOn,
-                    onClip: onClip,
-                    onPoint: onPoint
+                    actions: laneActions
                 )
+                // Over the track below, for the bubbles that rise out of it.
+                .zIndex(1)
             } else {
                 Color.clear.frame(height: MarkerLaneLayout.height(hasPoints: false, rows: 1))
             }
@@ -106,6 +112,12 @@ struct PlaybackScrubber: View {
             .frame(height: 5)
             .frame(maxHeight: .infinity)
             .contentShape(.rect)
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let location): hoverX = location.x
+                case .ended: hoverX = nil
+                }
+            }
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
@@ -118,6 +130,15 @@ struct PlaybackScrubber: View {
                         onCommit(time)
                     }
             )
+            .overlay(alignment: .topLeading) {
+                if let hoverX, let duration, duration > 0, width > 0 {
+                    MarkerBubble(Text(Self.timeLabel(Self.time(atX: hoverX, width: width, duration: duration))).monospacedDigit())
+                        .alignmentGuide(.leading) { $0.width / 2 - min(max(hoverX, 22), width - 22) }
+                        .alignmentGuide(.top) { $0[.bottom] + 6 }
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
+            }
         }
         .frame(height: 16)
         .disabled(duration == nil)
@@ -280,9 +301,15 @@ struct PlaybackScrubber: View {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
             #endif
         }
-        let time = duration * min(max(x / width, 0), 1)
+        let time = Self.time(atX: x, width: width, duration: duration)
         dragPosition = time
         onScrub(time)
+    }
+
+    /// The song time under `x` on a track `width` wide, clamped to the song.
+    nonisolated static func time(atX x: CGFloat, width: CGFloat, duration: TimeInterval) -> TimeInterval {
+        guard width > 0, duration > 0 else { return 0 }
+        return duration * min(max(x / width, 0), 1)
     }
 
     /// The marker a tap at `x` in the lane jumps to. Targets are widened to a

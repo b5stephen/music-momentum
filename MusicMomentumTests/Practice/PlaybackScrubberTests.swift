@@ -49,3 +49,24 @@ struct PlaybackScrubberTests {
         #expect(PlaybackScrubber.sectionName(at: 19.9, in: markers, pointNameDuration: 3) == "Intro")
     }
 }
+
+/// The time bubble over the track says where a click would land.
+@Suite("Time under the pointer")
+struct PlaybackScrubberHoverTimeTests {
+    @Test("Maps the pointer to song time and clamps past either end", arguments: [
+        (0.0, 0.0),
+        (300.0, 129.0),
+        (600.0, 258.0),
+        (-40.0, 0.0),
+        (900.0, 258.0),
+    ])
+    func time(x: Double, expected: Double) {
+        #expect(abs(PlaybackScrubber.time(atX: x, width: 600, duration: 258) - expected) < 0.001)
+    }
+
+    @Test("Is zero when the track or the song has no size")
+    func degenerate() {
+        #expect(PlaybackScrubber.time(atX: 10, width: 0, duration: 258) == 0)
+        #expect(PlaybackScrubber.time(atX: 10, width: 600, duration: 0) == 0)
+    }
+}

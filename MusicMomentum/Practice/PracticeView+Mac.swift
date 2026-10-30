@@ -200,11 +200,33 @@ extension PracticeView {
                 pointNameDuration: 3 * controller.playbackRate,
                 onScrub: { _ in controller.isScrubbing = true },
                 isLoopOn: controller.isLoopOn,
-                onClip: { macChoose($0.id, chaining: $1) },
-                onPoint: { macChoose($0.id, chaining: false) },
+                laneActions: macLaneActions,
                 onCommit: { controller.endScrub(at: $0) }
             )
         }
+    }
+
+    /// The lane hands back ids, never models: a menu can be open while the
+    /// store changes under it.
+    private var macLaneActions: MarkerLaneActions {
+        MarkerLaneActions(
+            clip: { macChoose($0.id, chaining: $1) },
+            point: { macChoose($0.id, chaining: false) },
+            jump: { if let marker = marker(for: $0.id) { controller.jump(to: marker) } },
+            rename: { scrubberMarker, name in
+                guard let marker = marker(for: scrubberMarker.id) else { return }
+                // A blank name would become "Clip 3"; renaming keeps the old one.
+                let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                update(marker, name: trimmed.isEmpty ? marker.name : trimmed, start: marker.startTime, end: marker.endTime)
+            },
+            editTimes: { if let marker = marker(for: $0.id) { markerSheet = .edit(marker) } },
+            makePoint: {
+                guard let marker = marker(for: $0.id) else { return }
+                marker.clearEnd(in: modelContext)
+                controller.markerChanged(marker)
+            },
+            delete: { if let marker = marker(for: $0.id) { delete(marker) } }
+        )
     }
 
     /// With the loop off a click can only jump, as a pill tap does: only the

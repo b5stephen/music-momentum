@@ -53,6 +53,8 @@ Practice on the Mac is a horizontal layout with no panel, divider or card behind
 
 The timeline's marker lane sits above the track, with no panel behind it. Points get a thin row of their own (a dot with its name beside it); clips are 24pt bars below, a 7pt corner, the name inside: idle is a faint fill with a hairline edge, looping is the solid text-colour fill with dark ink, as Play and Loop are. Overlapping clips stack into extra rows like calendar events, to three, then share the last; a stacked clip gets a ring in the background colour. A name shows only if the whole of it fits (a clip's bar, or the room before the next point); otherwise it's a bare bar or dot and the tooltip says it, never an ellipsis. Rows are worked out from the lane's width as it resizes, and an empty lane holds one row's height with a dashed hint, so loading a song never moves Practice. There is no pill row: click a clip to loop just it, ⌘-click to add it to or take it out of the chain, click a point to jump to it, and with the loop off every click just jumps, since only the Loop button turns looping on. The loop label in the header is a menu of Whole song, every clip (checked when looping, with its range and 1-9 position) and every point, for what the lane can't show. Under the track, elapsed time sits on the left and the remaining time, with a true minus, on the right.
 
+Hovering a lane item lifts a clip 2pt with a brighter fill and a soft shadow, and raises a dark, hairlined bubble over the lane at once ("**Chorus** · 1:02 – 1:36 · click to loop", or "click to jump" with the loop off). It replaces the system tooltip, which waits and would clash with it. Over the track, a small bubble gives the time under the pointer. Right-click opens a native menu, its shortcut hints down the right (Click, ⌘ Click, ⌥ Click, Double-click, ⌫): Loop This Clip and Add or Remove from Loop are greyed with the loop off, then Jump to Start, Rename, Edit Times…, Make a Point and Delete. Names are typed in place in a 26pt dark field with a ring in the text colour, not the accent, and "Return to keep · Esc to discard" beside it; clicking away discards.
+
 The knob is turned by dragging up or down, not round, since that's what Mac knobs do; the readout becomes a plain text field in the same rounded bold digits when clicked, with no box or border, and grows as it's typed into.
 
 ## Volume
@@ -112,6 +114,8 @@ Wide, the cover sits beside the title as it does stacked, the pair centred over 
 - **⌘-click keeping the loop menu open** to chain several clips in one go: a SwiftUI `Menu` closes on every click. The menu reads `NSEvent.modifierFlags` in the item's action, so ⌘-click still adds or removes a clip, but the menu closes each time; the lane is the place to chain.
 - **The mesh drawn behind the Mac's split view:** the columns cover anything behind them, so the window stayed white. It is the window's own container background instead.
 - **A picked song in the Mac sheet filled with the accent or system blue:** coral there meant "on", and blue is a second tint. The pick is a neutral 14% fill.
+- **A custom-drawn right-click menu in the lane:** it needed its own dismissal, keyboard navigation and focus handling. The native menu is popped up by hand, with a tab stop to right-align the hints.
+- **The system `.help` tooltip on lane items:** it waits about a second, and beside the hover bubble the two clashed. The bubble is the only tooltip there.
 
 ## Website
 

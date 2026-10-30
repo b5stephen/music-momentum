@@ -26,7 +26,7 @@ struct PracticeView: View {
     /// glow, which sit outside the screen.
     var onPalette: (ArtworkPalette?) -> Void = { _ in }
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.modelContext) var modelContext
     #if os(iOS)
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     #endif
@@ -783,7 +783,7 @@ struct PracticeView: View {
         SongMarker.add(to: song, name: name, startTime: start, endTime: end, in: modelContext)
     }
 
-    private func update(_ marker: SongMarker, name: String, start: TimeInterval, end: TimeInterval?) {
+    func update(_ marker: SongMarker, name: String, start: TimeInterval, end: TimeInterval?) {
         marker.set(name: name, start: start, end: end)
         try? modelContext.save()
         controller.markerChanged(marker)
