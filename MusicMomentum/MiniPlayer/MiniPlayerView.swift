@@ -20,6 +20,7 @@ struct MiniPlayerView: View {
     @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.onAccent) private var onAccent
     @Query private var savedSongs: [SavedSong]
+    @State private var showsWheel = false
 
     static let size = CGSize(width: 452, height: 120)
     private static let radius: CGFloat = 20
@@ -120,7 +121,11 @@ struct MiniPlayerView: View {
 
     private var speedChip: some View {
         HStack(alignment: .firstTextBaseline, spacing: 1) {
-            Text("\(speedPercent)")
+            // Held at the widest speed's width, so the chip and the knob's
+            // popover don't shift between 99 and 100.
+            Text("100")
+                .hidden()
+                .overlay(alignment: .trailing) { Text("\(speedPercent)") }
                 .font(.system(size: 13, weight: .bold, design: .rounded))
             Text("%")
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
@@ -132,13 +137,25 @@ struct MiniPlayerView: View {
         .modifier(ButtonGlass())
         .contentShape(.capsule)
         .speedDragInput(speed: $controller.playbackRate, range: PlaybackController.speedRange)
-        .help("Drag, scroll or \u{2191} \u{2193} to change speed")
+        .onTapGesture { showsWheel.toggle() }
+        .popover(isPresented: $showsWheel, arrowEdge: .bottom) { speedWheel }
+        .help("Click for the speed knob; drag, scroll or \u{2191} \u{2193} to change speed")
         .accessibilityElement()
         .accessibilityLabel("Speed")
         .accessibilityValue("\(speedPercent)%")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { showsWheel = true }
         .accessibilityAdjustableAction { direction in
             controller.stepSpeed(up: direction == .increment)
         }
+    }
+
+    /// Practice's knob, on the card's mesh, for anyone who clicks the chip
+    /// rather than dragging it.
+    private var speedWheel: some View {
+        SpeedWheelPicker(speed: $controller.playbackRate, savedSpeed: savedSong?.speed, diameter: 200)
+            .padding(18)
+            .modifier(ArtworkGround(palette: track?.palette, isPlaying: controller.isPlaying))
     }
 
     // MARK: - Controls
