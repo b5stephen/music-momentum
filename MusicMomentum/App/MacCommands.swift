@@ -7,8 +7,8 @@
 import SwiftUI
 
 /// The Mac's menus. Their state comes from the focused window's
-/// `PracticeActions` and `WindowActions`, so with no window (or a sheet up)
-/// they grey out.
+/// `PracticeActions` and `WindowActions`, or the mini player's while it's
+/// open, so with no window (or a sheet up) they grey out.
 ///
 /// Single keys (Space, the arrows, L, M, 1-9) are plain menu key equivalents, not
 /// `.onKeyPress`, so they work wherever focus is and Space never presses a
@@ -18,15 +18,21 @@ import SwiftUI
 ///
 /// Not here, because SwiftUI already supplies it: Show Sidebar (⌃⌘S) in View.
 struct MacCommands: Commands {
-    @FocusedValue(\.practiceActions) private var practice
+    @FocusedValue(\.practiceActions) private var focusedPractice
     @FocusedValue(\.windowActions) private var window
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
     let miniPlayer: MiniPlayerSwitch
 
+    /// The mini player is borderless, and a borderless window is never key,
+    /// so it never has focused values: while it's open, its actions stand in.
+    private var practice: PracticeActions? {
+        focusedPractice ?? (miniPlayer.isMiniOpen ? miniPlayer.actions : nil)
+    }
+
     private var canPractise: Bool {
-        guard let practice, let window else { return false }
-        return practice.hasSong && !practice.isBlocked && !window.isSheetOpen
+        guard let practice else { return false }
+        return practice.hasSong && !practice.isBlocked && window?.isSheetOpen != true
     }
 
     private var canSeek: Bool { canPractise && practice?.hasDuration == true }

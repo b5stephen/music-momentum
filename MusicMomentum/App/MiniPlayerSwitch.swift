@@ -18,6 +18,8 @@ final class MiniPlayerSwitch {
     static let mainID = "main"
 
     private(set) var isMiniOpen = false
+    /// The mini player's, for the menus: see `MacCommands.practice`.
+    var actions: PracticeActions?
     /// Set by `MacWindow`; weak, so a window the user closed isn't kept alive.
     @ObservationIgnored weak var mainWindow: NSWindow?
 

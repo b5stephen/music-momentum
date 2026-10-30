@@ -49,10 +49,17 @@ struct MiniPlayerView: View {
             window.collectionBehavior.formUnion([.canJoinAllSpaces, .fullScreenAuxiliary])
             DispatchQueue.main.async { window.invalidateShadow() }
         })
-        .focusedSceneValue(\.practiceActions, actions)
-        .focusedSceneValue(\.windowActions, WindowActions())
+        // `.windowBackgroundDragBehavior` only reaches bare window, and the
+        // card covers all of it. Buttons and the speed chip keep their own
+        // clicks and drags; anywhere else moves the window.
+        .gesture(WindowDragGesture())
+        .allowsWindowActivationEvents(true)
+        .onChange(of: actionsState, initial: true) { miniSwitch.actions = actions }
         .onAppear { miniSwitch.miniAppeared() }
-        .onDisappear { miniSwitch.miniDisappeared() }
+        .onDisappear {
+            miniSwitch.actions = nil
+            miniSwitch.miniDisappeared()
+        }
     }
 
     // MARK: - Card
@@ -239,6 +246,31 @@ struct MiniPlayerView: View {
     /// What the menus can ask of the mini player while it is the key window;
     /// see `MacCommands`. Anything that needs Practice's screen (marking,
     /// zooming) stays off.
+    /// What `actions` is built from, so it's handed to the menus again
+    /// whenever one of its flags or the clips its 1-9 keys reach change.
+    private struct ActionsState: Equatable {
+        var songID: String?
+        var hasDuration: Bool
+        var isPlaying: Bool
+        var isLoopOn: Bool
+        var canSaveSpeed: Bool
+        var clips: [PersistentIdentifier]
+        var clipNames: [String]
+    }
+
+    private var actionsState: ActionsState {
+        let clips = savedSong?.sortedClips ?? []
+        return ActionsState(
+            songID: track?.id,
+            hasDuration: controller.duration != nil,
+            isPlaying: controller.isPlaying,
+            isLoopOn: controller.isLoopOn,
+            canSaveSpeed: track != nil && savedSong?.percent != speedPercent,
+            clips: clips.map(\.persistentModelID),
+            clipNames: clips.prefix(9).map(\.name)
+        )
+    }
+
     private var actions: PracticeActions {
         let clips = savedSong?.sortedClips ?? []
         return PracticeActions(
