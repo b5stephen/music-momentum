@@ -92,9 +92,20 @@ struct PracticeView: View {
             albumTitle: song.albumTitle,
             palette: palette?.songID == song.id.rawValue
                 ? palette?.palette
-                : ArtworkPalette(song.artwork),
+                : ArtworkPalette(song.artwork) ?? heldPalette,
             artwork: song.artwork
         )
+    }
+
+    /// The previous song's colours, kept on the Mac while the next cover is
+    /// sampled. Its library artwork often carries no colour of its own, so the
+    /// window flashed the system background between two covers.
+    private var heldPalette: ArtworkPalette? {
+        #if os(macOS)
+        palette?.palette
+        #else
+        nil
+        #endif
     }
 
     /// Tinted text: the cover's text colour, or the coral that stays legible on white.
@@ -171,11 +182,21 @@ struct PracticeView: View {
         .task(id: controller.selectedSong?.id) {
             guard let song = controller.selectedSong else { return }
             if palette?.songID != song.id.rawValue {
-                palette = (song.id.rawValue, ArtworkPalette(song.artwork))
+                let fallback = ArtworkPalette(song.artwork)
+                // Caching a missing fallback would drop the held palette.
+                if fallback != nil || heldPalette == nil {
+                    palette = (song.id.rawValue, fallback)
+                }
             }
             // A superseded song's sample can land after the next song's
             // fallback was cached, and would evict it.
-            guard let sampled = await ArtworkPalette.sampled(from: song), !Task.isCancelled else { return }
+            let sampled = await ArtworkPalette.sampled(from: song)
+            guard !Task.isCancelled else { return }
+            guard let sampled else {
+                // A cover without colours: only now let go of the held ones.
+                if palette?.songID != song.id.rawValue { palette = (song.id.rawValue, nil) }
+                return
+            }
             withAnimation(.easeInOut(duration: 0.4)) {
                 palette = (song.id.rawValue, sampled)
             }

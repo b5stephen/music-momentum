@@ -39,8 +39,16 @@ struct ArtworkGround: ViewModifier {
                 .environment(\.colorScheme, palette == nil ? systemScheme : .dark)
                 // Empty, the window turned see-through until a cover's
                 // colours arrived.
+                // The mesh's colours animate from one cover to the next, and
+                // fade in over the system background when there was none.
                 .containerBackground(for: .window) {
-                    if let palette { backdrop(palette) } else { Color.systemBackground }
+                    ZStack {
+                        Color.systemBackground
+                        if let palette {
+                            backdrop(palette).transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.8), value: palette)
                 }
         } else {
             branching(content)
