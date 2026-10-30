@@ -97,16 +97,10 @@ struct PracticeView: View {
         )
     }
 
-    /// The previous song's colours, kept on the Mac while the next cover is
-    /// sampled. Its library artwork often carries no colour of its own, so the
-    /// window flashed the system background between two covers.
-    private var heldPalette: ArtworkPalette? {
-        #if os(macOS)
-        palette?.palette
-        #else
-        nil
-        #endif
-    }
+    /// The previous song's colours, kept while the next cover is sampled when
+    /// its artwork carries no colour of its own (often, for a Mac library
+    /// cover), so the screen doesn't flash the system background between them.
+    private var heldPalette: ArtworkPalette? { palette?.palette }
 
     /// Tinted text: the cover's text colour, or the coral that stays legible on white.
     var textTint: Color { track?.palette?.foreground ?? .accentText }
