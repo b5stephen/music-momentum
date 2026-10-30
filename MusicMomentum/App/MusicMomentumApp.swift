@@ -37,6 +37,7 @@ struct MusicMomentumApp: App {
         #if os(macOS)
         // Wide enough to show Saved as a sidebar beside Practice.
         .defaultSize(width: 1180, height: 820)
+        .commands { MacCommands() }
         #endif
     }
 }

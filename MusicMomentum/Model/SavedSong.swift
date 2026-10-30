@@ -207,4 +207,10 @@ extension SavedSong {
     var sortedMarkers: [SongMarker] {
         (markers ?? []).sorted { $0.startTime < $1.startTime }
     }
+
+    /// Clips in start order: the numbering the Mac's loop menu shows and the
+    /// 1-9 keys use.
+    var sortedClips: [SongMarker] {
+        sortedMarkers.filter(\.isClip)
+    }
 }

@@ -88,7 +88,7 @@ extension PracticeView {
         }
         .buttonStyle(.plain)
         .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .leading)))
-        .help("Save this speed for the song")
+        .help("Save this speed for the song (\u{2318}S)")
         .accessibilityLabel(savedSong != nil ? "Update saved speed to \(percent)%" : "Save at \(percent)%")
     }
 
@@ -96,14 +96,14 @@ extension PracticeView {
 
     private var macTransport: some View {
         HStack(spacing: 6) {
-            macSkipButton("gobackward", glyph: 21, side: 40, label: controller.isLoopOn ? "Restart loop" : "Restart") {
+            macSkipButton("gobackward", glyph: 21, side: 40, label: controller.isLoopOn ? "Restart loop" : "Restart", hint: "Restart (\u{2318}\u{2190})") {
                 controller.restart()
             }
-            macSkipButton("gobackward.10", glyph: 27, side: 44, label: "Back 10 seconds") {
+            macSkipButton("gobackward.10", glyph: 27, side: 44, label: "Back 10 seconds", hint: "Back 10 seconds (\u{2190})") {
                 controller.skip(by: -10)
             }
             macPlayButton
-            macSkipButton("goforward.10", glyph: 27, side: 44, label: "Forward 10 seconds") {
+            macSkipButton("goforward.10", glyph: 27, side: 44, label: "Forward 10 seconds", hint: "Forward 10 seconds (\u{2192})") {
                 controller.skip(by: 10)
             }
             Rectangle()
@@ -116,7 +116,7 @@ extension PracticeView {
     }
 
     private func macSkipButton(
-        _ systemImage: String, glyph: CGFloat, side: CGFloat, label: String, action: @escaping () -> Void
+        _ systemImage: String, glyph: CGFloat, side: CGFloat, label: String, hint: String, action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
@@ -125,7 +125,7 @@ extension PracticeView {
                 .contentShape(.circle)
         }
         .buttonStyle(.plain)
-        .help(label)
+        .help(hint)
         .accessibilityLabel(label)
     }
 
@@ -144,7 +144,7 @@ extension PracticeView {
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 4)
-        .help(controller.isPlaying ? "Pause" : "Play")
+        .help("Play or pause (Space)")
         .accessibilityLabel(controller.isPlaying ? "Pause" : "Play")
     }
 
@@ -161,7 +161,7 @@ extension PracticeView {
                 .contentShape(.circle)
         }
         .buttonStyle(.plain)
-        .help("Loop")
+        .help("Loop on or off (L)")
         .accessibilityLabel("Loop")
         .accessibilityValue(loopDescription)
         .accessibilityAddTraits(controller.isLoopOn ? .isSelected : [])
@@ -231,6 +231,48 @@ extension PracticeView {
         let segments = loop?.segments ?? []
         guard let first = segments.map(\.start).min(), let last = segments.map(\.end).max() else { return nil }
         return first...max(first, last)
+    }
+
+    /// Pauses and opens the marker sheet, as iOS's Mark does.
+    func macMark() {
+        markerSheet = .new(start: controller.pauseForMarking())
+    }
+
+    // MARK: Menu
+
+    /// What the menus can ask of this window; see `MacCommands`.
+    var macActions: PracticeActions {
+        let duration = controller.duration
+        let clips = savedSong?.sortedClips ?? []
+        return PracticeActions(
+            hasSong: track != nil,
+            hasDuration: duration != nil,
+            isPlaying: controller.isPlaying,
+            isLoopOn: controller.isLoopOn,
+            canSaveSpeed: track != nil && !isSpeedSaved,
+            canZoomIn: duration.map { timelineViewport.canZoomIn(duration: $0) } ?? false,
+            canZoomOut: timelineViewport.isZoomed,
+            clipNames: clips.prefix(9).map(\.name),
+            isBlocked: markerSheet != nil,
+            playPause: { controller.togglePlayPause() },
+            skip: { controller.skip(by: $0) },
+            restart: { controller.restart() },
+            toggleLoop: { controller.toggleLoop() },
+            mark: macMark,
+            stepSpeed: { up in
+                let percent = Int((controller.playbackRate * 100).rounded())
+                let range = SpeedKnobGeometry.minPercent...SpeedKnobGeometry.maxPercent
+                controller.playbackRate = Double(SpeedInput.stepped(from: percent, up: up, in: range)) / 100
+            },
+            saveSpeed: { controller.saveCurrentSong() },
+            loopClip: { number in
+                guard clips.indices.contains(number - 1) else { return }
+                macChoose(clips[number - 1], chaining: false)
+            },
+            zoomIn: macZoomIn,
+            zoomOut: macZoomOut,
+            zoomToFit: macZoomToFit
+        )
     }
 
     // MARK: Zoom
@@ -406,9 +448,7 @@ extension PracticeView {
     }
 
     private var macMarkButton: some View {
-        Button {
-            markerSheet = .new(start: controller.pauseForMarking())
-        } label: {
+        Button(action: macMark) {
             HStack(spacing: 6) {
                 MarkGlyph()
                     .frame(width: 13, height: 13)
@@ -423,7 +463,7 @@ extension PracticeView {
         }
         .buttonStyle(.plain)
         .disabled(controller.duration == nil)
-        .help("Mark this point")
+        .help("Mark this point (M)")
         .accessibilityLabel("Mark this point")
     }
 }

@@ -138,7 +138,7 @@ struct SavedSidebarView: View {
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
             .disabled(!controller.canUseMusic)
-            .help("Add a song to Saved without opening it")
+            .help("Add a song to Saved without opening it (\u{21E7}\u{2318}N)")
             .accessibilityLabel("Add Song")
         }
     }

@@ -70,4 +70,22 @@ struct SpeedInputTests {
         #expect(SpeedInput.typed("nan", in: range) == nil)
         #expect(SpeedInput.typed("inf", in: range) == nil)
     }
+
+    @Test("Stepping moves to the next 5% stop, from on or off the grid")
+    func stepping() {
+        #expect(SpeedInput.stepped(from: 70, up: true, in: range) == 75)
+        #expect(SpeedInput.stepped(from: 70, up: false, in: range) == 65)
+        #expect(SpeedInput.stepped(from: 72, up: true, in: range) == 75)
+        #expect(SpeedInput.stepped(from: 72, up: false, in: range) == 70)
+        #expect(SpeedInput.stepped(from: 71, up: false, in: range) == 70)
+        #expect(SpeedInput.stepped(from: 74, up: true, in: range) == 75)
+    }
+
+    @Test("Stepping stops dead at the ends of the range")
+    func steppingClamps() {
+        #expect(SpeedInput.stepped(from: 100, up: true, in: range) == 100)
+        #expect(SpeedInput.stepped(from: 98, up: true, in: range) == 100)
+        #expect(SpeedInput.stepped(from: 30, up: false, in: range) == 30)
+        #expect(SpeedInput.stepped(from: 32, up: false, in: range) == 30)
+    }
 }

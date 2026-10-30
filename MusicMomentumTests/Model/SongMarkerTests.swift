@@ -36,6 +36,14 @@ struct SongMarkerTests {
         #expect(clip.timeLabel == "0:10 – 0:18")
     }
 
+    @Test("Clips are numbered in start order, points left out")
+    func clipOrder() {
+        SongMarker.add(to: song, name: "Late", startTime: 90, endTime: 100, in: context)
+        SongMarker.add(to: song, name: "Point", startTime: 5, endTime: nil, in: context)
+        SongMarker.add(to: song, name: "Early", startTime: 20, endTime: 30, in: context)
+        #expect(song.sortedClips.map(\.name) == ["Early", "Late"])
+    }
+
     @Test("Blank names get a default that counts markers of the same kind")
     func defaultNames() {
         let a = SongMarker.add(to: song, name: "", startTime: 1, endTime: nil, in: context)

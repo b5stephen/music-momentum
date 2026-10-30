@@ -220,6 +220,9 @@ struct PracticeView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { controller.refreshPlaybackTime() }
         }
+        #if os(macOS)
+        .focusedSceneValue(\.practiceActions, macActions)
+        #endif
     }
 
     // MARK: - Practising

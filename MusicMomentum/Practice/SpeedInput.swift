@@ -35,4 +35,15 @@ nonisolated enum SpeedInput {
         guard let value = Double(trimmed.trimmingCharacters(in: .whitespaces)), value.isFinite else { return nil }
         return Int(min(max(value, Double(range.lowerBound)), Double(range.upperBound)).rounded())
     }
+
+    /// The next stop on the 5% grid from `percent`, up or down, clamped to
+    /// `range`. Off the grid it lands on the grid rather than adding five
+    /// (72 goes to 75 or 70, not 77).
+    static func stepped(from percent: Int, up: Bool, in range: ClosedRange<Int>) -> Int {
+        let grid = shiftStep
+        let next = up
+            ? (percent / grid + 1) * grid
+            : (percent - 1) / grid * grid
+        return min(max(next, range.lowerBound), range.upperBound)
+    }
 }

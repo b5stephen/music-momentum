@@ -21,7 +21,7 @@ struct TimelineZoomControls: View {
     var body: some View {
         let isZoomed = viewport.isZoomed
         HStack(spacing: 0) {
-            button("minus", label: "Zoom out", enabled: isZoomed, action: zoomOut)
+            button("minus", label: "Zoom out", hint: "Zoom out (\u{2318}\u{2212})", enabled: isZoomed, action: zoomOut)
                 .frame(width: 30)
             divider
             Button(action: fit) {
@@ -34,10 +34,10 @@ struct TimelineZoomControls: View {
             }
             .buttonStyle(.plain)
             .disabled(!isZoomed)
-            .help("Fit the whole song")
+            .help("Fit the whole song (\u{2318}0)")
             .accessibilityLabel("Fit the whole song")
             divider
-            button("plus", label: "Zoom in", enabled: viewport.canZoomIn(duration: duration), action: zoomIn)
+            button("plus", label: "Zoom in", hint: "Zoom in (\u{2318}+)", enabled: viewport.canZoomIn(duration: duration), action: zoomIn)
                 .frame(width: 30)
         }
         .foregroundStyle(Color.primary)
@@ -51,7 +51,7 @@ struct TimelineZoomControls: View {
             .accessibilityHidden(true)
     }
 
-    private func button(_ glyph: String, label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+    private func button(_ glyph: String, label: String, hint: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: glyph)
                 .font(.system(size: 11, weight: .bold))
@@ -62,7 +62,7 @@ struct TimelineZoomControls: View {
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
-        .help(label)
+        .help(hint)
         .accessibilityLabel(label)
     }
 }

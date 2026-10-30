@@ -111,6 +111,15 @@ struct MacWindow: View {
             self.columns = .detailOnly
             setSidebarOver(!sidebarOver)
         }
+        .focusedSceneValue(
+            \.windowActions,
+            WindowActions(
+                canPickSong: controller.canUseMusic,
+                isSheetOpen: picking != nil,
+                changeSong: { pick(.change) },
+                addSong: { pick(.add) }
+            )
+        )
         // Outside the ground, which would hand the sheet the cover's dark
         // scheme and light text.
         .sheet(item: $picking) { picking in
@@ -140,7 +149,6 @@ struct MacWindow: View {
                 Label("Change Song", systemImage: "music.note")
                     .labelStyle(.titleAndIcon)
             }
-            .keyboardShortcut("o")
             .disabled(!controller.canUseMusic)
             .help("Change song without saving it (\u{2318}O)")
         }
