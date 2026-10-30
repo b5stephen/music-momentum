@@ -104,4 +104,25 @@ struct MarkerLaneDragTests {
         #expect(MarkerLaneDrag.trimReadout(.start, start: 140, end: 180) == "Start 2:20.0 \u{00B7} 0:40")
         #expect(MarkerLaneDrag.trimReadout(.end, start: 140, end: 180.4) == "End 3:00.4 \u{00B7} 0:40.4")
     }
+
+    @Test func zoomedInMapsAndSnapsAtTheVisibleScale() {
+        // 1000pt across 100...140s: 25 points a second.
+        func zoomedTime(_ x: CGFloat, snap: [TimeInterval] = []) -> TimeInterval {
+            MarkerLaneDrag.time(atX: x, width: 1000, duration: 200, visible: 100...140, fine: false, snapTo: snap)
+        }
+        #expect(zoomedTime(0) == 100)
+        #expect(zoomedTime(500) == 120)
+        #expect(zoomedTime(1200) == 140)
+        // 4s away is 100pt, 0.2s away is 5pt: only the second snaps.
+        #expect(zoomedTime(501, snap: [120.2]) == 120.2)
+        #expect(zoomedTime(500, snap: [124]) == 120)
+    }
+
+    @Test func zoomedInClipDragsStayInTheVisibleRange() {
+        let clip = MarkerLaneDrag.clip(
+            from: 250, to: 750, width: 1000, duration: 200, visible: 100...140, fine: false, snapTo: []
+        )
+        #expect(clip?.start == 110)
+        #expect(clip?.end == 130)
+    }
 }

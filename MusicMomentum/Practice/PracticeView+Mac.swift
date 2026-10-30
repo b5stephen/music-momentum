@@ -189,9 +189,17 @@ extension PracticeView {
             HStack(spacing: 10) {
                 macLoopMenu
                 Spacer(minLength: 0)
+                if isZoomOffered {
+                    TimelineZoomControls(
+                        viewport: timelineViewport, duration: controller.duration ?? 0,
+                        zoomOut: macZoomOut, fit: macZoomToFit, zoomIn: macZoomIn
+                    )
+                    .transition(.opacity)
+                }
                 macMarkButton
             }
             .frame(minHeight: Self.macControlHeight)
+            .animation(.easeOut(duration: 0.2), value: isZoomOffered)
 
             PlaybackScrubber(
                 position: controller.playbackTime,
@@ -201,9 +209,41 @@ extension PracticeView {
                 onScrub: { _ in controller.isScrubbing = true },
                 isLoopOn: controller.isLoopOn,
                 laneActions: macLaneActions,
+                viewport: $timelineViewport,
+                onZoomNeeded: { isZoomOffered = $0 },
                 onCommit: { controller.endScrub(at: $0) }
             )
         }
+        .onChange(of: track?.id) { timelineViewport.fit() }
+        .onChange(of: controller.playbackTime) { old, new in
+            guard let duration = controller.duration else { return }
+            timelineViewport.follow(playhead: new, previous: old, duration: duration)
+        }
+        .onChange(of: controller.loop) { _, loop in
+            guard let duration = controller.duration, let range = Self.macSpan(of: loop) else { return }
+            timelineViewport.reveal(range, duration: duration)
+        }
+    }
+
+    /// From the first clip's start to the last one's end; `nil` for the whole
+    /// song or no loop.
+    private static func macSpan(of loop: Loop?) -> ClosedRange<TimeInterval>? {
+        let segments = loop?.segments ?? []
+        guard let first = segments.map(\.start).min(), let last = segments.map(\.end).max() else { return nil }
+        return first...max(first, last)
+    }
+
+    // MARK: Zoom
+
+    /// Zooming for Phase 5's menu and keys, around the playhead as the
+    /// buttons do.
+    func macZoomIn() { macZoom(by: TimelineViewport.step) }
+    func macZoomOut() { macZoom(by: 1 / TimelineViewport.step) }
+    func macZoomToFit() { timelineViewport.fit() }
+
+    private func macZoom(by factor: Double) {
+        guard let duration = controller.duration else { return }
+        timelineViewport.zoom(by: factor, around: controller.playbackTime, duration: duration)
     }
 
     /// The lane hands back ids, never models: a menu can be open while the

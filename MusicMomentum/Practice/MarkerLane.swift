@@ -90,7 +90,7 @@ struct MarkerLane: View {
 
     private static let clipFont = NSFont.systemFont(ofSize: 11, weight: .bold)
 
-    private func layout(width: CGFloat) -> MarkerLaneLayout {
+    private func layout(width: CGFloat, visible: ClosedRange<TimeInterval>?) -> MarkerLaneLayout {
         MarkerLaneLayout(markers: shownMarkers, duration: duration, width: width, visible: visible, nameWidth: Self.textWidth)
     }
 
@@ -99,7 +99,7 @@ struct MarkerLane: View {
     /// width it is given.
     var body: some View {
         GeometryReader { proxy in
-            let layout = layout(width: proxy.size.width)
+            let layout = layout(width: proxy.size.width, visible: visible)
             let width = proxy.size.width
             ZStack(alignment: .topLeading) {
                 Color.clear
@@ -155,7 +155,9 @@ struct MarkerLane: View {
             }
         }
         .modifier(LaneHeight { width in
-            markers.isEmpty ? MarkerLaneLayout.height(hasPoints: false, rows: 1) : layout(width: width).height
+            // The whole song's, so zooming never changes the height and
+            // moves Practice; zoomed in, rows only get fewer.
+            markers.isEmpty ? MarkerLaneLayout.height(hasPoints: false, rows: 1) : layout(width: width, visible: nil).height
         })
     }
 
@@ -281,7 +283,7 @@ struct MarkerLane: View {
                 naming = nil
                 ghost = MarkerLaneDrag.clip(
                     from: value.startLocation.x, to: value.location.x,
-                    width: width, duration: duration, fine: isFine, snapTo: snapPoints()
+                    width: width, duration: duration, visible: visible, fine: isFine, snapTo: snapPoints()
                 ).map { ClipDraft(start: $0.start, end: $0.end) }
             }
             .onEnded { _ in
@@ -292,8 +294,7 @@ struct MarkerLane: View {
     }
 
     private func x(_ time: TimeInterval, width: CGFloat) -> CGFloat {
-        let range = visible ?? 0...duration
-        return width * (time - range.lowerBound) / (range.upperBound - range.lowerBound)
+        TimelineViewport.x(for: time, width: width, in: visible ?? 0...duration)
     }
 
     private func ghostBar(_ draft: ClipDraft, top: CGFloat, width: CGFloat) -> some View {
@@ -344,7 +345,8 @@ struct MarkerLane: View {
         let inside = min(Self.edgeZone, clip.width / 3)
         let zone = Self.edgeZone + inside
         return ZStack(alignment: .topLeading) {
-            ForEach([MarkerLaneDrag.Edge.start, .end], id: \.self) { edge in
+            // An edge cut off by the view isn't the clip's own.
+            ForEach([MarkerLaneDrag.Edge.start, .end].filter { isEdgeVisible($0, of: marker) }, id: \.self) { edge in
                 TrimZone(
                     onHover: { entered in
                         if entered {
@@ -365,6 +367,14 @@ struct MarkerLane: View {
         .offset(y: top)
     }
 
+    private func isEdgeVisible(_ edge: MarkerLaneDrag.Edge, of marker: PlaybackScrubber.Marker) -> Bool {
+        let range = visible ?? 0...duration
+        switch edge {
+        case .start: return marker.start >= range.lowerBound
+        case .end: return (marker.end ?? marker.start) <= range.upperBound
+        }
+    }
+
     private func trimChanged(
         _ value: DragGesture.Value, marker: PlaybackScrubber.Marker, edge: MarkerLaneDrag.Edge, width: CGFloat
     ) {
@@ -376,7 +386,7 @@ struct MarkerLane: View {
         }
         guard var draft = trim else { return }
         let time = MarkerLaneDrag.time(
-            atX: trimOriginX + value.translation.width, width: width, duration: duration,
+            atX: trimOriginX + value.translation.width, width: width, duration: duration, visible: visible,
             fine: isFine, snapTo: snapPoints(excluding: marker.id)
         )
         let bounds = MarkerLaneDrag.trim(edge, to: time, start: draft.start, end: draft.end, duration: duration)
@@ -442,7 +452,7 @@ struct MarkerLane: View {
         shownMarkers.first { $0.id == id }
     }
 
-    private static func textWidth(_ text: String) -> CGFloat {
+    static func textWidth(_ text: String) -> CGFloat {
         ceil((text as NSString).size(withAttributes: [.font: clipFont]).width)
     }
 

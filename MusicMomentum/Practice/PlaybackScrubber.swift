@@ -27,6 +27,12 @@ struct PlaybackScrubber: View {
     /// The lane's clicks and menu. The scrubber only reports them; what they
     /// mean is Practice's call.
     var laneActions = MarkerLaneActions()
+    /// The part of the song the lane and track show. Practice owns it, since
+    /// the zoom controls in its header act on it too.
+    var viewport: Binding<TimelineViewport> = .constant(TimelineViewport())
+    /// Whether the whole-song lane is crowded enough to offer zoom, told to
+    /// Practice for its header controls.
+    var onZoomNeeded: (Bool) -> Void = { _ in }
     #endif
     var onCommit: (TimeInterval) -> Void
 
@@ -49,6 +55,12 @@ struct PlaybackScrubber: View {
     #if os(macOS)
     /// Where the pointer is over the track, for the time bubble.
     @State private var hoverX: CGFloat?
+    @State private var timelineWidth: CGFloat = 0
+    /// Off for the first moments, so the controls a song already calls for
+    /// are there when it appears rather than sliding in.
+    @State private var animatesZoomControls = false
+    /// The view when a pinch began; the gesture's scale is from there.
+    @State private var pinchBase: TimelineViewport?
     #endif
 
     private var isDragging: Bool { dragPosition != nil }
@@ -56,7 +68,11 @@ struct PlaybackScrubber: View {
 
     private var fraction: Double {
         guard let duration, duration > 0 else { return 0 }
+        #if os(macOS)
+        return Double(min(max(TimelineViewport.x(for: displayedPosition, width: 1, in: visibleRange(duration)), 0), 1))
+        #else
         return min(max(displayedPosition / duration, 0), 1)
+        #endif
     }
 
     var body: some View {
@@ -72,14 +88,28 @@ struct PlaybackScrubber: View {
     /// at its height so a song with none never moves Practice. No playhead
     /// line; the end of the played fill marks the position.
     private var macBody: some View {
-        VStack(spacing: 10) {
+        let range = duration.map(visibleRange) ?? 0...0
+        // Over the whole song, whatever the view, so the controls don't
+        // come and go as the user zooms.
+        let wholeSong = duration.map {
+            MarkerLaneLayout(markers: markers, duration: $0, width: timelineWidth, nameWidth: MarkerLane.textWidth)
+        }
+        let isNeeded = wholeSong.map { viewport.wrappedValue.isNeeded(wholeSong: $0) } ?? false
+        return VStack(spacing: 10) {
             if let duration, duration > 0 {
-                MarkerLane(
-                    markers: markers,
-                    duration: duration,
-                    isLoopOn: isLoopOn,
-                    actions: laneActions
-                )
+                VStack(spacing: 0) {
+                    if isNeeded {
+                        TimelineOverview(markers: markers, duration: duration, viewport: viewport)
+                            .transition(.opacity)
+                    }
+                    MarkerLane(
+                        markers: markers,
+                        duration: duration,
+                        visible: range,
+                        isLoopOn: isLoopOn,
+                        actions: laneActions
+                    )
+                }
                 // Over the track below, for the bubbles that rise out of it.
                 .zIndex(1)
             } else {
@@ -97,6 +127,40 @@ struct PlaybackScrubber: View {
                 onCommit(displayedPosition + (direction == .increment ? 5 : -5))
             }
         }
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { timelineWidth = $0 }
+        .onChange(of: isNeeded, initial: true) { _, needed in onZoomNeeded(needed) }
+        .animation(animatesZoomControls ? .easeOut(duration: 0.2) : nil, value: isNeeded)
+        .task {
+            try? await Task.sleep(for: .milliseconds(500))
+            animatesZoomControls = true
+        }
+        .simultaneousGesture(pinch)
+        .timelinePan(isEnabled: viewport.wrappedValue.isZoomed) { points in
+            guard let duration, duration > 0, timelineWidth > 0 else { return }
+            // Fingers moving right drag the song right, so the view moves earlier.
+            viewport.wrappedValue.pan(by: -TimeInterval(points / timelineWidth) * viewport.wrappedValue.span(duration: duration), duration: duration)
+        }
+    }
+
+    private func visibleRange(_ duration: TimeInterval) -> ClosedRange<TimeInterval> {
+        viewport.wrappedValue.visible(duration: duration)
+    }
+
+    /// Zooms around the pointer, over the lane and the track.
+    private var pinch: some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                guard let duration, duration > 0, timelineWidth > 0 else { return }
+                let base = pinchBase ?? viewport.wrappedValue
+                pinchBase = base
+                var next = base
+                let anchor = TimelineViewport.time(
+                    atX: value.startAnchor.x * timelineWidth, width: timelineWidth, in: base.visible(duration: duration)
+                )
+                next.zoom(by: value.magnification, around: anchor, duration: duration)
+                viewport.wrappedValue = next
+            }
+            .onEnded { _ in pinchBase = nil }
     }
 
     private var macTrack: some View {
@@ -106,7 +170,7 @@ struct PlaybackScrubber: View {
                 Capsule().fill(.primary.opacity(0.18))
                 Capsule()
                     .fill(.primary)
-                    .frame(width: max(5, width * fraction))
+                    .frame(width: fraction == 0 && displayedPosition > 0 ? 0 : max(5, width * fraction))
                     .opacity(duration == nil ? 0 : 1)
             }
             .frame(height: 5)
@@ -122,7 +186,7 @@ struct PlaybackScrubber: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         guard let duration, duration > 0, width > 0 else { return }
-                        scrub(to: value.location.x, width: width, duration: duration)
+                        scrub(to: value.location.x, width: width, duration: duration, visible: visibleRange(duration))
                     }
                     .onEnded { _ in
                         guard let time = dragPosition else { return }
@@ -132,7 +196,7 @@ struct PlaybackScrubber: View {
             )
             .overlay(alignment: .topLeading) {
                 if let hoverX, let duration, duration > 0, width > 0 {
-                    MarkerBubble(Text(Self.timeLabel(Self.time(atX: hoverX, width: width, duration: duration))).monospacedDigit())
+                    MarkerBubble(Text(Self.timeLabel(TimelineViewport.time(atX: hoverX, width: width, in: visibleRange(duration)))).monospacedDigit())
                         .alignmentGuide(.leading) { $0.width / 2 - min(max(hoverX, 22), width - 22) }
                         .alignmentGuide(.top) { $0[.bottom] + 6 }
                         .allowsHitTesting(false)
@@ -295,13 +359,14 @@ struct PlaybackScrubber: View {
             }
     }
 
-    private func scrub(to x: CGFloat, width: CGFloat, duration: TimeInterval) {
+    private func scrub(to x: CGFloat, width: CGFloat, duration: TimeInterval, visible: ClosedRange<TimeInterval>? = nil) {
         if dragPosition == nil {
             #if canImport(UIKit)
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
             #endif
         }
-        let time = Self.time(atX: x, width: width, duration: duration)
+        let time = visible.map { TimelineViewport.time(atX: x, width: width, in: $0) }
+            ?? Self.time(atX: x, width: width, duration: duration)
         dragPosition = time
         onScrub(time)
     }
@@ -494,6 +559,66 @@ private let laneLots: [PlaybackScrubber.Marker] = [
     ("Groove", 196, 208), ("Last chorus", 210, nil), ("Hook 3", 210, 218), ("Tag", 240, nil),
     ("Outro lick", 240, 250), ("End", 252, nil),
 ].map { .init(id: $0.0, name: $0.0, start: $0.1, end: $0.2) }
+
+/// The timeline as Practice composes it: the zoom controls appear in the
+/// header row only when the scrubber says they're needed.
+private struct ZoomPreview: View {
+    let markers: [PlaybackScrubber.Marker]
+    let position: TimeInterval
+    let isLoopOn: Bool
+    @State private var viewport: TimelineViewport
+    @State private var isOffered = false
+
+    init(
+        markers: [PlaybackScrubber.Marker], zoomedOn: TimeInterval? = nil,
+        position: TimeInterval = 80, isLoopOn: Bool = false
+    ) {
+        self.markers = markers
+        self.position = position
+        self.isLoopOn = isLoopOn
+        var viewport = TimelineViewport()
+        if let zoomedOn { viewport.zoom(by: 4, around: zoomedOn, duration: 258) }
+        _viewport = State(initialValue: viewport)
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text("Looping Chorus")
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer(minLength: 0)
+                if isOffered {
+                    TimelineZoomControls(
+                        viewport: viewport, duration: 258,
+                        zoomOut: { viewport.zoom(by: 0.5, around: position, duration: 258) },
+                        fit: { viewport.fit() },
+                        zoomIn: { viewport.zoom(by: 2, around: position, duration: 258) }
+                    )
+                }
+            }
+            .frame(minHeight: 30)
+            PlaybackScrubber(
+                position: position, duration: 258, markers: markers, isLoopOn: isLoopOn,
+                viewport: $viewport, onZoomNeeded: { isOffered = $0 }
+            ) { _ in }
+        }
+        .padding(24)
+        .frame(width: 680)
+        .modifier(ArtworkGround(palette: laneCover, isPlaying: false))
+    }
+}
+
+#Preview("Mac timeline, lots, fitted with controls", traits: .fixedLayout(width: 680, height: 290)) {
+    ZoomPreview(markers: laneLots.map { var m = $0; m.isLooping = m.id == AnyHashable("Solo pt 1"); return m }, position: 170, isLoopOn: true)
+}
+
+#Preview("Mac timeline, lots, zoomed on the middle", traits: .fixedLayout(width: 680, height: 290)) {
+    ZoomPreview(markers: laneLots.map { var m = $0; m.isLooping = m.id == AnyHashable("Solo pt 1"); return m }, zoomedOn: 130, position: 170, isLoopOn: true)
+}
+
+#Preview("Mac timeline, a few markers, no controls", traits: .fixedLayout(width: 680, height: 230)) {
+    ZoomPreview(markers: laneFew, position: 70)
+}
 
 #Preview("Mac lane, no markers", traits: .fixedLayout(width: 680, height: 140)) {
     lanePreview([])

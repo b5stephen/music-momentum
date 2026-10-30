@@ -39,17 +39,21 @@ nonisolated enum MarkerLaneDrag {
     }
 
     /// The song time under `x`: a nearby point if there is one, otherwise
-    /// rounded; always inside the song.
+    /// rounded; always inside the song. `visible` is the part of the song the
+    /// lane shows, the whole of it by default.
     static func time(
         atX x: CGFloat,
         width: CGFloat,
         duration: TimeInterval,
+        visible: ClosedRange<TimeInterval>? = nil,
         fine: Bool,
         snapTo points: [TimeInterval]
     ) -> TimeInterval {
-        let raw = PlaybackScrubber.time(atX: x, width: width, duration: duration)
-        guard width > 0, duration > 0 else { return raw }
-        let target = snapped(raw, to: points, pointsPerSecond: width / duration)
+        let range = visible ?? 0...duration
+        let raw = TimelineViewport.time(atX: x, width: width, in: range)
+        let span = range.upperBound - range.lowerBound
+        guard width > 0, duration > 0, span > 0 else { return raw }
+        let target = snapped(raw, to: points, pointsPerSecond: width / span)
             ?? rounded(raw, fine: fine)
         return min(max(target, 0), duration)
     }
@@ -61,12 +65,13 @@ nonisolated enum MarkerLaneDrag {
         to endX: CGFloat,
         width: CGFloat,
         duration: TimeInterval,
+        visible: ClosedRange<TimeInterval>? = nil,
         fine: Bool,
         snapTo points: [TimeInterval]
     ) -> (start: TimeInterval, end: TimeInterval)? {
         guard abs(endX - startX) >= minimumDragWidth else { return nil }
-        let a = time(atX: min(startX, endX), width: width, duration: duration, fine: fine, snapTo: points)
-        let b = time(atX: max(startX, endX), width: width, duration: duration, fine: fine, snapTo: points)
+        let a = time(atX: min(startX, endX), width: width, duration: duration, visible: visible, fine: fine, snapTo: points)
+        let b = time(atX: max(startX, endX), width: width, duration: duration, visible: visible, fine: fine, snapTo: points)
         guard b - a >= SongMarker.minimumClipLength else { return nil }
         return (a, b)
     }

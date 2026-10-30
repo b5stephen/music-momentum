@@ -33,6 +33,9 @@ nonisolated struct MarkerLaneLayout: Equatable {
     var points: [Point]
     var clips: [Clip]
     var height: CGFloat
+    /// Whether the song has any points at all, in view or not, so a zoomed
+    /// lane keeps its clips where the whole-song lane has them.
+    var hasPointRow: Bool
 
     static let pointRowHeight: CGFloat = 18
     /// A point row's height plus the gap under it.
@@ -68,7 +71,7 @@ nonisolated struct MarkerLaneLayout: Equatable {
         let range = visible ?? 0...duration
         let span = range.upperBound - range.lowerBound
         guard duration > 0, width > 0, span > 0 else {
-            self.init(points: [], clips: [], height: Self.height(hasPoints: false, rows: 1))
+            self.init(points: [], clips: [], height: Self.height(hasPoints: false, rows: 1), hasPointRow: false)
             return
         }
         func x(_ time: TimeInterval) -> CGFloat { width * (time - range.lowerBound) / span }
@@ -77,6 +80,7 @@ nonisolated struct MarkerLaneLayout: Equatable {
             ($0.element.start, $0.offset) < ($1.element.start, $1.offset)
         }.map(\.element)
 
+        let hasPointRow = ordered.contains { !$0.isClip }
         let pointMarkers = ordered.filter { !$0.isClip && range.contains($0.start) }
         let points = pointMarkers.enumerated().map { index, marker in
             let px = x(marker.start)
@@ -109,18 +113,28 @@ nonisolated struct MarkerLaneLayout: Equatable {
         self.init(
             points: points,
             clips: clips,
-            height: Self.height(hasPoints: !points.isEmpty, rows: rowEnds.count)
+            height: Self.height(hasPoints: hasPointRow, rows: rowEnds.count),
+            hasPointRow: hasPointRow
         )
     }
 
-    private init(points: [Point], clips: [Clip], height: CGFloat) {
+    private init(points: [Point], clips: [Clip], height: CGFloat, hasPointRow: Bool) {
         self.points = points
         self.clips = clips
         self.height = height
+        self.hasPointRow = hasPointRow
     }
+
+    /// Names the lane had to leave out.
+    var hiddenNameCount: Int {
+        points.filter { !$0.showsName }.count + clips.filter { !$0.showsName }.count
+    }
+
+    /// Clip rows in use.
+    var rowCount: Int { (clips.map(\.row).max() ?? -1) + 1 }
 
     /// Where a row's bars start, below the point row if there is one.
     func top(ofRow row: Int) -> CGFloat {
-        (points.isEmpty ? 0 : Self.pointBand) + CGFloat(row) * Self.rowPitch
+        (hasPointRow ? Self.pointBand : 0) + CGFloat(row) * Self.rowPitch
     }
 }

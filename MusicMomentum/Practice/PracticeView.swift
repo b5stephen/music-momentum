@@ -34,6 +34,13 @@ struct PracticeView: View {
     @Query private var savedSongs: [SavedSong]
     @State private var showPicker = false
     @State var markerSheet: MarkerSheet?
+    #if os(macOS)
+    /// Which part of the song the Mac timeline shows. Not saved, and fitted
+    /// again when the song changes.
+    @State var timelineViewport = TimelineViewport()
+    /// Whether the timeline is crowded enough to show its zoom controls.
+    @State var isZoomOffered = false
+    #endif
     /// The selected song's palette, kept so `track` doesn't rebuild it on
     /// every read: `Artwork.backgroundColor`'s, then the sampled cover's.
     @State private var palette: (songID: String, palette: ArtworkPalette?)?
