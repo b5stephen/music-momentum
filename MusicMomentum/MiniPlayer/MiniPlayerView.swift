@@ -125,7 +125,7 @@ struct MiniPlayerView: View {
         .modifier(ButtonGlass())
         .contentShape(.capsule)
         .speedDragInput(speed: $controller.playbackRate, range: PlaybackController.speedRange)
-        .help("Drag, scroll or \u{2318}\u{2191} \u{2318}\u{2193} to change speed")
+        .help("Drag, scroll or \u{2191} \u{2193} to change speed")
         .accessibilityElement()
         .accessibilityLabel("Speed")
         .accessibilityValue("\(speedPercent)%")

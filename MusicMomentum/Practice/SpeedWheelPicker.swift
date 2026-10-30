@@ -75,7 +75,7 @@ struct SpeedWheelPicker: View {
             // A click is a tap rather than a drag of no distance, which the
             // drag's few points of slop would otherwise swallow.
             .simultaneousGesture(SpatialTapGesture().onEnded { click(at: $0.location) })
-            .help("Drag up or down, or scroll · double-click for full speed")
+            .help("Drag up or down, scroll, or press ↑ ↓ · double-click for full speed")
             #endif
             // The touch drag gesture has `minimumDistance: 0`, so a plain
             // `.onTapGesture` never fires. The drag a double tap also

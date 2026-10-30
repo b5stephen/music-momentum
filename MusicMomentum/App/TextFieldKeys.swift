@@ -6,7 +6,7 @@
 #if os(macOS)
 import AppKit
 
-/// Hands the Playback menu's single keys (Space, the arrows, L, M, 1-9) to a
+/// Hands the Playback menu's single keys (Space, the four arrows, L, M, 1-9) to a
 /// text field that's being edited. AppKit offers every key to the menu before
 /// the first responder, so without this ← in the sidebar search moved the
 /// playhead instead of the caret. Only those keys: Return and Escape must
@@ -15,7 +15,8 @@ enum TextFieldKeys {
     private static var monitor: Any?
 
     private static let characters: Set<String> = [" ", "l", "m", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
-    private static let arrows: Set<UInt16> = [123, 124]
+    /// ←, →, ↓, ↑.
+    private static let arrows: Set<UInt16> = [123, 124, 125, 126]
 
     static func install() {
         guard monitor == nil else { return }

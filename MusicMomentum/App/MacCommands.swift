@@ -10,7 +10,7 @@ import SwiftUI
 /// `PracticeActions` and `WindowActions`, so with no window (or a sheet up)
 /// they grey out.
 ///
-/// Single keys (Space, arrows, L, M, 1-9) are plain menu key equivalents, not
+/// Single keys (Space, the arrows, L, M, 1-9) are plain menu key equivalents, not
 /// `.onKeyPress`, so they work wherever focus is and Space never presses a
 /// focused button. The menu sees a key before a text field does, so
 /// `TextFieldKeys` hands them to a field being edited. The sheets are shut out
@@ -75,10 +75,10 @@ struct MacCommands: Commands {
             Divider()
 
             Button("Speed Up") { practice?.stepSpeed(true) }
-                .keyboardShortcut(.upArrow, modifiers: .command)
+                .keyboardShortcut(.upArrow, modifiers: [])
                 .disabled(!canPractise)
             Button("Slow Down") { practice?.stepSpeed(false) }
-                .keyboardShortcut(.downArrow, modifiers: .command)
+                .keyboardShortcut(.downArrow, modifiers: [])
                 .disabled(!canPractise)
             Button("Save Speed") { practice?.saveSpeed() }
                 .keyboardShortcut("s")
