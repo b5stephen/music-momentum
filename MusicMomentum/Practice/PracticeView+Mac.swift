@@ -259,11 +259,7 @@ extension PracticeView {
             restart: { controller.restart() },
             toggleLoop: { controller.toggleLoop() },
             mark: macMark,
-            stepSpeed: { up in
-                let percent = Int((controller.playbackRate * 100).rounded())
-                let range = SpeedKnobGeometry.minPercent...SpeedKnobGeometry.maxPercent
-                controller.playbackRate = Double(SpeedInput.stepped(from: percent, up: up, in: range)) / 100
-            },
+            stepSpeed: { controller.stepSpeed(up: $0) },
             saveSpeed: { controller.saveCurrentSong() },
             loopClip: { number in
                 guard clips.indices.contains(number - 1) else { return }

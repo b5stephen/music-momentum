@@ -28,8 +28,7 @@ extension PlaybackController {
         return index.map { clips[$0] }
     }
 
-    /// ±5% for the keys and menu items of the small surfaces, landing on the
-    /// 5% grid.
+    /// ±5% for the speed keys and menu items, landing on the 5% grid.
     func stepSpeed(up: Bool) {
         let percent = Int((playbackRate * 100).rounded())
         let range = SpeedKnobGeometry.minPercent...SpeedKnobGeometry.maxPercent
