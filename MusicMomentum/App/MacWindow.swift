@@ -60,6 +60,9 @@ struct MacWindow: View {
                     // colours the system's own sidebar look stands.
                     .background { if palette != nil { Color.black.opacity(0.22) } }
                     .navigationSplitViewColumnWidth(Self.sidebarWidth)
+                    .toolbar {
+                        ToolbarItem(placement: .primaryAction) { sidebarToggle(hide: true) }
+                    }
             } detail: {
                 PracticeView(
                     controller: controller,
@@ -70,6 +73,10 @@ struct MacWindow: View {
                 .toolbar { toolbar }
                 .toolbar(removing: .title)
             }
+            // The split view's own toggle draws itself "on" while the sidebar
+            // shows, filled with the window's tint, which over a cover is its
+            // pale text colour: a white button beside the toolbar's glass ones.
+            .toolbar(removing: .sidebarToggle)
 
             if sidebarOver {
                 Color.black.opacity(0.32)
@@ -147,6 +154,9 @@ struct MacWindow: View {
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
+        if !isSidebarColumnShown {
+            ToolbarItem(placement: .navigation) { sidebarToggle(hide: false) }
+        }
         ToolbarItem(placement: .navigation) {
             Button {
                 pick(.change)
@@ -167,6 +177,23 @@ struct MacWindow: View {
             .disabled(sampleTrack == nil && controller.selectedSong == nil)
             .help("Mini player (\u{2325}\u{2318}M)")
         }
+    }
+
+    private var isSidebarColumnShown: Bool { isWide && columns != .detailOnly }
+
+    /// Plain like the toolbar's other buttons, so it's the same glass.
+    private func sidebarToggle(hide: Bool) -> some View {
+        Button {
+            if isWide {
+                withAnimation { columns = hide ? .detailOnly : .all }
+            } else {
+                setSidebarOver(!sidebarOver)
+            }
+        } label: {
+            Label(hide ? "Hide Sidebar" : "Show Sidebar", systemImage: "sidebar.left")
+                .labelStyle(.iconOnly)
+        }
+        .help(hide ? "Hide sidebar (\u{2303}\u{2318}S)" : "Show sidebar (\u{2303}\u{2318}S)")
     }
 
     private func setSidebarOver(_ over: Bool) {
