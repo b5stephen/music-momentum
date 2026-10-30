@@ -11,11 +11,10 @@ import SwiftUI
 /// they grey out.
 ///
 /// Single keys (Space, arrows, L, M, 1-9) are plain menu key equivalents, not
-/// `.onKeyPress`. AppKit offers a key to the window's views before the menu,
-/// and a text field being edited takes it first, so typing a space or an "l"
-/// into the search or a name field types it; with focus anywhere else the menu
-/// gets it, which is also why Space never presses a focused button. The sheets
-/// are shut out separately: an item is disabled while one is up.
+/// `.onKeyPress`, so they work wherever focus is and Space never presses a
+/// focused button. The menu sees a key before a text field does, so
+/// `TextFieldKeys` hands them to a field being edited. The sheets are shut out
+/// separately: an item is disabled while one is up.
 ///
 /// Not here, because SwiftUI already supplies it: Show Sidebar (⌃⌘S) in View.
 struct MacCommands: Commands {
