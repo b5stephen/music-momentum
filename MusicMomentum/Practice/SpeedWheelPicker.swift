@@ -39,6 +39,18 @@ struct SpeedWheelPicker: View {
     /// than a tap's slop on a small knob, doesn't.
     @State private var touchDownPercent: Int?
 
+    /// Whether the readout is a text field. Only the Mac ever starts it.
+    @State private var isEditing = false
+    @State private var draft = ""
+    @FocusState private var fieldFocused: Bool
+    #if os(macOS)
+    @State private var lastDoubleClick = Date.distantPast
+    @State private var editTask: Task<Void, Never>?
+    @State private var clickAway: Any?
+    /// Starts in the editing state, for previews, which can't click.
+    var startsEditing = false
+    #endif
+
     #if canImport(UIKit)
     private let tick = UIImpactFeedbackGenerator(style: .rigid)
     private let limit = UIImpactFeedbackGenerator(style: .medium)
@@ -52,16 +64,30 @@ struct SpeedWheelPicker: View {
         knob
             .frame(width: diameter, height: diameter)
             .contentShape(.circle)
-            .gesture(rotationGesture)
             #if canImport(UIKit)
+            .gesture(rotationGesture)
             .gesture(TrackpadScroll(onChanged: scroll(by:), onEnded: endScroll))
             #elseif os(macOS)
-            .modifier(ScrollWheel(onChanged: scroll(by:), onEnded: endScroll))
+            .speedDragInput(
+                speed: $speed,
+                range: Double(SpeedKnobGeometry.minPercent) / 100...Double(SpeedKnobGeometry.maxPercent) / 100
+            )
+            // A click is a tap rather than a drag of no distance, which the
+            // drag's few points of slop would otherwise swallow.
+            .simultaneousGesture(SpatialTapGesture().onEnded { click(at: $0.location) })
+            .pointerStyle(isEditing ? nil : .rowResize)
+            .help("Drag up or down, or scroll · double-click for full speed")
             #endif
-            // The drag gesture has `minimumDistance: 0`, so a plain
+            // The touch drag gesture has `minimumDistance: 0`, so a plain
             // `.onTapGesture` never fires. The drag a double tap also
             // triggers moves no distance and commits the value unchanged.
-            .simultaneousGesture(TapGesture(count: 2).onEnded { toggleFullSpeed() })
+            .simultaneousGesture(TapGesture(count: 2).onEnded {
+                #if os(macOS)
+                lastDoubleClick = .now
+                cancelEditing()
+                #endif
+                toggleFullSpeed()
+            })
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Playback speed")
             .accessibilityValue("\(displayPercent) percent")
@@ -82,6 +108,10 @@ struct SpeedWheelPicker: View {
                 }
             }
             .animation(.snappy(duration: 0.25), value: savedPercent.map { $0 == currentPercent })
+            #if os(macOS)
+            .onAppear { if startsEditing { beginEditing() } }
+            .onDisappear { cancelEditing() }
+            #endif
     }
 
     // MARK: - Knob
@@ -214,10 +244,14 @@ struct SpeedWheelPicker: View {
                 }
 
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
-                    Text("\(displayPercent)")
-                        .font(.system(size: size, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
+                    if isEditing {
+                        readoutField(size: size)
+                    } else {
+                        Text("\(displayPercent)")
+                            .font(.system(size: size, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                    }
                     Text("%")
                         .font(.system(size: size * 0.42, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
@@ -226,7 +260,7 @@ struct SpeedWheelPicker: View {
             }
         }
         .frame(width: side, height: side)
-        .allowsHitTesting(false)
+        .allowsHitTesting(isEditing)
     }
 
     /// Bare, so it reads as part of the readout rather than a control
@@ -243,6 +277,47 @@ struct SpeedWheelPicker: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Back to saved speed, \(percent) percent")
+    }
+
+    // MARK: - Typing
+
+    /// The digits' own width plus a little for the caret, so the field grows
+    /// as it's typed into and the readout stays centred.
+    private func readoutField(size: CGFloat) -> some View {
+        TextField("", text: $draft)
+            .textFieldStyle(.plain)
+            .font(.system(size: size, weight: .bold, design: .rounded))
+            .monospacedDigit()
+            .multilineTextAlignment(.trailing)
+            .frame(width: size * 0.62 * CGFloat(max(draft.count, 1)) + 6)
+            .focused($fieldFocused)
+            .onSubmit(commitEditing)
+            .onKeyPress(.escape) {
+                cancelEditing()
+                return .handled
+            }
+            .onChange(of: fieldFocused) { _, focused in
+                if !focused { cancelEditing() }
+            }
+            .accessibilityLabel("Playback speed, type a percentage")
+    }
+
+    private func commitEditing() {
+        if let percent = SpeedInput.typed(draft, in: SpeedKnobGeometry.minPercent...SpeedKnobGeometry.maxPercent) {
+            jump(to: percent)
+        }
+        cancelEditing()
+    }
+
+    private func cancelEditing() {
+        guard isEditing else { return }
+        isEditing = false
+        fieldFocused = false
+        #if os(macOS)
+        editTask?.cancel()
+        if let clickAway { NSEvent.removeMonitor(clickAway) }
+        clickAway = nil
+        #endif
     }
 
     // MARK: - Gesture
@@ -292,6 +367,49 @@ struct SpeedWheelPicker: View {
                 dragPercent = nil
             }
     }
+
+    #if os(macOS)
+    /// A click on the scale jumps to the tick under it; one in the cap opens
+    /// the readout for typing, once it's clear a double-click isn't coming.
+    private func click(at location: CGPoint) {
+        if isEditing {
+            cancelEditing()
+            return
+        }
+        if let target = geometry.tapPercent(at: location, saved: savedPercent) {
+            jump(to: target)
+            return
+        }
+        guard hypot(location.x - diameter / 2, location.y - diameter / 2) <= geometry.capRadius else { return }
+        let clicked = Date.now
+        editTask?.cancel()
+        editTask = Task {
+            try? await Task.sleep(for: .seconds(NSEvent.doubleClickInterval))
+            guard !Task.isCancelled, lastDoubleClick < clicked.addingTimeInterval(-0.1) else { return }
+            beginEditing()
+        }
+    }
+
+    private func beginEditing() {
+        draft = "\(currentPercent)"
+        isEditing = true
+        fieldFocused = true
+        // Typing replaces the number, as it would in any other field.
+        DispatchQueue.main.async { (NSApp.keyWindow?.firstResponder as? NSTextView)?.selectAll(nil) }
+        // A click away from the field doesn't always take its focus.
+        clickAway = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
+            MainActor.assumeIsolated {
+                if let window = event.window,
+                   let editor = window.firstResponder as? NSView,
+                   let hit = window.contentView?.hitTest(window.contentView?.superview?.convert(event.locationInWindow, from: nil) ?? event.locationInWindow),
+                   hit !== editor, !hit.isDescendant(of: editor) {
+                    cancelEditing()
+                }
+            }
+            return event
+        }
+    }
+    #endif
 
     /// Up or right is faster, in whichever direction the system's natural
     /// scrolling setting reports the fingers moving.
@@ -419,48 +537,13 @@ private struct TrackpadScroll: UIGestureRecognizerRepresentable {
         }
     }
 }
-#elseif os(macOS)
-/// SwiftUI on the Mac has no scroll-wheel gesture, so scrolls are read off
-/// the window's event stream while the pointer is over the knob, and
-/// swallowed there so the page doesn't scroll as well. Deltas come in the
-/// same direction as UIKit's pan translation.
-private struct ScrollWheel: ViewModifier {
-    var onChanged: (CGSize) -> Void
-    var onEnded: () -> Void
-    @State private var isHovering = false
-    @State private var monitor: Any?
+#endif
 
-    /// A mouse wheel reports lines, not points.
-    private static let pointsPerLine: CGFloat = 10
-
-    func body(content: Content) -> some View {
-        content
-            .onHover { isHovering = $0 }
-            .onAppear {
-                monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
-                    let handled = MainActor.assumeIsolated { handle(event) }
-                    return handled ? nil : event
-                }
-            }
-            .onDisappear {
-                if let monitor { NSEvent.removeMonitor(monitor) }
-                monitor = nil
-            }
-    }
-
-    private func handle(_ event: NSEvent) -> Bool {
-        guard isHovering else { return false }
-        // Momentum after the fingers lift would fling the speed past
-        // where they stopped it.
-        guard event.momentumPhase.isEmpty else { return true }
-        let scale = event.hasPreciseScrollingDeltas ? 1 : Self.pointsPerLine
-        onChanged(CGSize(width: event.scrollingDeltaX * scale, height: event.scrollingDeltaY * scale))
-        // A mouse wheel's clicks have no phase; each is a whole scroll.
-        if event.phase.isEmpty || event.phase.contains(.ended) || event.phase.contains(.cancelled) {
-            onEnded()
-        }
-        return true
-    }
+#if os(macOS)
+#Preview("Editing") {
+    @Previewable @State var speed = 0.7
+    SpeedWheelPicker(speed: $speed, savedSpeed: 0.8, diameter: 284, startsEditing: true)
+        .padding()
 }
 #endif
 
