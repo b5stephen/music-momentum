@@ -25,6 +25,7 @@ struct ArtworkGround: ViewModifier {
 
     #if os(macOS)
     @Environment(\.colorScheme) private var systemScheme
+    @State private var window: NSWindow?
     #endif
 
     func body(content: Content) -> some View {
@@ -37,10 +38,9 @@ struct ArtworkGround: ViewModifier {
                 .foregroundStyle(palette.map { AnyShapeStyle($0.foreground) } ?? AnyShapeStyle(.primary))
                 .tint(palette?.foreground)
                 .environment(\.colorScheme, palette == nil ? systemScheme : .dark)
-                // Empty, the window turned see-through until a cover's
-                // colours arrived.
-                // The mesh's colours animate from one cover to the next, and
-                // fade in over the system background when there was none.
+                // Never empty, or the window turns see-through. The mesh's
+                // colours animate from one cover to the next, and fade in over
+                // the system background when there was none.
                 .containerBackground(for: .window) {
                     ZStack {
                         Color.systemBackground
@@ -50,6 +50,13 @@ struct ArtworkGround: ViewModifier {
                     }
                     .animation(.easeInOut(duration: 0.8), value: palette)
                 }
+                // The window's own chrome (the split view's sidebar toggle,
+                // the traffic lights) follows the window's appearance, not the
+                // environment, so over a cover it drew light glass beside the
+                // toolbar's dark.
+                .background(WindowAccessor { window = $0 })
+                .onChange(of: palette == nil, initial: true) { matchAppearance() }
+                .onChange(of: window) { matchAppearance() }
         } else {
             branching(content)
         }
@@ -57,6 +64,12 @@ struct ArtworkGround: ViewModifier {
         branching(content)
         #endif
     }
+
+    #if os(macOS)
+    private func matchAppearance() {
+        window?.appearance = palette == nil ? nil : NSAppearance(named: .darkAqua)
+    }
+    #endif
 
     @ViewBuilder
     private func branching(_ content: Content) -> some View {
