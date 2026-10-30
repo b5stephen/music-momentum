@@ -55,6 +55,8 @@ The timeline's marker lane sits above the track, with no panel behind it. Points
 
 Hovering a lane item lifts a clip 2pt with a brighter fill and a soft shadow, and raises a dark, hairlined bubble over the lane at once ("**Chorus** · 1:02 – 1:36 · click to loop", or "click to jump" with the loop off). It replaces the system tooltip, which waits and would clash with it. Over the track, a small bubble gives the time under the pointer. Right-click opens SwiftUI's own context menu, with only Delete's ⌫ as a hint (the bubble already says what a click does): Loop This Clip and Add or Remove from Loop are greyed with the loop off, then Jump to Start, Rename, Edit Times…, Make a Point and Delete. Names are typed in place in a 26pt dark field with a ring in the text colour, not the accent, and "Return to keep · Esc to discard" beside it; clicking away discards.
 
+Dragging on empty lane (the dashed "No markers yet" area too) marks a clip: a dashed ghost bar in the clip row with a dark bubble above it reading "1:40 – 2:04 · 0:24", then, on release, the name field under it; Return keeps it (a blank name becomes "Clip 3", as on iOS), Escape or clicking away discards it. Marking never starts playback or touches the loop. Times round to whole seconds, tenths with ⌥, and an edge within 6pt of another marker's edge or the song's ends snaps to it. A drag under 4pt, or under the shortest clip, is a click and makes nothing. Within 5pt of a clip's edge the pointer becomes the left-right resize arrow and a white handle, taller than the bar and ringed in the ground colour, appears; dragging it shows "Start 2:20.0 · 0:40" (the edge in tenths, the length) above it, snapping the same way and held inside the song and short of the other edge by the shortest clip. Nothing is saved until release. A looping clip keeps playing while it's trimmed: its bounds in the loop follow the drag without a seek, and a playhead left outside it simply wraps as at the end of any lap. The body of a clip can't be dragged, so a click there still loops it.
+
 The knob is turned by dragging up or down, not round, since that's what Mac knobs do; the readout becomes a plain text field in the same rounded bold digits when clicked, with no box or border, and grows as it's typed into.
 
 ## Volume
@@ -116,6 +118,7 @@ Wide, the cover sits beside the title as it does stacked, the pair centred over 
 - **A picked song in the Mac sheet filled with the accent or system blue:** coral there meant "on", and blue is a second tint. The pick is a neutral 14% fill.
 - **A hand-built right-click menu in the lane** (a drawn panel, then an `NSMenu` popped up by hand with gesture hints like "⌘ Click" down the right): the first needed its own dismissal and keyboard handling, and the second a local event monitor that could act on a stale hover. `.contextMenu` handles right-click and ctrl-click itself, and the bubble already says what a click does.
 - **The system `.help` tooltip on lane items:** it waits about a second, and beside the hover bubble the two clashed. The bubble is the only tooltip there.
+- **Alignment guides to hang the lane's bubbles above it:** in a `ZStack` they resized the stack, and the whole lane slid down while a bubble showed. The bubbles hang from a zero-sized frame instead.
 
 ## Website
 

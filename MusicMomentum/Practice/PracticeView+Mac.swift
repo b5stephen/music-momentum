@@ -225,7 +225,20 @@ extension PracticeView {
                 marker.clearEnd(in: modelContext)
                 controller.markerChanged(marker)
             },
-            delete: { if let marker = marker(for: $0.id) { delete(marker) } }
+            delete: { if let marker = marker(for: $0.id) { delete(marker) } },
+            createClip: { name, start, end in addMarker(name: name, start: start, end: end) },
+            trimming: { scrubberMarker, start, end in
+                guard let id = scrubberMarker.id as? PersistentIdentifier else { return }
+                controller.reshapeLoop(for: id, start: start, end: end)
+            },
+            trimmed: { scrubberMarker, start, end in
+                guard let marker = marker(for: scrubberMarker.id) else { return }
+                marker.set(name: marker.name, start: start, end: end)
+                try? modelContext.save()
+                // Not `controller.markerChanged`, which seeks into the loop
+                // when the playhead is outside it.
+                controller.reshapeLoop(for: marker.persistentModelID, start: marker.startTime, end: marker.endTime ?? end)
+            }
         )
     }
 

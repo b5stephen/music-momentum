@@ -778,7 +778,7 @@ struct PracticeView: View {
     }
 
     /// Markers live on the saved entry, so marking an unsaved song saves it.
-    private func addMarker(name: String, start: TimeInterval, end: TimeInterval?) {
+    func addMarker(name: String, start: TimeInterval, end: TimeInterval?) {
         guard let song = savedSong ?? controller.saveCurrentSong() else { return }
         SongMarker.add(to: song, name: name, startTime: start, endTime: end, in: modelContext)
     }

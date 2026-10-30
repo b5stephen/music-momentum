@@ -418,6 +418,22 @@ final class PlaybackController {
         setScope(segments)
     }
 
+    /// Moves a looping clip's bounds in place while it is being trimmed: no
+    /// seek and no change of scope, so the player never notices. `markerChanged`
+    /// would seek to the loop's first clip whenever the playhead ends up
+    /// outside it, which mid-drag is a restart. Does nothing for a clip that
+    /// isn't in the loop. The ticker reads `loop` on every poll, so the new
+    /// bounds apply from the next one; a playhead left past the end wraps as it
+    /// would at the end of any lap.
+    func reshapeLoop(for id: PersistentIdentifier, start: TimeInterval, end: TimeInterval) {
+        guard let loop, let index = loop.segments.firstIndex(where: { $0.markerID == id }) else { return }
+        var segments = loop.segments
+        segments[index] = .init(markerID: id, start: start, end: end)
+        segments.sort { $0.start < $1.start }
+        self.loop = .clips(segments)
+        loopIndex = segments.firstIndex { playbackTime >= $0.start && playbackTime < $0.end } ?? segments.firstIndex { $0.markerID == id }
+    }
+
     /// Deleting the last clip in scope widens to the whole song rather than
     /// switching off, so an edit can never silently stop a loop the user turned on.
     func markerDeleted(_ marker: SongMarker) {
