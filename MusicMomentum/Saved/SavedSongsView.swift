@@ -389,43 +389,6 @@ struct SavedSongsView: View {
     }
 }
 
-// MARK: - Order
-
-private enum SongOrder: String, CaseIterable, Identifiable {
-    case changed, practiced, title, artist
-
-    var id: Self { self }
-
-    var title: String {
-        switch self {
-        case .changed: "Last Changed"
-        case .practiced: "Last Practiced"
-        case .title: "Title"
-        case .artist: "Artist"
-        }
-    }
-
-    /// Takes the list most recently changed first, which a stable sort keeps
-    /// as the tiebreak, including among songs never practised.
-    func sorted(_ recentlyChanged: [SavedSong]) -> [SavedSong] {
-        switch self {
-        case .changed:
-            recentlyChanged
-        case .practiced:
-            recentlyChanged.sorted { ($0.practicedAt ?? .distantPast) > ($1.practicedAt ?? .distantPast) }
-        case .title:
-            recentlyChanged.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
-        case .artist:
-            recentlyChanged.sorted {
-                switch $0.artistName.localizedStandardCompare($1.artistName) {
-                case .orderedSame: $0.title.localizedStandardCompare($1.title) == .orderedAscending
-                case let result: result == .orderedAscending
-                }
-            }
-        }
-    }
-}
-
 // MARK: - Row
 
 private struct SavedSongRow: View {
@@ -445,7 +408,7 @@ private struct SavedSongRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            artwork
+            SavedSongArtwork(song: song, side: 48, isLoading: isLoading)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -501,26 +464,6 @@ private struct SavedSongRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityAction(named: "Practice", onPlay)
         .accessibilityAction(named: "Add Marker", onAddMarker)
-    }
-
-    @ViewBuilder
-    private var artwork: some View {
-        if isLoading {
-            placeholder { ProgressView() }
-        } else if let artwork = song.artwork {
-            ArtworkImage(artwork, width: 48, height: 48)
-                .clipShape(.rect(cornerRadius: 6))
-        } else {
-            placeholder { Image(systemName: "music.note").foregroundStyle(.secondary) }
-                .sampleCover(songID: song.songID, cornerRadius: 6)
-        }
-    }
-
-    private func placeholder<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        RoundedRectangle(cornerRadius: 6)
-            .fill(.quaternary)
-            .frame(width: 48, height: 48)
-            .overlay(content())
     }
 }
 

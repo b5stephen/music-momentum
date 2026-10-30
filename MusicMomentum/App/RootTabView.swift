@@ -9,37 +9,33 @@ import SwiftUI
 
 /// Owns the one `PlaybackController`: both screens need it, and `TabView`
 /// keeps the practice tab alive so switching away doesn't tear down playback.
-/// A wide landscape window drops the tabs and floats Practice over Saved.
+/// A wide landscape window drops the tabs and floats Practice over Saved; a
+/// Mac window has Saved as a sidebar instead.
 struct RootTabView: View {
     /// Stands in for a loaded song; see `SampleSong`.
     var sampleTrack: PracticeView.Track?
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
     @State private var controller = PlaybackController()
+    #if os(iOS)
     @State private var tab: TabID = .practice
+    #endif
     @State private var practicePalette: ArtworkPalette?
+    #if os(iOS)
     @State private var floats = false
+    #endif
     #if os(macOS)
     @State private var displayAwake: (any NSObjectProtocol)?
     #endif
 
+    #if os(iOS)
     private enum TabID {
         case practice, saved
     }
+    #endif
 
     var body: some View {
-        Group {
-            if floats {
-                FloatingLayout(palette: practicePalette) {
-                    PracticeView(controller: controller, previewTrack: sampleTrack, savedIsBeside: true) { practicePalette = $0 }
-                } saved: {
-                    SavedSongsView(controller: controller, isBesidePractice: true, previewCurrentID: sampleTrack?.id) {}
-                }
-            } else {
-                tabs
-            }
-        }
-        .onGeometryChange(for: Bool.self) { Self.floats($0.size, insets: $0.safeAreaInsets) } action: { floats = $0 }
+        content
         .task { controller.configure(modelContext: modelContext) }
         #if DEBUG
         .onChange(of: sampleTrack?.id, initial: true) { _, id in
@@ -74,6 +70,27 @@ struct RootTabView: View {
         }
     }
 
+    @ViewBuilder
+    private var content: some View {
+        #if os(macOS)
+        MacWindow(controller: controller, sampleTrack: sampleTrack, palette: $practicePalette)
+        #else
+        Group {
+            if floats {
+                FloatingLayout(palette: practicePalette) {
+                    PracticeView(controller: controller, previewTrack: sampleTrack, savedIsBeside: true) { practicePalette = $0 }
+                } saved: {
+                    SavedSongsView(controller: controller, isBesidePractice: true, previewCurrentID: sampleTrack?.id) {}
+                }
+            } else {
+                tabs
+            }
+        }
+        .onGeometryChange(for: Bool.self) { Self.floats($0.size, insets: $0.safeAreaInsets) } action: { floats = $0 }
+        #endif
+    }
+
+    #if os(iOS)
     private var tabs: some View {
         TabView(selection: $tab) {
             Tab("Practice", systemImage: "guitars", value: .practice) {
@@ -106,7 +123,10 @@ struct RootTabView: View {
             && width >= FloatingLayout<EmptyView, EmptyView>.minWindowWidth
             && height >= FloatingLayout<EmptyView, EmptyView>.minWindowHeight
     }
+    #endif
 }
+
+#if os(iOS)
 
 /// Practice as a phone-width card hovering over Saved, which runs the full
 /// width of the window behind it. The cover's colour glows on the page
@@ -180,25 +200,11 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
                     y: colorScheme == .dark ? 24 : 16
                 )
                 .frame(width: cardWidth)
-                #if os(macOS)
-                // Level with the first saved row's artwork under the toolbar.
-                .padding(EdgeInsets(
-                    top: SavedSongsView.rowTopPadding, leading: Self.margin,
-                    bottom: Self.margin, trailing: Self.margin
-                ))
-                #else
                 .padding(Self.margin)
                 .padding(.top, max(0, windowControlsHeight + Self.contentInset - Self.margin))
-                #endif
                 // The status bar and home indicator are shorter than the
                 // margin, so the card can measure from the screen's edges.
-                // A Mac's top inset is the title bar and toolbar, which the
-                // card would slide under.
-                #if os(macOS)
-                .ignoresSafeArea(edges: .bottom)
-                #else
                 .ignoresSafeArea(edges: .vertical)
-                #endif
                 .onGeometryChange(for: CGFloat.self) { $0.windowControls.height } action: { windowControlsHeight = $0 }
 
             // Bent, the crease sets the width.
@@ -210,7 +216,6 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
         .background(Color.systemBackground)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
         .onGeometryChange(for: ClosedRange<CGFloat>?.self) { proxy in
-            #if os(iOS)
             guard #available(iOS 27.1, *),
                   let region = proxy.reservedRegions(kind: .division).first(where: {
                       $0.isActive && $0.frame.height > $0.frame.width
@@ -218,9 +223,6 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
                   region.frame.minX >= narrowestCardEdge
             else { return nil }
             return region.frame.minX...region.frame.maxX
-            #else
-            return nil
-            #endif
         } action: { crease in
             withAnimation(.snappy) { self.crease = crease }
         }
@@ -248,9 +250,7 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
             .frame(width: 5, height: 44)
             .frame(width: Self.margin, height: 120)
             .contentShape(.rect)
-            #if os(iOS)
             .hoverEffect(.highlight)
-            #endif
             .gesture(
                 // Global, because the handle moves with the width it sets: measured
                 // locally, each step shifts the frame the next translation is read in.
@@ -278,12 +278,14 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
             }
     }
 }
+#endif
 
 #Preview {
     RootTabView()
         .modelContainer(try! AppSchema.inMemoryContainer())
 }
 
+#if os(iOS)
 #Preview("Floating, 11-inch", traits: .fixedLayout(width: 1180, height: 820)) {
     floatingPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.88, green: 0.64, blue: 0.05)))
 }
@@ -345,3 +347,4 @@ private func floatingPreview(palette: ArtworkPalette?) -> some View {
     }
     .modelContainer(previewContainer())
 }
+#endif

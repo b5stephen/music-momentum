@@ -19,6 +19,9 @@ struct PracticeView: View {
     var previewTrack: Track?
     /// Set when Saved is on screen beside it rather than in another tab.
     var savedIsBeside = false
+    /// Off when the window behind paints the cover's mesh, so the sidebar
+    /// shares it.
+    var paintsGround = true
     /// Hands the cover's palette up to the tab bar and the floating card's
     /// glow, which sit outside the screen.
     var onPalette: (ArtworkPalette?) -> Void = { _ in }
@@ -151,7 +154,7 @@ struct PracticeView: View {
                 laidOutSize = size
             }
         }
-        .modifier(ArtworkGround(palette: track?.palette, isPlaying: controller.isPlaying))
+        .modifier(ArtworkGround(palette: track?.palette, isPlaying: controller.isPlaying, paintsBackdrop: paintsGround))
         .task(id: controller.selectedSong?.id) {
             guard let song = controller.selectedSong else { return }
             if palette?.songID != song.id.rawValue {

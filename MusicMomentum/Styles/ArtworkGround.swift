@@ -12,22 +12,61 @@ struct ArtworkGround: ViewModifier {
     /// The mesh drifts while the song plays, as Apple Music's does, and holds
     /// still while it's paused.
     var isPlaying: Bool
+    /// Off when something further out already paints the mesh behind this
+    /// view, as the Mac window does behind its sidebar as well.
+    var paintsBackdrop = true
+    #if os(macOS)
+    /// Paints the window's own background instead of this view's: a split
+    /// view's columns cover anything drawn behind it.
+    var paintsWindow = false
+    #endif
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var clock = DriftClock()
 
+    #if os(macOS)
+    @Environment(\.colorScheme) private var systemScheme
+    #endif
+
     func body(content: Content) -> some View {
-        if let palette {
+        #if os(macOS)
+        if paintsWindow {
+            // One structure whether or not there's a palette: a branch here
+            // would rebuild the split view, and Practice's state with it, each
+            // time a cover's colours arrive.
             content
-                .foregroundStyle(palette.foreground)
-                .tint(palette.foreground)
-                .backgroundStyle(palette.background)
-                .environment(\.onAccent, palette.background)
-                .environment(\.smokedFill, palette.isBright ? palette.shadow.opacity(0.24) : nil)
-                .environment(\.colorScheme, .dark)
-                .background { backdrop(palette) }
+                .foregroundStyle(palette.map { AnyShapeStyle($0.foreground) } ?? AnyShapeStyle(.primary))
+                .tint(palette?.foreground)
+                .environment(\.colorScheme, palette == nil ? systemScheme : .dark)
+                .containerBackground(for: .window) {
+                    if let palette { backdrop(palette) }
+                }
+        } else {
+            branching(content)
+        }
+        #else
+        branching(content)
+        #endif
+    }
+
+    @ViewBuilder
+    private func branching(_ content: Content) -> some View {
+        if let palette {
+            tinted(content, palette)
         } else {
             content
         }
+    }
+
+    @ViewBuilder
+    private func tinted(_ content: Content, _ palette: ArtworkPalette) -> some View {
+        let tinted = content
+            .foregroundStyle(palette.foreground)
+            .tint(palette.foreground)
+            .backgroundStyle(palette.background)
+            .environment(\.onAccent, palette.background)
+            .environment(\.smokedFill, palette.isBright ? palette.shadow.opacity(0.24) : nil)
+            .environment(\.colorScheme, .dark)
+        tinted.background { if paintsBackdrop { backdrop(palette) } }
     }
 
     /// Darkening from a third of the way down, as Apple Music's does,

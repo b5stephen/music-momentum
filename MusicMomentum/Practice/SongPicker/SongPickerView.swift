@@ -11,9 +11,14 @@ import SwiftData
 import SwiftUI
 
 struct SongPickerView: View {
+    /// A Mac sheet says what it will do: "Open" from Change Song, "Add" from
+    /// the sidebar's +. iOS picks on tap and shows neither button.
+    var title = "Choose Song"
+    var confirmTitle = "Open"
     let onSelect: (Song) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @State private var picked = PickedSong()
 
     @State private var searchTerm = ""
     @State private var scope: SearchScope = .library
@@ -33,36 +38,31 @@ struct SongPickerView: View {
                 if let searchError {
                     SearchMessage(kind: .failed(searchError))
                 } else if searchTerm.isEmpty, scope == .library {
-                    LibraryBrowseView { song in
-                        onSelect(song)
-                        dismiss()
-                    }
+                    LibraryBrowseView { choose($0) }
                 } else if searchTerm.isEmpty {
                     SearchMessage(kind: .prompt)
                 } else if results.isEmpty {
                     SearchMessage(kind: .noResults(searchTerm))
                 } else {
                     List(results) { song in
-                        Button {
-                            onSelect(song)
-                            dismiss()
-                        } label: {
+                        SongPickerRow(song: song) { choose($0) } label: {
                             // The album is what tells recordings of one song apart.
                             SongRow(song: song, showsAlbum: true)
                         }
-                        .buttonStyle(.plain)
                     }
                     .listStyle(.plain)
                 }
             }
-            .navigationTitle("Choose Song")
+            .navigationTitle(title)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
+                #if os(iOS)
                 ToolbarItem(placement: .cancellationAction) {
                     Button(role: .close) { dismiss() }
                 }
+                #endif
                 if isSearching {
                     ToolbarItem(placement: .confirmationAction) { ProgressView() }
                 }
@@ -79,8 +79,37 @@ struct SongPickerView: View {
             .task(id: SearchKey(term: searchTerm, scope: scope)) {
                 await runSearch()
             }
+            .onChange(of: SearchKey(term: searchTerm, scope: scope)) { picked.clear() }
         }
+        .environment(\.pickedSong, picked)
+        #if os(macOS)
+        .safeAreaInset(edge: .bottom, spacing: 0) { buttons }
+        .frame(minWidth: 460, idealWidth: 520, minHeight: 520, idealHeight: 600)
+        #endif
     }
+
+    private func choose(_ song: Song) {
+        onSelect(song)
+        dismiss()
+    }
+
+    #if os(macOS)
+    private var buttons: some View {
+        HStack(spacing: 8) {
+            Spacer()
+            Button("Cancel", role: .cancel) { dismiss() }
+                .keyboardShortcut(.cancelAction)
+            Button(confirmTitle) {
+                if let song = picked.song { choose(song) }
+            }
+            .keyboardShortcut(.defaultAction)
+            .disabled(picked.song == nil)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .overlay(alignment: .top) { Divider() }
+    }
+    #endif
 
     private func runSearch() async {
         let term = searchTerm.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -162,6 +191,13 @@ private struct SearchMessage: View {
     SongPickerView { _ in }
         .modelContainer(try! AppSchema.inMemoryContainer())
 }
+
+#if os(macOS)
+#Preview("Add to Saved, Mac") {
+    SongPickerView(title: "Add Song to Saved", confirmTitle: "Add") { _ in }
+        .modelContainer(try! AppSchema.inMemoryContainer())
+}
+#endif
 
 #Preview("Nothing typed") {
     SearchMessage(kind: .prompt)

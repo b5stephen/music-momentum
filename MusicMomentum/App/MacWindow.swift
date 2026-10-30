@@ -1,0 +1,230 @@
+//
+//  MacWindow.swift
+//  MusicMomentum
+//
+
+#if os(macOS)
+import MusicKit
+import SwiftData
+import SwiftUI
+
+/// The Mac window: Saved as a translucent sidebar beside Practice, both over
+/// the cover's mesh. Below `sidebarWidth` of room the sidebar collapses and
+/// slides over Practice with a dim instead of squeezing it.
+struct MacWindow: View {
+    let controller: PlaybackController
+    /// Stands in for a loaded song; see `SampleSong`.
+    var sampleTrack: PracticeView.Track?
+    @Binding var palette: ArtworkPalette?
+
+    @Environment(\.modelContext) private var modelContext
+    @State private var columns: NavigationSplitViewVisibility = .all
+    @State private var isWide = true
+    @State private var sidebarOver: Bool
+    @State private var picking: Picking?
+    /// A preview has no window to put the background in.
+    private let paintsWindow: Bool
+
+    /// Wide enough to keep Practice's own wide layout beside the sidebar.
+    nonisolated static var wideWidth: CGFloat { 1180 }
+    nonisolated static var minWindowSize: CGSize { CGSize(width: 720, height: 600) }
+    static let sidebarWidth: CGFloat = 272
+
+    private enum Picking: Identifiable {
+        case change, add
+        var id: Self { self }
+    }
+
+    init(
+        controller: PlaybackController,
+        sampleTrack: PracticeView.Track? = nil,
+        palette: Binding<ArtworkPalette?>,
+        sidebarOver: Bool = false,
+        paintsWindow: Bool = true
+    ) {
+        self.paintsWindow = paintsWindow
+        self.controller = controller
+        self.sampleTrack = sampleTrack
+        _palette = palette
+        _sidebarOver = State(initialValue: sidebarOver)
+    }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            NavigationSplitView(columnVisibility: $columns) {
+                sidebar
+                    .navigationSplitViewColumnWidth(Self.sidebarWidth)
+            } detail: {
+                PracticeView(
+                    controller: controller,
+                    previewTrack: sampleTrack,
+                    savedIsBeside: true,
+                    paintsGround: false
+                ) { palette = $0 }
+                .toolbar { toolbar }
+                .toolbar(removing: .title)
+            }
+
+            if sidebarOver {
+                Color.black.opacity(0.32)
+                    .contentShape(.rect)
+                    .onTapGesture { setSidebarOver(false) }
+                    .transition(.opacity)
+                    .accessibilityLabel("Close sidebar")
+                    .accessibilityAddTraits(.isButton)
+
+                sidebar
+                    .frame(width: Self.sidebarWidth)
+                    .frame(maxHeight: .infinity)
+                    .background(.regularMaterial)
+                    .overlay(alignment: .trailing) {
+                        Rectangle().fill(.primary.opacity(0.08)).frame(width: 1)
+                    }
+                    .shadow(color: .black.opacity(0.45), radius: 30, x: 12)
+                    .transition(.move(edge: .leading))
+            }
+        }
+        .modifier(ArtworkGround(palette: palette, isPlaying: controller.isPlaying, paintsWindow: paintsWindow))
+        .frame(minWidth: Self.minWindowSize.width, minHeight: Self.minWindowSize.height)
+        .onGeometryChange(for: Bool.self) { $0.size.width >= Self.wideWidth } action: { wide in
+            isWide = wide
+            columns = wide ? .all : .detailOnly
+            if wide { sidebarOver = false }
+        }
+        // A narrow window has no room for a column. The toolbar's toggle and
+        // View > Show Sidebar both ask for one, and are answered with the
+        // overlay instead.
+        .onChange(of: columns) { _, columns in
+            guard !isWide, columns != .detailOnly else { return }
+            self.columns = .detailOnly
+            setSidebarOver(!sidebarOver)
+        }
+        // Outside the ground, which would hand the sheet the cover's dark
+        // scheme and light text.
+        .sheet(item: $picking) { picking in
+            switch picking {
+            case .change:
+                SongPickerView { song in
+                    Task { await controller.select(song: song) }
+                }
+            case .add:
+                SongPickerView(title: "Add Song to Saved", confirmTitle: "Add", onSelect: add)
+            }
+        }
+    }
+
+    private var sidebar: some View {
+        SavedSidebarView(controller: controller, previewCurrentID: sampleTrack?.id) {
+            pick(.add)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            Button {
+                pick(.change)
+            } label: {
+                Label("Change Song", systemImage: "music.note")
+                    .labelStyle(.titleAndIcon)
+            }
+            .keyboardShortcut("o")
+            .disabled(!controller.canUseMusic)
+            .help("Change song without saving it (\u{2318}O)")
+        }
+        ToolbarItem(placement: .primaryAction) {
+            // Phase 6 wires this to the mini player window.
+            Button {} label: {
+                Label("Mini Player", systemImage: "pip")
+                    .labelStyle(.iconOnly)
+            }
+            .disabled(true)
+            .help("Mini player (\u{2325}\u{2318}M)")
+        }
+    }
+
+    private func setSidebarOver(_ over: Bool) {
+        withAnimation(.snappy(duration: 0.25)) { sidebarOver = over }
+    }
+
+    private func pick(_ picking: Picking) {
+        Task {
+            if await controller.requestAuthorizationIfNeeded() { self.picking = picking }
+        }
+    }
+
+    /// Re-adding a song keeps its tuned speed rather than resetting to 100%.
+    /// It doesn't load the song: that's Change Song's job.
+    private func add(_ song: Song) {
+        if let existing = SavedSong.find(song: song, in: modelContext) {
+            SavedSong.touch(existing, in: modelContext)
+        } else {
+            SavedSong.save(song: song, speed: 1.0, in: modelContext)
+        }
+    }
+}
+
+// MARK: - Previews
+
+private let previewPalette = ArtworkPalette(cover: OKLCH(red: 0.18, green: 0.42, blue: 0.45))
+
+private let previewTrack = PracticeView.Track(
+    id: "2", title: "Slow Burn Avenue", artistName: "The Kettle Lines",
+    palette: previewPalette
+)
+
+@MainActor
+private func previewWindow(
+    track: PracticeView.Track?,
+    sidebarOver: Bool = false
+) -> some View {
+    let container = try! AppSchema.inMemoryContainer()
+    let context = container.mainContext
+    SavedSong.save(songID: "1", title: "Harbour Lights", artistName: "Mara Ellis", artworkData: nil, speed: 0.75, in: context)
+    SavedSong.save(songID: "2", title: "Slow Burn Avenue", artistName: "The Kettle Lines", artworkData: nil, speed: 0.6, in: context)
+    SavedSong.save(songID: "3", title: "Paper Moons", artistName: "June Okafor", artworkData: nil, speed: 0.8, in: context)
+    SavedSong.save(songID: "4", title: "Night Ferry", artistName: "Low Tide Club", artworkData: nil, speed: 0.7, in: context)
+    SavedSong.save(songID: "5", title: "Copper Wire", artistName: "Ada & the Static", artworkData: nil, speed: 0.65, in: context)
+    let controller = PlaybackController()
+    controller.playbackRate = 0.6
+    return PreviewWindow(controller: controller, track: track, sidebarOver: sidebarOver)
+        .modelContainer(container)
+}
+
+private struct PreviewWindow: View {
+    let controller: PlaybackController
+    let track: PracticeView.Track?
+    let sidebarOver: Bool
+    @State private var palette: ArtworkPalette?
+
+    init(controller: PlaybackController, track: PracticeView.Track?, sidebarOver: Bool) {
+        self.controller = controller
+        self.track = track
+        self.sidebarOver = sidebarOver
+        _palette = State(initialValue: track?.palette)
+    }
+
+    var body: some View {
+        MacWindow(
+            controller: controller, sampleTrack: track, palette: $palette,
+            sidebarOver: sidebarOver, paintsWindow: false
+        )
+    }
+}
+
+#Preview("Wide window", traits: .fixedLayout(width: 1280, height: 820)) {
+    previewWindow(track: previewTrack)
+}
+
+#Preview("Compact window", traits: .fixedLayout(width: 900, height: 700)) {
+    previewWindow(track: previewTrack)
+}
+
+#Preview("Compact, sidebar over", traits: .fixedLayout(width: 900, height: 700)) {
+    previewWindow(track: previewTrack, sidebarOver: true)
+}
+
+#Preview("No song", traits: .fixedLayout(width: 1280, height: 820)) {
+    previewWindow(track: nil)
+}
+#endif

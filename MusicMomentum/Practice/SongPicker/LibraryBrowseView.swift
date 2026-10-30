@@ -22,6 +22,7 @@ struct LibraryBrowseView: View {
 
     @State private var openingID: String?
     @State private var missingID: String?
+    @Environment(\.pickedSong) private var picked
 
     private static let recentLimit = 3
 
@@ -53,16 +54,7 @@ struct LibraryBrowseView: View {
             if !recent.isEmpty {
                 Section("Practising lately") {
                     ForEach(recent) { song in
-                        Button {
-                            practise(song)
-                        } label: {
-                            RecentRow(
-                                song: song,
-                                isLoading: openingID == song.songID,
-                                isMissing: missingID == song.songID
-                            )
-                        }
-                        .buttonStyle(.plain)
+                        recentRow(song)
                     }
                 }
             }
@@ -73,7 +65,35 @@ struct LibraryBrowseView: View {
         Array(saved.prefix(Self.recentLimit))
     }
 
-    private func practise(_ song: SavedSong) {
+    @ViewBuilder
+    private func recentRow(_ song: SavedSong) -> some View {
+        let row = RecentRow(
+            song: song,
+            isLoading: openingID == song.songID,
+            isMissing: missingID == song.songID
+        )
+        #if os(macOS)
+        row
+            .padding(.vertical, 2)
+            .padding(.horizontal, 6)
+            .background(.primary.opacity(picked?.savedID == song.songID ? 0.14 : 0), in: .rect(cornerRadius: 6))
+            .contentShape(.rect)
+            .onTapGesture(count: 2) { practise(song, confirming: true) }
+            .simultaneousGesture(TapGesture().onEnded { practise(song, confirming: false) })
+            .accessibilityAddTraits(.isButton)
+        #else
+        Button {
+            practise(song, confirming: true)
+        } label: {
+            row
+        }
+        .buttonStyle(.plain)
+        #endif
+    }
+
+    /// `confirming` is false on a Mac's single click, which only picks the
+    /// song for the sheet's Open or Add button.
+    private func practise(_ song: SavedSong, confirming: Bool) {
         openingID = song.songID
         missingID = nil
         Task {
@@ -86,7 +106,12 @@ struct LibraryBrowseView: View {
                 missingID = song.songID
                 return
             }
-            onSelect(found)
+            if confirming {
+                onSelect(found)
+            } else {
+                picked?.song = found
+                picked?.savedID = song.songID
+            }
         }
     }
 
@@ -178,12 +203,9 @@ struct LibraryBrowseView: View {
             request.sort(by: \.title, ascending: true)
             return try await request.response().items
         } row: { song in
-            Button {
-                onSelect(song)
-            } label: {
+            SongPickerRow(song: song, onSelect: onSelect) {
                 SongRow(song: song, showsAlbum: true)
             }
-            .buttonStyle(.plain)
         }
     }
 
@@ -212,13 +234,17 @@ struct LibraryBrowseView: View {
         ) { track in
             // Music videos are greyed out rather than hidden so track numbers
             // don't appear to skip.
-            Button {
-                if case .song(let song) = track { onSelect(song) }
-            } label: {
-                TrackRow(track: track)
+            if case .song(let song) = track {
+                SongPickerRow(song: song, onSelect: onSelect) {
+                    TrackRow(track: track)
+                }
+            } else {
+                Button {} label: {
+                    TrackRow(track: track)
+                }
+                .buttonStyle(.plain)
+                .disabled(true)
             }
-            .buttonStyle(.plain)
-            .disabled(!track.isSong)
         }
     }
 }

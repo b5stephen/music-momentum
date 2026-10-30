@@ -41,6 +41,14 @@ Saved's speed and marker chips are clear Liquid Glass with primary text and no c
 
 Practice's save, change-song and Mark buttons and its clip pills are glass too, so they take on the cover like the knob does. Mark was bare text on the caption line until people didn't see it as a button. The save prompt is the same glass in the same colour as Change Song: tinted coral beside it, the pair read as two unrelated controls. The prompt is only there while there's a speed to save; once it's saved, the dot on the knob's scale says so. Mark, on its own line at the bottom, is the same 44pt capsule as the prompt, so glass on Practice means one thing at one size.
 
+## Mac
+
+The Mac window is the iPad's wide layout turned into a window rather than a new app. The cover's mesh fills the whole window, title bar and sidebar included, so loading a song re-tints everything; covers without colours and the empty state keep the system look and coral. Saved is the sidebar: translucent over the mesh, with a pill search field, a small "Saved" header carrying Sort and Add as bare glyphs, and 36pt rows with the saved speed as quiet trailing text. The loaded song gets a speaker glyph, not a highlight, for the same reason as on iOS. Hover is the only fill a row ever gets.
+
+The toolbar has no title, since Practice's song title is the title. Change Song is a labelled glass capsule ("change" and "add" are different actions, so the label stays), the mini player is a glass icon at the trailing end, and the sidebar toggle joins them when the sidebar is collapsed. Below about 1180pt the sidebar slides over Practice with a 32% dim instead of squeezing it; the dim closes it.
+
+A Mac sheet says what it will do: "Choose Song" with Open from Change Song, "Add Song to Saved" with Add from the sidebar's +. A click picks a row (a quiet fill, not the accent), Return or a double-click confirms. Browse stays above "Practising lately", as on iOS.
+
 ## Volume
 
 Practice's volume is the system's, the level the side buttons set: Apple's own `MPVolumeView` under the transport in every layout, its native slider and thumb, tinted the text colour, not coral, since volume isn't a state; the transport sits midway between it and the scrubber, so the two bars frame it as a pair. Stacked, it's the first thing to go when the screen runs short of height, before the controls shrink: the side buttons do the same job, and the clips don't.
@@ -94,6 +102,9 @@ Wide, the cover sits beside the title as it does stacked, the pair centred over 
 - **The wide playback column as a tight block** centred beside the header and wheel: it looked stark. Stretched the whole height, an iPad window's rows drifted apart, so each gap grows by at most 28pt.
 - **The cover over the playback column in the wide layout,** up to 180pt: it was the only thing the volume row could take height from, and on a landscape phone it shrank to 76pt.
 - **⏮ for restart:** a triangle-and-bar beside the skip buttons' circular arrows looked like a different set, and reads as "previous track". Restart uses `gobackward`, the skip arrow without a number.
+
+- **The mesh drawn behind the Mac's split view:** the columns cover anything behind them, so the window stayed white. It is the window's own container background instead.
+- **A picked song in the Mac sheet filled with the accent or system blue:** coral there meant "on", and blue is a second tint. The pick is a neutral 14% fill.
 
 ## Website
 
