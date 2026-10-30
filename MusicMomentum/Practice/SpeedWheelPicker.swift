@@ -68,14 +68,18 @@ struct SpeedWheelPicker: View {
             .gesture(rotationGesture)
             .gesture(TrackpadScroll(onChanged: scroll(by:), onEnded: endScroll))
             #elseif os(macOS)
+            // Round with the pointer, as a finger turns it on iOS: dragging
+            // up or down, Logic-style, ignored where the pointer went.
+            .gesture(rotationGesture)
             .speedDragInput(
                 speed: $speed,
-                range: Double(SpeedKnobGeometry.minPercent) / 100...Double(SpeedKnobGeometry.maxPercent) / 100
+                range: Double(SpeedKnobGeometry.minPercent) / 100...Double(SpeedKnobGeometry.maxPercent) / 100,
+                drags: false
             )
             // A click is a tap rather than a drag of no distance, which the
             // drag's few points of slop would otherwise swallow.
             .simultaneousGesture(SpatialTapGesture().onEnded { click(at: $0.location) })
-            .help("Drag up or down, scroll, or press ↑ ↓ · double-click for full speed")
+            .help("Drag round, scroll, or press ↑ ↓ · double-click for full speed")
             #endif
             // The touch drag gesture has `minimumDistance: 0`, so a plain
             // `.onTapGesture` never fires. The drag a double tap also
@@ -322,7 +326,14 @@ struct SpeedWheelPicker: View {
     // MARK: - Gesture
 
     private var rotationGesture: some Gesture {
-        DragGesture(minimumDistance: 0)
+        // A mouse's clicks are read by their own tap gesture, so the drag
+        // waits for a few points of movement before taking over.
+        #if os(macOS)
+        let slop: CGFloat = 3
+        #else
+        let slop: CGFloat = 0
+        #endif
+        return DragGesture(minimumDistance: slop)
             .onChanged { value in
                 let centre = CGPoint(x: diameter / 2, y: diameter / 2)
                 let dx = value.location.x - centre.x

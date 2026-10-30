@@ -9,9 +9,10 @@ import SwiftUI
 
 extension View {
     /// Lets a mouse set `speed` by dragging up or down, or by scrolling over
-    /// the view, for the knob and anything else that shows the speed.
-    func speedDragInput(speed: Binding<Double>, range: ClosedRange<Double>) -> some View {
-        modifier(SpeedDragInput(speed: speed, range: range))
+    /// the view, for anything that shows the speed. The knob turns its own
+    /// drag round with the pointer, so it takes only the scroll (`drags: false`).
+    func speedDragInput(speed: Binding<Double>, range: ClosedRange<Double>, drags: Bool = true) -> some View {
+        modifier(SpeedDragInput(speed: speed, range: range, drags: drags))
     }
 }
 
@@ -21,6 +22,7 @@ extension View {
 struct SpeedDragInput: ViewModifier {
     @Binding var speed: Double
     var range: ClosedRange<Double>
+    var drags = true
 
     /// The speed when the drag began, or when ⇧ last went down or up, so
     /// changing gear mid-drag carries on from where the knob is.
@@ -39,7 +41,8 @@ struct SpeedDragInput: ViewModifier {
             .gesture(
                 DragGesture(minimumDistance: 3)
                     .onChanged { value in drag(travel: -value.translation.height) }
-                    .onEnded { _ in anchor = nil }
+                    .onEnded { _ in anchor = nil },
+                isEnabled: drags
             )
             .modifier(ScrollWheel(onChanged: scroll(by:), onEnded: { scrolled = nil }))
     }
