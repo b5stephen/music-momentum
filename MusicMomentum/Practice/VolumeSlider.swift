@@ -23,12 +23,22 @@ struct VolumeSlider: View {
     /// The screen's text colour; UIKit can't see SwiftUI's foreground style.
     var tint: Color?
     #if os(macOS)
+    /// Left out, rather than disabled, on an output with no software volume.
+    var hidesWhenFixed = false
     /// Made on appear: `@State` evaluates its initial value on every init,
     /// and each one would register CoreAudio listeners.
     @State private var volume: SystemVolume?
     #endif
 
     var body: some View {
+        #if os(macOS)
+        if hidesWhenFixed, volume?.isSettable == false { EmptyView() } else { content }
+        #else
+        content
+        #endif
+    }
+
+    private var content: some View {
         HStack(spacing: 10) {
             Image(systemName: "speaker.fill")
             slider

@@ -33,7 +33,7 @@ struct PracticeView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Query private var savedSongs: [SavedSong]
     @State private var showPicker = false
-    @State private var markerSheet: MarkerSheet?
+    @State var markerSheet: MarkerSheet?
     /// The selected song's palette, kept so `track` doesn't rebuild it on
     /// every read: `Artwork.backgroundColor`'s, then the sampled cover's.
     @State private var palette: (songID: String, palette: ArtworkPalette?)?
@@ -52,7 +52,7 @@ struct PracticeView: View {
 
     /// Editing carries the marker's identity so switching straight from one
     /// marker to another rebuilds the sheet.
-    private enum MarkerSheet: Identifiable {
+    enum MarkerSheet: Identifiable {
         case new(start: TimeInterval)
         case edit(SongMarker)
 
@@ -70,17 +70,19 @@ struct PracticeView: View {
         var catalogID: String? = nil
         var title: String
         var artistName: String
+        var albumTitle: String? = nil
         var palette: ArtworkPalette?
         var artwork: Artwork?
     }
 
-    private var track: Track? {
+    var track: Track? {
         guard let song = controller.selectedSong else { return previewTrack }
         return Track(
             id: song.id.rawValue,
             catalogID: song.catalogID,
             title: song.title,
             artistName: song.artistName,
+            albumTitle: song.albumTitle,
             palette: palette?.songID == song.id.rawValue
                 ? palette?.palette
                 : ArtworkPalette(song.artwork),
@@ -89,9 +91,9 @@ struct PracticeView: View {
     }
 
     /// Tinted text: the cover's text colour, or the coral that stays legible on white.
-    private var textTint: Color { track?.palette?.foreground ?? .accentText }
+    var textTint: Color { track?.palette?.foreground ?? .accentText }
 
-    private var onAccent: Color { track?.palette?.background ?? .onAccent }
+    var onAccent: Color { track?.palette?.background ?? .onAccent }
 
     var body: some View {
         // Spacers absorb spare height; the screen only scrolls once they've
@@ -111,6 +113,9 @@ struct PracticeView: View {
                 VStack(spacing: 0) {
                     if let track {
                         Group {
+                            #if os(macOS)
+                            macLoadedSong(track, size: proxy.size)
+                            #else
                             if layout.isWide {
                                 loadedSongWide(
                                     track,
@@ -129,6 +134,7 @@ struct PracticeView: View {
                             } else {
                                 loadedSong(track, layout: layout, width: proxy.size.width, placement: placement)
                             }
+                            #endif
                         }
                         .animation(isDragged(to: proxy.size) ? .snappy : nil, value: layout.isCompact)
                     } else if controller.isRestoringLastSong {
@@ -145,8 +151,8 @@ struct PracticeView: View {
 
                     messages
                 }
-                .padding(.top, arrivalCrease != nil || creaseSplit != nil ? 0 : track == nil ? 16 : layout.isWide ? PracticeLayout.wideTopPadding : layout.topMargin + controlsClearance)
-                .padding(.bottom, arrivalCrease != nil || creaseSplit != nil ? 0 : PracticeLayout.bottomMargin)
+                .padding(.top, arrivalCrease != nil || creaseSplit != nil || usesMacLayout ? 0 : track == nil ? 16 : layout.isWide ? PracticeLayout.wideTopPadding : layout.topMargin + controlsClearance)
+                .padding(.bottom, arrivalCrease != nil || creaseSplit != nil || usesMacLayout ? 0 : PracticeLayout.bottomMargin)
                 .frame(maxWidth: .infinity, minHeight: proxy.size.height)
             }
             .scrollBounceBehavior(.basedOnSize)
@@ -308,6 +314,15 @@ struct PracticeView: View {
             Spacer(minLength: 0)
             Spacer(minLength: 0)
         }
+    }
+
+    /// Whether the Mac's own layout is on screen, in place of the stacked one.
+    private var usesMacLayout: Bool {
+        #if os(macOS)
+        track != nil
+        #else
+        false
+        #endif
     }
 
     /// A Mac has no tab bar in the window's bottom inset.
@@ -521,7 +536,7 @@ struct PracticeView: View {
 
     /// Always laid out, so switching between songs with and without markers
     /// doesn't shift the centred stack.
-    private func markerPills(trailingInset: CGFloat?) -> some View {
+    func markerPills(trailingInset: CGFloat?) -> some View {
         MarkerPills(
             markers: savedSong?.sortedMarkers ?? [],
             inset: Self.sideMargin,
@@ -536,7 +551,7 @@ struct PracticeView: View {
         )
     }
 
-    private static let sideMargin: CGFloat = 24
+    static let sideMargin: CGFloat = 24
     private static var spreadGap: some View {
         Spacer(minLength: 0).frame(maxHeight: 28)
     }
@@ -724,7 +739,7 @@ struct PracticeView: View {
     }
 
     /// For VoiceOver: the caption is a separate element to the button.
-    private var loopDescription: String {
+    var loopDescription: String {
         guard let loop = controller.loop else { return "Off" }
         let clips = loop.segments.count
         switch clips {
@@ -738,7 +753,7 @@ struct PracticeView: View {
 
     /// With the loop off a tap navigates; with it on, a clip tap reshapes the
     /// scope instead (the menu's Jump to Start still navigates).
-    private func tapped(_ marker: SongMarker) {
+    func tapped(_ marker: SongMarker) {
         if controller.isLoopOn, marker.isClip {
             controller.toggleLoop(for: marker)
         } else {
@@ -746,11 +761,11 @@ struct PracticeView: View {
         }
     }
 
-    private func marker(for id: AnyHashable) -> SongMarker? {
+    func marker(for id: AnyHashable) -> SongMarker? {
         savedSong?.markers?.first { $0.persistentModelID == id as? PersistentIdentifier }
     }
 
-    private var scrubberMarkers: [PlaybackScrubber.Marker] {
+    var scrubberMarkers: [PlaybackScrubber.Marker] {
         (savedSong?.sortedMarkers ?? []).map {
             .init(
                 id: $0.persistentModelID,
@@ -774,7 +789,7 @@ struct PracticeView: View {
         controller.markerChanged(marker)
     }
 
-    private func delete(_ marker: SongMarker) {
+    func delete(_ marker: SongMarker) {
         controller.markerDeleted(marker)
         SongMarker.delete(marker, in: modelContext)
     }
@@ -942,7 +957,7 @@ struct PracticeView: View {
     }
 
     @ViewBuilder
-    private func cover(_ track: Track, side: CGFloat, radius: CGFloat? = nil) -> some View {
+    func cover(_ track: Track, side: CGFloat, radius: CGFloat? = nil) -> some View {
         let radius = radius ?? side / 8
         if let artwork = track.artwork {
             ArtworkImage(artwork, width: side, height: side)
@@ -958,7 +973,7 @@ struct PracticeView: View {
         }
     }
 
-    private var isSpeedSaved: Bool {
+    var isSpeedSaved: Bool {
         savedSong?.percent == Int((controller.playbackRate * 100).rounded())
     }
 
@@ -1002,7 +1017,7 @@ struct PracticeView: View {
 
     /// Reads the `@Query` results rather than fetching, so the save button restyles
     /// the moment the store changes — including from the Saved tab.
-    private var savedSong: SavedSong? {
+    var savedSong: SavedSong? {
         guard let track else { return nil }
         return savedSongs.first { $0.matches(songID: track.id, catalogID: track.catalogID) }
     }
