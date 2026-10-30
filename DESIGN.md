@@ -63,6 +63,10 @@ Shortcuts are in tooltips and the Playback menu, never on screen. Space, the arr
 
 The knob is turned by dragging up or down, not round, since that's what Mac knobs do; the readout becomes a plain text field in the same rounded bold digits when clicked, with no box or border, and grows as it's typed into.
 
+The mini player is a 452 by 120 card that is its own window: no title bar or chrome, not resizable, floating above other apps' windows, painted with the same mesh and dragged by its background. The cover (96pt) sits inset on the left; beside it, the title with what's looping under it ("Looping Chorus · 0:34", or a dimmed "Loop off"), and at the trailing end the speed as a glass chip in SF Pro Rounded, which takes the knob's drag, scroll and ⌘↑/⌘↓. Below: previous clip, play/pause (solid text colour, dark ink), next clip, then Loop (solid when on) and an expand button as glass, and a 4pt progress bar with the loop's clips as a lighter band under the played fill. Previous and next follow the lane's click rule (looping: loop that clip alone; off: jump to its start) and are dimmed when there's no clip that way. ⌥⌘M swaps it with the main window, which is hidden rather than closed so Practice keeps its cover colours.
+
+The menu bar extra is the Tempo Ring: a faint full ring, a lit arc from the lower left up round to the right (three quarters of the sweep, as on the canvas), and a centre dot, drawn in SwiftUI and handed to the bar as a template image so it takes the bar's colour. Its 300pt panel is on the mesh: song row with play/pause, the five speeds (50/60/75/90/100) as a segmented row with the current one solid, then the clips as rows with a short bar glyph, name and start time, the looping one solid. With no song it says "No song loaded" and offers a glass "Open Music Momentum".
+
 ## Volume
 
 Practice's volume is the system's, the level the side buttons set: Apple's own `MPVolumeView` under the transport in every layout, its native slider and thumb, tinted the text colour, not coral, since volume isn't a state; the transport sits midway between it and the scrubber, so the two bars frame it as a pair. Stacked, it's the first thing to go when the screen runs short of height, before the controls shrink: the side buttons do the same job, and the clips don't.
@@ -127,6 +131,9 @@ Wide, the cover sits beside the title as it does stacked, the pair centred over 
 - **Paging a playhead the user has panned away from:** looking ahead at a clip would be undone on the next tick. Only a playhead that was in view and has just left it pages.
 - **A lane height that follows the visible rows:** zooming into a quieter part shrank it and moved everything below. It holds the whole song's height.
 - **An 18pt overview strip** (the canvas's): 14pt is enough for dots and bars, and costs Practice less when it appears.
+- **A title bar over the mini player** (hidden-title-bar style, traffic lights floating on the card): the lights covered the cover's corner, and the card is meant to read as one object. The plain window style has none.
+- **Previous clip stepping from the playhead while a clip loops:** from deep inside the looping clip it went back to that same clip, so the button seemed dead. With a clip loop running, "here" is the loop's clip.
+- **A fully lit Tempo Ring arc** (lower left all the way to lower right): it read as a closed dial. The canvas's three-quarter arc leaves the ring's faint part showing and suggests a speed.
 
 ## Website
 

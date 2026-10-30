@@ -88,4 +88,19 @@ struct SpeedInputTests {
         #expect(SpeedInput.stepped(from: 30, up: false, in: range) == 30)
         #expect(SpeedInput.stepped(from: 32, up: false, in: range) == 30)
     }
+
+    @Test("A preset is current when the knob reads out its percent")
+    func presetMatching() {
+        #expect(SpeedInput.preset(matching: 0.75) == 75)
+        #expect(SpeedInput.preset(matching: 0.749) == 75)
+        #expect(SpeedInput.preset(matching: 0.7449) == nil)
+        #expect(SpeedInput.preset(matching: 1.0) == 100)
+        #expect(SpeedInput.preset(matching: 0.5) == 50)
+    }
+
+    @Test("Between presets, none is current")
+    func presetBetween() {
+        #expect(SpeedInput.preset(matching: 0.72) == nil)
+        #expect(SpeedInput.preset(matching: 0.3) == nil)
+    }
 }

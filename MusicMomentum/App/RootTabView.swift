@@ -257,6 +257,9 @@ private struct PreviewRoot: View {
 
     var body: some View {
         RootTabView(sampleTrack: sampleTrack, controller: controller, practicePalette: $palette)
+            #if os(macOS)
+            .environment(MiniPlayerSwitch())
+            #endif
     }
 }
 

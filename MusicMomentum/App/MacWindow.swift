@@ -18,6 +18,9 @@ struct MacWindow: View {
     @Binding var palette: ArtworkPalette?
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(MiniPlayerSwitch.self) private var miniPlayer
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
     @State private var columns: NavigationSplitViewVisibility = .all
     @State private var isWide = true
     @State private var sidebarOver: Bool
@@ -98,6 +101,7 @@ struct MacWindow: View {
         }
         .modifier(ArtworkGround(palette: palette, isPlaying: controller.isPlaying, paintsWindow: paintsWindow))
         .frame(minWidth: Self.minWindowSize.width, minHeight: Self.minWindowSize.height)
+        .background(WindowAccessor { miniPlayer.mainWindow = $0 })
         .onGeometryChange(for: Bool.self) { $0.size.width >= Self.wideWidth } action: { wide in
             isWide = wide
             columns = wide ? .all : .detailOnly
@@ -153,12 +157,13 @@ struct MacWindow: View {
             .help("Change song without saving it (\u{2318}O)")
         }
         ToolbarItem(placement: .primaryAction) {
-            // Phase 6 wires this to the mini player window.
-            Button {} label: {
+            Button {
+                miniPlayer.toggle(open: openWindow, dismiss: dismissWindow)
+            } label: {
                 Label("Mini Player", systemImage: "pip")
                     .labelStyle(.iconOnly)
             }
-            .disabled(true)
+            .disabled(sampleTrack == nil && controller.selectedSong == nil)
             .help("Mini player (\u{2325}\u{2318}M)")
         }
     }
@@ -208,6 +213,7 @@ private func previewWindow(
     let controller = PlaybackController()
     controller.playbackRate = 0.6
     return PreviewWindow(controller: controller, track: track, sidebarOver: sidebarOver)
+        .environment(MiniPlayerSwitch())
         .modelContainer(container)
 }
 

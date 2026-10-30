@@ -21,6 +21,9 @@ import SwiftUI
 struct MacCommands: Commands {
     @FocusedValue(\.practiceActions) private var practice
     @FocusedValue(\.windowActions) private var window
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
+    let miniPlayer: MiniPlayerSwitch
 
     private var canPractise: Bool {
         guard let practice, let window else { return false }
@@ -68,7 +71,7 @@ struct MacCommands: Commands {
             }
             Button("Mark This Point\u{2026}") { practice?.mark() }
                 .keyboardShortcut("m", modifiers: [])
-                .disabled(!canSeek)
+                .disabled(!canSeek || practice?.canMark != true)
 
             Divider()
 
@@ -97,10 +100,11 @@ struct MacCommands: Commands {
         }
 
         CommandGroup(after: .windowArrangement) {
-            // Phase 6 gives this a window to open.
-            Button("Mini Player") {}
-                .keyboardShortcut("m", modifiers: [.command, .option])
-                .disabled(true)
+            Button(miniPlayer.isMiniOpen ? "Show Main Window" : "Mini Player") {
+                miniPlayer.toggle(open: openWindow, dismiss: dismissWindow)
+            }
+            .keyboardShortcut("m", modifiers: [.command, .option])
+            .disabled(!miniPlayer.isMiniOpen && practice?.hasSong != true)
         }
     }
 }

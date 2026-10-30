@@ -966,21 +966,8 @@ struct PracticeView: View {
         .dynamicTypeSize(...PracticeLayout.headerTypeLimit)
     }
 
-    @ViewBuilder
     func cover(_ track: Track, side: CGFloat, radius: CGFloat? = nil) -> some View {
-        let radius = radius ?? side / 8
-        if let artwork = track.artwork {
-            ArtworkImage(artwork, width: side, height: side)
-                .clipShape(.rect(cornerRadius: radius))
-                .accessibilityHidden(true)
-        } else {
-            RoundedRectangle(cornerRadius: radius)
-                .fill(.quaternary)
-                .frame(width: side, height: side)
-                .overlay { Image(systemName: "music.note").foregroundStyle(.secondary) }
-                .sampleCover(songID: track.id, cornerRadius: radius)
-                .accessibilityHidden(true)
-        }
+        CoverArt(artwork: track.artwork, songID: track.id, side: side, radius: radius)
     }
 
     var isSpeedSaved: Bool {

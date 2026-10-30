@@ -18,6 +18,8 @@ struct PracticeActions {
     var canSaveSpeed = false
     var canZoomIn = false
     var canZoomOut = false
+    /// The mini player has no marker sheet to open.
+    var canMark = true
     /// Names of the first nine clips in start order, for the 1-9 items.
     var clipNames: [String] = []
     /// A marker sheet is up, and its fields are for typing.

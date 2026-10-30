@@ -46,4 +46,14 @@ nonisolated enum SpeedInput {
             : (percent - 1) / grid * grid
         return min(max(next, range.lowerBound), range.upperBound)
     }
+
+    /// The menu bar's one-click speeds, in percent.
+    static let presets = [50, 60, 75, 90, 100]
+
+    /// The preset `rate` is showing as, matched on the whole percent the knob
+    /// reads out (0.749 is 75%), or `nil` between presets.
+    static func preset(matching rate: Double) -> Int? {
+        let percent = Int((rate * 100).rounded())
+        return presets.first { $0 == percent }
+    }
 }
