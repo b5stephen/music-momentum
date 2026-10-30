@@ -3,29 +3,24 @@
 //  MusicMomentum
 //
 
-import CoreData
 import SwiftData
 import SwiftUI
 
-/// Owns the one `PlaybackController`: both screens need it, and `TabView`
-/// keeps the practice tab alive so switching away doesn't tear down playback.
-/// A wide landscape window drops the tabs and floats Practice over Saved; a
-/// Mac window has Saved as a sidebar instead.
+/// Hands the one `PlaybackController`, which `AppModel` owns, to both
+/// screens; `TabView` keeps the practice tab alive so switching away doesn't
+/// tear down the screen. A wide landscape window drops the tabs and floats
+/// Practice over Saved; a Mac window has Saved as a sidebar instead.
 struct RootTabView: View {
     /// Stands in for a loaded song; see `SampleSong`.
     var sampleTrack: PracticeView.Track?
-    @Environment(\.modelContext) private var modelContext
+    let controller: PlaybackController
+    /// The loaded cover's colours, which the app keeps for the mini player
+    /// and menu bar as well as the tab bar and the floating card's glow.
+    @Binding var practicePalette: ArtworkPalette?
     @Environment(\.colorScheme) private var colorScheme
-    @State private var controller = PlaybackController()
     #if os(iOS)
     @State private var tab: TabID = .practice
-    #endif
-    @State private var practicePalette: ArtworkPalette?
-    #if os(iOS)
     @State private var floats = false
-    #endif
-    #if os(macOS)
-    @State private var displayAwake: (any NSObjectProtocol)?
     #endif
 
     #if os(iOS)
@@ -36,7 +31,6 @@ struct RootTabView: View {
 
     var body: some View {
         content
-        .task { controller.configure(modelContext: modelContext) }
         #if DEBUG
         .onChange(of: sampleTrack?.id, initial: true) { _, id in
             guard SampleSong.isRequested, let id, let duration = SampleSong.duration(of: id) else { return }
@@ -44,30 +38,6 @@ struct RootTabView: View {
             controller.playbackRate = SampleSong.speed(of: id) ?? 1.0
         }
         #endif
-        // Duplicates and another device's library artwork only ever arrive by
-        // sync, so tidying on each import is enough.
-        .task {
-            SavedSong.mergeDuplicates(in: modelContext)
-            await ArtworkRepair.run(in: modelContext)
-            for await _ in NotificationCenter.default.notifications(named: .NSPersistentStoreRemoteChange) {
-                SavedSong.mergeDuplicates(in: modelContext)
-                await ArtworkRepair.run(in: modelContext)
-            }
-        }
-        // Hands are on the guitar, not the screen. iOS ignores this while
-        // the app is in the background, so it needs no scene-phase check.
-        .onChange(of: controller.isPlaying, initial: true) { _, playing in
-            #if os(iOS)
-            UIApplication.shared.isIdleTimerDisabled = playing
-            #elseif os(macOS)
-            if playing, displayAwake == nil {
-                displayAwake = ProcessInfo.processInfo.beginActivity(options: .idleDisplaySleepDisabled, reason: "Practising")
-            } else if !playing, let displayAwake {
-                ProcessInfo.processInfo.endActivity(displayAwake)
-                self.displayAwake = nil
-            }
-            #endif
-        }
     }
 
     @ViewBuilder
@@ -280,8 +250,18 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
 }
 #endif
 
+private struct PreviewRoot: View {
+    var sampleTrack: PracticeView.Track?
+    @State private var controller = PlaybackController()
+    @State private var palette: ArtworkPalette?
+
+    var body: some View {
+        RootTabView(sampleTrack: sampleTrack, controller: controller, practicePalette: $palette)
+    }
+}
+
 #Preview {
-    RootTabView()
+    PreviewRoot()
         .modelContainer(try! AppSchema.inMemoryContainer())
 }
 
@@ -299,12 +279,12 @@ private struct FloatingLayout<Practice: View, Saved: View>: View {
 }
 
 #Preview("Open iPhone Duo, landscape", traits: .fixedLayout(width: 951, height: 669)) {
-    RootTabView(sampleTrack: previewTrack)
+    PreviewRoot(sampleTrack: previewTrack)
         .modelContainer(previewContainer())
 }
 
 #Preview("iPhone Air, landscape", traits: .fixedLayout(width: 912, height: 420)) {
-    RootTabView(sampleTrack: previewTrack)
+    PreviewRoot(sampleTrack: previewTrack)
         .modelContainer(previewContainer())
 }
 

@@ -11,26 +11,37 @@ import SwiftUI
 @main
 struct MusicMomentumApp: App {
     private let container: ModelContainer
+    private let model: AppModel
+    @State private var palette: ArtworkPalette?
     #if DEBUG
     @AppStorage(SampleSong.loadedKey) private var sampleSongID = SampleSong.tracks[0].id
     #endif
 
     init() {
+        let container: ModelContainer
         #if DEBUG
         if SampleSong.isRequested {
             container = try! SampleSong.container()
-            return
+        } else {
+            container = try! AppSchema.appContainer()
         }
-        #endif
+        #else
         container = try! AppSchema.appContainer()
+        #endif
+        self.container = container
+        model = AppModel(context: container.mainContext)
     }
 
     var body: some Scene {
         WindowGroup {
             #if DEBUG
-            RootTabView(sampleTrack: SampleSong.isRequested ? SampleSong.track(id: sampleSongID) : nil)
+            RootTabView(
+                sampleTrack: SampleSong.isRequested ? SampleSong.track(id: sampleSongID) : nil,
+                controller: model.controller,
+                practicePalette: $palette
+            )
             #else
-            RootTabView()
+            RootTabView(controller: model.controller, practicePalette: $palette)
             #endif
         }
         .modelContainer(container)
