@@ -20,6 +20,13 @@ struct PlaybackScrubber: View {
     /// Song time a point's name stays up after the playhead crosses it.
     var pointNameDuration: TimeInterval = 3
     var onScrub: (TimeInterval) -> Void = { _ in }
+    #if os(macOS)
+    /// The lane's clicks: a clip (⌘-click is `chaining`) or a point. The
+    /// scrubber only reports them; what they mean is Practice's call.
+    var isLoopOn = false
+    var onClip: (Marker, _ chaining: Bool) -> Void = { _, _ in }
+    var onPoint: (Marker) -> Void = { _ in }
+    #endif
     var onCommit: (TimeInterval) -> Void
 
     nonisolated struct Marker: Identifiable {
@@ -48,6 +55,98 @@ struct PlaybackScrubber: View {
     }
 
     var body: some View {
+        #if os(macOS)
+        macBody
+        #else
+        touchBody
+        #endif
+    }
+
+    #if os(macOS)
+    /// Lane, track, then the times: the markers' lane above the track, held
+    /// at its height so a song with none never moves Practice. No playhead
+    /// line; the end of the played fill marks the position.
+    private var macBody: some View {
+        VStack(spacing: 10) {
+            if let duration, duration > 0 {
+                MarkerLane(
+                    markers: markers,
+                    duration: duration,
+                    isLoopOn: isLoopOn,
+                    onClip: onClip,
+                    onPoint: onPoint
+                )
+            } else {
+                Color.clear.frame(height: MarkerLaneLayout.height(hasPoints: false, rows: 1))
+            }
+            VStack(spacing: 2) {
+                macTrack
+                macLabels
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Playback position")
+            .accessibilityValue(Text([Self.timeLabel(displayedPosition), sectionName].compactMap(\.self).joined(separator: ", ")))
+            .accessibilityAdjustableAction { direction in
+                guard duration != nil else { return }
+                onCommit(displayedPosition + (direction == .increment ? 5 : -5))
+            }
+        }
+    }
+
+    private var macTrack: some View {
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            ZStack(alignment: .leading) {
+                Capsule().fill(.primary.opacity(0.18))
+                Capsule()
+                    .fill(.primary)
+                    .frame(width: max(5, width * fraction))
+                    .opacity(duration == nil ? 0 : 1)
+            }
+            .frame(height: 5)
+            .frame(maxHeight: .infinity)
+            .contentShape(.rect)
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        guard let duration, duration > 0, width > 0 else { return }
+                        scrub(to: value.location.x, width: width, duration: duration)
+                    }
+                    .onEnded { _ in
+                        guard let time = dragPosition else { return }
+                        dragPosition = nil
+                        onCommit(time)
+                    }
+            )
+        }
+        .frame(height: 16)
+        .disabled(duration == nil)
+    }
+
+    private var macLabels: some View {
+        HStack {
+            Text(Self.timeLabel(displayedPosition))
+            Spacer()
+            if let duration {
+                Text("\u{2212}" + Self.timeLabel(max(0, duration - displayedPosition)))
+            }
+        }
+        .overlay {
+            if let sectionName {
+                Text(sectionName)
+                    .lineLimit(1)
+                    .padding(.horizontal, 60)
+                    .id(sectionName)
+                    .transition(.opacity)
+            }
+        }
+        .animation(isDragging ? .easeOut(duration: 0.15) : .easeInOut(duration: 0.6), value: sectionName)
+        .font(.system(size: 11, weight: .medium).monospacedDigit())
+        .foregroundStyle(.primary.opacity(0.55))
+    }
+    #endif
+
+    private var touchBody: some View {
         // The bar's 44pt is touch area around the lane and the track, so the
         // labels tuck up under the track rather than under the touch area.
         VStack(spacing: -4) {
@@ -336,3 +435,60 @@ struct PlaybackScrubber: View {
     ) { _ in }
         .padding(.horizontal, 32)
 }
+
+#if os(macOS)
+// The Mac lane on a cover's colours. Ids are the marker names.
+private let laneCover = ArtworkPalette(cover: OKLCH(red: 0.18, green: 0.42, blue: 0.45))
+
+@MainActor
+private func lanePreview(
+    _ markers: [PlaybackScrubber.Marker], position: TimeInterval = 80, isLoopOn: Bool = false, width: CGFloat = 632
+) -> some View {
+    PlaybackScrubber(position: position, duration: 258, markers: markers, isLoopOn: isLoopOn) { _ in }
+        .padding(24)
+        .frame(width: width + 48)
+        .modifier(ArtworkGround(palette: laneCover, isPlaying: false))
+}
+
+private let laneFew: [PlaybackScrubber.Marker] = [
+    .init(id: "Chorus", name: "Chorus", start: 62, end: 96),
+    .init(id: "Bridge", name: "Bridge", start: 128, end: nil),
+    .init(id: "Solo", name: "Solo", start: 142, end: 180),
+]
+
+// 17 clips and 13 points, borrowed from the canvas's density board.
+private let laneLots: [PlaybackScrubber.Marker] = [
+    ("Count-in", 0, nil), ("Riff A", 2, 10), ("Verse 1", 14, nil), ("Riff B", 16, 22),
+    ("Fill", 36, 38), ("Pre", 38, nil), ("Chorus", 52, nil), ("Hook", 52, 60),
+    ("Hook alt", 56, 66), ("Vocal run", 74, 80), ("Verse 2", 82, nil), ("Riff A2", 84, 92),
+    ("Fill 2", 102, 104), ("Pre 2", 104, nil), ("Chorus 2", 118, nil), ("Hook 2", 118, 126),
+    ("Turnaround", 140, 147), ("Bridge", 148, nil), ("Bridge lick", 150, 158), ("Solo", 164, nil),
+    ("Solo pt 1", 164, 180), ("Bend", 172, 175), ("Solo pt 2", 180, 194), ("Breakdown", 196, nil),
+    ("Groove", 196, 208), ("Last chorus", 210, nil), ("Hook 3", 210, 218), ("Tag", 240, nil),
+    ("Outro lick", 240, 250), ("End", 252, nil),
+].map { .init(id: $0.0, name: $0.0, start: $0.1, end: $0.2) }
+
+#Preview("Mac lane, no markers", traits: .fixedLayout(width: 680, height: 140)) {
+    lanePreview([])
+}
+
+#Preview("Mac lane, a few markers", traits: .fixedLayout(width: 680, height: 160)) {
+    lanePreview(laneFew)
+}
+
+#Preview("Mac lane, lots", traits: .fixedLayout(width: 680, height: 220)) {
+    lanePreview(laneLots, position: 170)
+}
+
+#Preview("Mac lane, narrow", traits: .fixedLayout(width: 420, height: 220)) {
+    lanePreview(laneFew, width: 372)
+}
+
+#Preview("Mac lane, a looping clip", traits: .fixedLayout(width: 680, height: 160)) {
+    lanePreview(laneFew.map { var m = $0; m.isLooping = m.id == AnyHashable("Chorus"); return m }, position: 70, isLoopOn: true)
+}
+
+#Preview("Mac lane, a two-clip chain", traits: .fixedLayout(width: 680, height: 160)) {
+    lanePreview(laneFew.map { var m = $0; m.isLooping = m.isClip; return m }, position: 150, isLoopOn: true)
+}
+#endif

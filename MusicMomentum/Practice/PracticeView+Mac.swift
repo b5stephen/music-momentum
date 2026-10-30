@@ -4,6 +4,7 @@
 //
 
 #if os(macOS)
+import AppKit
 import SwiftData
 import SwiftUI
 
@@ -186,7 +187,7 @@ extension PracticeView {
     private var macTimeline: some View {
         VStack(spacing: 10) {
             HStack(spacing: 10) {
-                macLoopLabel
+                macLoopMenu
                 Spacer(minLength: 0)
                 macMarkButton
             }
@@ -198,15 +199,93 @@ extension PracticeView {
                 markers: scrubberMarkers,
                 pointNameDuration: 3 * controller.playbackRate,
                 onScrub: { _ in controller.isScrubbing = true },
+                isLoopOn: controller.isLoopOn,
+                onClip: { macChoose($0.id, chaining: $1) },
+                onPoint: { macChoose($0.id, chaining: false) },
                 onCommit: { controller.endScrub(at: $0) }
             )
-            .padding(.bottom, -4)
-
-            // Phase 4 replaces the pills with the lane. They scroll edge to edge,
-            // their inset putting the first one back on the margin.
-            markerPills(trailingInset: 0)
-                .padding(.horizontal, -Self.sideMargin)
         }
+    }
+
+    /// With the loop off a click can only jump, as a pill tap does: only the
+    /// Loop button turns looping on. With it on, a click narrows the loop to
+    /// that clip and ⌘-click adds it to the chain or takes it out.
+    private func macChoose(_ id: AnyHashable, chaining: Bool) {
+        guard let marker = marker(for: id) else { return }
+        macChoose(marker, chaining: chaining)
+    }
+
+    private func macChoose(_ marker: SongMarker, chaining: Bool) {
+        guard marker.isClip, controller.isLoopOn else {
+            controller.jump(to: marker)
+            return
+        }
+        if chaining {
+            controller.toggleLoop(for: marker)
+        } else {
+            controller.loop(only: marker)
+        }
+    }
+
+    /// What's looping, and every marker by name for the cases the lane can't
+    /// cover: names too long for their bar, clips stacked or too short to hit.
+    /// A SwiftUI menu closes on every click, so ⌘-click adds or removes a clip
+    /// and the menu closes anyway.
+    private var macLoopMenu: some View {
+        let markers = savedSong?.sortedMarkers ?? []
+        let clips = markers.filter(\.isClip)
+        let points = markers.filter { !$0.isClip }
+        return Menu {
+            Toggle(
+                "Whole song",
+                isOn: Binding(
+                    get: { controller.loop == .wholeSong },
+                    set: { _ in controller.loopWholeSong() }
+                )
+            )
+            .disabled(!controller.isLoopOn)
+
+            if !clips.isEmpty {
+                Section("Clips") {
+                    ForEach(Array(clips.enumerated()), id: \.element.persistentModelID) { index, clip in
+                        Toggle(
+                            Self.macMenuTitle(clip, number: index < 9 ? index + 1 : nil),
+                            isOn: Binding(
+                                get: { controller.isLooping(clip) },
+                                set: { _ in macChoose(clip, chaining: NSEvent.modifierFlags.contains(.command)) }
+                            )
+                        )
+                    }
+                }
+            }
+            if !points.isEmpty {
+                Section("Points") {
+                    ForEach(points, id: \.persistentModelID) { point in
+                        Button(Self.macMenuTitle(point, number: nil)) { macChoose(point, chaining: false) }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 7) {
+                macLoopLabel
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .opacity(0.6)
+            }
+            .contentShape(.rect)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Choose what loops, or jump to a marker. \u{2318}-click a clip to add or remove it")
+        .accessibilityLabel("Loop scope")
+        .accessibilityValue(loopDescription)
+    }
+
+    private static func macMenuTitle(_ marker: SongMarker, number: Int?) -> String {
+        let title = "\(marker.name)  \(marker.timeLabel)"
+        return number.map { "\(title)  \u{00B7}  \($0)" } ?? title
     }
 
     @ViewBuilder

@@ -382,6 +382,19 @@ final class PlaybackController {
         setScope(segments)
     }
 
+    /// Narrows a running loop to just this clip, dropping the rest of a
+    /// chain. Like `toggleLoop(for:)`, does nothing with the button off.
+    func loop(only marker: SongMarker) {
+        guard loop != nil, let end = marker.endTime else { return }
+        setScope([.init(markerID: marker.persistentModelID, start: marker.startTime, end: end)])
+    }
+
+    /// Widens a running loop to the whole song; does nothing with the button off.
+    func loopWholeSong() {
+        guard loop != nil else { return }
+        setLoop(.wholeSong)
+    }
+
     /// The one place a marker starts playback, against the rule everywhere
     /// else that choosing something never does: the user read the words
     /// "Play on Loop" before tapping. Replaces the scope rather than adding to it.
