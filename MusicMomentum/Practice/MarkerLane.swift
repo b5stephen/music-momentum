@@ -33,7 +33,6 @@ struct MarkerLane: View {
     @Environment(\.displayScale) private var displayScale
     @State private var hovered: AnyHashable?
     @State private var renaming: AnyHashable?
-    @State private var rightClicks = RightClickMonitor()
 
     private var shownHover: AnyHashable? { renaming == nil ? hovered ?? previewHover : nil }
 
@@ -68,10 +67,6 @@ struct MarkerLane: View {
                     }
                 }
             }
-            .onAppear { rightClicks.start() }
-            .onDisappear { rightClicks.stop() }
-            .onChange(of: hovered, initial: true) { refreshMenu() }
-            .onChange(of: isLoopOn) { refreshMenu() }
         }
         .modifier(LaneHeight { width in
             markers.isEmpty ? MarkerLaneLayout.height(hasPoints: false, rows: 1) : layout(width: width).height
@@ -123,6 +118,7 @@ struct MarkerLane: View {
         }
         .buttonStyle(.plain)
         .modifier(LaneItemInput(id: marker.id, hovered: $hovered, renaming: $renaming))
+        .contextMenu { menu(for: marker) }
         .offset(x: point.x - dot / 2 - padding)
         .accessibilityLabel("\(marker.name), point")
         .accessibilityValue(PlaybackScrubber.timeLabel(marker.start))
@@ -177,6 +173,7 @@ struct MarkerLane: View {
         }
         .buttonStyle(.plain)
         .modifier(LaneItemInput(id: marker.id, hovered: $hovered, renaming: $renaming))
+        .contextMenu { menu(for: marker) }
         .offset(x: clip.x, y: top)
         .accessibilityLabel("\(marker.name), clip\(marker.isLooping ? ", looping" : "")")
         .accessibilityValue(timeLabel(marker))
@@ -261,39 +258,25 @@ struct MarkerLane: View {
         }
     }
 
-    /// Right-click, or control-click, over a hovered item. Kept pointed at
-    /// whatever is hovered now and the loop's current state.
-    private func refreshMenu() {
-        guard let id = hovered, let marker = marker(id) else {
-            rightClicks.handler = nil
-            return
-        }
-        rightClicks.handler = { event in
-            hovered = nil
-            MarkerContextMenu.popUp(menuEntries(for: marker), with: event)
-        }
-    }
-
-    private func menuEntries(for marker: PlaybackScrubber.Marker) -> [MarkerContextMenu.Entry] {
-        var entries: [MarkerContextMenu.Entry] = []
+    @ViewBuilder
+    private func menu(for marker: PlaybackScrubber.Marker) -> some View {
         if marker.isClip {
-            entries.append(.item("Loop This Clip", hint: "Click", isEnabled: isLoopOn) { actions.clip(marker, false) })
-            entries.append(.item(
-                marker.isLooping && isLoopOn ? "Remove from Loop" : "Add to Loop",
-                hint: "\u{2318} Click",
-                isEnabled: isLoopOn
-            ) { actions.clip(marker, true) })
+            Button("Loop This Clip") { actions.clip(marker, false) }
+                .disabled(!isLoopOn)
+            Button(marker.isLooping && isLoopOn ? "Remove from Loop" : "Add to Loop") { actions.clip(marker, true) }
+                .disabled(!isLoopOn)
         }
-        entries.append(.item("Jump to Start", hint: "\u{2325} Click") { actions.jump(marker) })
-        entries.append(.separator)
-        entries.append(.item("Rename", hint: "Double-click") { renaming = marker.id })
-        entries.append(.item("Edit Times\u{2026}") { actions.editTimes(marker) })
+        Button("Jump to Start") { actions.jump(marker) }
+        Divider()
+        Button("Rename") { renaming = marker.id }
+        Button("Edit Times\u{2026}") { actions.editTimes(marker) }
         if marker.isClip {
-            entries.append(.item("Make a Point") { actions.makePoint(marker) })
+            Button("Make a Point") { actions.makePoint(marker) }
         }
-        entries.append(.separator)
-        entries.append(.item("Delete", hint: "\u{232B}") { actions.delete(marker) })
-        return entries
+        Divider()
+        // Shown for the hint; the key itself comes in Phase 5.
+        Button("Delete", role: .destructive) { actions.delete(marker) }
+            .keyboardShortcut(.delete, modifiers: [])
     }
 }
 
@@ -313,30 +296,6 @@ private struct LaneItemInput: ViewModifier {
                 }
             }
             .simultaneousGesture(TapGesture(count: 2).onEnded { renaming = id })
-    }
-}
-
-/// SwiftUI has no right-click event, so one monitor watches for it and hands
-/// it to whatever the lane has hovered.
-@MainActor
-private final class RightClickMonitor {
-    var handler: ((NSEvent) -> Void)?
-    private var token: Any?
-
-    func start() {
-        guard token == nil else { return }
-        token = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown]) { [weak self] event in
-            let isContextClick = event.type == .rightMouseDown || event.modifierFlags.contains(.control)
-            guard isContextClick, let handler = self?.handler else { return event }
-            handler(event)
-            return nil
-        }
-    }
-
-    func stop() {
-        token.map(NSEvent.removeMonitor)
-        token = nil
-        handler = nil
     }
 }
 
