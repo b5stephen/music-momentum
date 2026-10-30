@@ -101,7 +101,7 @@ struct MacWindow: View {
         }
         .modifier(ArtworkGround(palette: palette, isPlaying: controller.isPlaying, paintsWindow: paintsWindow))
         .frame(minWidth: Self.minWindowSize.width, minHeight: Self.minWindowSize.height)
-        .onAppear { TextFieldKeys.install() }
+        .onAppear { TextFieldFocus.install() }
         .background(WindowAccessor { miniPlayer.mainWindow = $0 })
         .onGeometryChange(for: Bool.self) { $0.size.width >= Self.wideWidth } action: { wide in
             isWide = wide

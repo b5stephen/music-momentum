@@ -13,7 +13,7 @@ import SwiftUI
 /// Single keys (Space, the arrows, L, M, 1-9) are plain menu key equivalents, not
 /// `.onKeyPress`, so they work wherever focus is and Space never presses a
 /// focused button. The menu sees a key before a text field does, so
-/// `TextFieldKeys` hands them to a field being edited. The sheets are shut out
+/// `TextFieldFocus` hands them to a field being edited. The sheets are shut out
 /// separately: an item is disabled while one is up.
 ///
 /// Not here, because SwiftUI already supplies it: Show Sidebar (⌃⌘S) in View.
