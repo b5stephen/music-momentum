@@ -115,6 +115,7 @@ struct SavedSidebarView: View {
                         Text(order.title).tag(order)
                     }
                 }
+                .pickerStyle(.inline)
             } label: {
                 Image(systemName: "arrow.up.arrow.down")
                     .font(.system(size: 12, weight: .semibold))

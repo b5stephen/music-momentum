@@ -165,6 +165,7 @@ struct SavedSongsView: View {
                                     Text(order.title).tag(order)
                                 }
                             }
+                            .pickerStyle(.inline)
                         } label: {
                             // An `Image`, not a `Label`: the toolbar drops a
                             // label's foreground style and draws it black.
