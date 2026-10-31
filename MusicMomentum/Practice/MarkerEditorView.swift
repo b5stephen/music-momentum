@@ -108,6 +108,22 @@ struct MarkerEditorView: View {
     }
 
     var body: some View {
+        editor
+            .onChange(of: isLoopingDraft) { controller.loopDraft(draftRange) }
+            .onChange(of: start) { if isLoopingDraft { controller.loopDraft(draftRange) } }
+            .onChange(of: end) {
+                if end == nil { isLoopingDraft = false } else if isLoopingDraft { controller.loopDraft(draftRange) }
+            }
+            .onDisappear { if isLoopingDraft { controller.loopDraft(nil) } }
+    }
+
+    private var draftRange: Range<TimeInterval>? {
+        guard isLoopingDraft, let end else { return nil }
+        return start..<end
+    }
+
+    @ViewBuilder
+    private var editor: some View {
         #if os(macOS)
         macBody
             .confirmationDialog(
@@ -406,6 +422,7 @@ struct MarkerEditorView: View {
                 skipButton(-Self.skipInterval)
                 playPauseButton
                 skipButton(Self.skipInterval)
+                loopButton
             }
 
             // Each cue carries the dot of the time column it plays from.
@@ -437,6 +454,21 @@ struct MarkerEditorView: View {
                 .frame(maxWidth: .infinity, minHeight: 28)
         }
         .accessibilityLabel(controller.isPlaying ? "Pause" : "Play")
+    }
+
+    /// Solid coral when on, as looping is wherever the app isn't on a cover.
+    private var loopButton: some View {
+        Button {
+            isLoopingDraft.toggle()
+        } label: {
+            Image(systemName: "repeat")
+                .font(.subheadline.weight(.medium))
+                .frame(maxWidth: .infinity, minHeight: 28)
+        }
+        .buttonStyle(FillButtonStyle(isOn: isLoopingDraft))
+        .disabled(end == nil)
+        .accessibilityLabel("Loop this clip")
+        .accessibilityAddTraits(isLoopingDraft ? .isSelected : [])
     }
 
     private func skipButton(_ offset: TimeInterval) -> some View {
@@ -475,15 +507,18 @@ struct MarkerEditorView: View {
 }
 
 /// The nudge and cue buttons: a capsule on the lightest system fill, which
-/// keeps them quieter than `.bordered` and leaves the coral to the clip.
+/// keeps them quieter than `.bordered` and leaves the coral to the clip. Loop
+/// fills solid when on.
 private struct FillButtonStyle: ButtonStyle {
+    var isOn = false
+
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .padding(.vertical, 6)
-            .background(Color.tertiarySystemFill, in: Capsule())
-            .foregroundStyle(.primary)
+            .background(isOn ? Color.accentColor : Color.tertiarySystemFill, in: Capsule())
+            .foregroundStyle(isOn ? AnyShapeStyle(Color.onAccent) : AnyShapeStyle(.primary))
             .opacity(configuration.isPressed ? 0.5 : isEnabled ? 1 : 0.4)
     }
 }

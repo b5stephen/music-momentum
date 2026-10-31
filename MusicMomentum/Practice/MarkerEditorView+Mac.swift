@@ -61,17 +61,6 @@ extension MarkerEditorView {
             macButtons
         }
         .frame(width: 540)
-        .onChange(of: isLoopingDraft) { controller.loopDraft(draftRange) }
-        .onChange(of: start) { if isLoopingDraft { controller.loopDraft(draftRange) } }
-        .onChange(of: end) {
-            if end == nil { isLoopingDraft = false } else if isLoopingDraft { controller.loopDraft(draftRange) }
-        }
-        .onDisappear { if isLoopingDraft { controller.loopDraft(nil) } }
-    }
-
-    private var draftRange: Range<TimeInterval>? {
-        guard isLoopingDraft, let end else { return nil }
-        return start..<end
     }
 
     /// Drawn by hand rather than as a segmented `Picker`, which can't show the
@@ -143,7 +132,7 @@ extension MarkerEditorView {
                 Image(systemName: "goforward.5")
             }
             .help("Forward 5 seconds")
-            loopButton
+            macLoopButton
 
             Divider()
                 .frame(height: 16)
@@ -163,7 +152,7 @@ extension MarkerEditorView {
 
     /// Solid coral when on, as looping is wherever the app isn't on a cover.
     @ViewBuilder
-    private var loopButton: some View {
+    private var macLoopButton: some View {
         let button = Button {
             isLoopingDraft.toggle()
         } label: {
