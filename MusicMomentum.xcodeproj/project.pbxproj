@@ -24,7 +24,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		DCD17BA0304BF15600BC02ED /* MusicMomentum.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MusicMomentum.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DCD17BA0304BF15600BC02ED /* Music Momentum.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Music Momentum.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCD17BAF304BF15800BC02ED /* MusicMomentumTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MusicMomentumTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCD17BB9304BF15800BC02ED /* MusicMomentumUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MusicMomentumUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -98,7 +98,7 @@
 		DCD17BA1304BF15600BC02ED /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				DCD17BA0304BF15600BC02ED /* MusicMomentum.app */,
+				DCD17BA0304BF15600BC02ED /* Music Momentum.app */,
 				DCD17BAF304BF15800BC02ED /* MusicMomentumTests.xctest */,
 				DCD17BB9304BF15800BC02ED /* MusicMomentumUITests.xctest */,
 			);
@@ -127,7 +127,7 @@
 			packageProductDependencies = (
 			);
 			productName = MusicMomentum;
-			productReference = DCD17BA0304BF15600BC02ED /* MusicMomentum.app */;
+			productReference = DCD17BA0304BF15600BC02ED /* Music Momentum.app */;
 			productType = "com.apple.product-type.application";
 		};
 		DCD17BAE304BF15800BC02ED /* MusicMomentumTests */ = {
@@ -413,7 +413,7 @@
 				CODE_SIGN_ENTITLEMENTS = MusicMomentum/MusicMomentum.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "MusicMomentum/MusicMomentum-macOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 2FBZHF6G7Q;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -443,9 +443,9 @@
 				MACOSX_DEPLOYMENT_TARGET = 26.4;
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "dev.etched.music-momentum";
+				PRODUCT_MODULE_NAME = MusicMomentum;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				"PRODUCT_NAME[sdk=macosx*]" = "Music Momentum";
-				PRODUCT_MODULE_NAME = MusicMomentum;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
@@ -468,7 +468,7 @@
 				CODE_SIGN_ENTITLEMENTS = MusicMomentum/MusicMomentum.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "MusicMomentum/MusicMomentum-macOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 2FBZHF6G7Q;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -498,9 +498,9 @@
 				MACOSX_DEPLOYMENT_TARGET = 26.4;
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "dev.etched.music-momentum";
+				PRODUCT_MODULE_NAME = MusicMomentum;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				"PRODUCT_NAME[sdk=macosx*]" = "Music Momentum";
-				PRODUCT_MODULE_NAME = MusicMomentum;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
@@ -520,7 +520,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 2FBZHF6G7Q;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
@@ -542,7 +542,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 2FBZHF6G7Q;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
@@ -563,7 +563,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 2FBZHF6G7Q;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.3.0;
@@ -583,7 +583,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 2FBZHF6G7Q;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.3.0;
