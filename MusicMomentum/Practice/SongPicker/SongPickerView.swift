@@ -152,6 +152,7 @@ struct SongPickerView: View {
         guard !term.isEmpty else {
             results = []
             searchError = nil
+            isSearching = false
             return
         }
 
@@ -159,23 +160,34 @@ struct SongPickerView: View {
         guard !Task.isCancelled else { return }
 
         isSearching = true
-        defer { isSearching = false }
-
+        let outcome: Result<MusicItemCollection<Song>, Error>
         do {
             switch scope {
             case .catalog:
                 var request = MusicCatalogSearchRequest(term: term, types: [Song.self])
                 request.limit = 25
-                results = try await request.response().songs
+                outcome = .success(try await request.response().songs)
             case .library:
                 var request = MusicLibrarySearchRequest(term: term, types: [Song.self])
                 request.limit = 25
-                results = try await request.response().songs
+                outcome = .success(try await request.response().songs)
             }
-            searchError = nil
-        } catch is CancellationError {
-            return
         } catch {
+            outcome = .failure(error)
+        }
+
+        // MusicKit reports a request cancelled mid-flight as a connection
+        // error, not `CancellationError`. The first catalog search is slow
+        // enough to be overtaken by the next keystroke, and used to flash
+        // "couldn't connect" until the newer search landed.
+        guard !Task.isCancelled else { return }
+        isSearching = false
+
+        switch outcome {
+        case .success(let songs):
+            results = songs
+            searchError = nil
+        case .failure(let error):
             results = []
             searchError = error.localizedDescription
         }
