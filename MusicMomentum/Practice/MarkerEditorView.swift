@@ -589,3 +589,29 @@ private struct PreciseTimeField: View {
     return MarkerEditorView(marker: marker, duration: 245, controller: PlaybackController()) { _, _, _ in }
         .modelContainer(container)
 }
+
+#if os(macOS)
+#Preview("Over a cover, Mac") {
+    InheritedGround {
+        MarkerEditorView(initialStart: 71, duration: 245, controller: PlaybackController()) { _, _, _ in }
+            .outsideArtworkGround()
+    }
+}
+
+/// What a sheet presented from inside `MacWindow`'s ground inherits, drawn on
+/// the system background its window has: previews don't draw sheets.
+private struct InheritedGround<Content: View>: View {
+    @ViewBuilder let content: Content
+    @Environment(\.colorScheme) private var scheme
+    private let palette = ArtworkPalette(cover: OKLCH(red: 0.62, green: 0.52, blue: 0.40))
+
+    var body: some View {
+        content
+            .foregroundStyle(palette.foreground)
+            .tint(palette.foreground)
+            .environment(\.colorScheme, .dark)
+            .environment(\.systemColorScheme, scheme)
+            .background(Color.systemBackground)
+    }
+}
+#endif

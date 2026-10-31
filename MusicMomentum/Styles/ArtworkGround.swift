@@ -37,6 +37,7 @@ struct ArtworkGround: ViewModifier {
                 .foregroundStyle(palette.map { AnyShapeStyle($0.foreground) } ?? AnyShapeStyle(.primary))
                 .tint(palette?.foreground)
                 .environment(\.colorScheme, palette == nil ? systemScheme : .dark)
+                .environment(\.systemColorScheme, systemScheme)
                 // Empty, the window turned see-through until a cover's
                 // colours arrived.
                 // The mesh's colours animate from one cover to the next, and
@@ -114,6 +115,37 @@ struct ArtworkGround: ViewModifier {
             [0, 0.5 + 0.12 * wave(19, 1)], [0.5 + 0.18 * wave(17, 2), 0.5 + 0.15 * wave(29, 3)], [1, 0.5 + 0.12 * wave(31, 4)],
             [0, 1], [0.5 + 0.15 * wave(37, 5), 1], [1, 1],
         ]
+    }
+}
+
+extension EnvironmentValues {
+    /// The scheme from outside the ground, which forces dark over a cover.
+    /// `nil` where no ground has overridden it.
+    @Entry var systemColorScheme: ColorScheme?
+}
+
+extension View {
+    /// For a sheet presented from inside the ground. The sheet's window is
+    /// drawn in the system's appearance, so the cover's dark scheme and light
+    /// text left pale text on a white sheet in light mode.
+    func outsideArtworkGround() -> some View {
+        modifier(OutsideArtworkGround())
+    }
+}
+
+private struct OutsideArtworkGround: ViewModifier {
+    @Environment(\.systemColorScheme) private var systemColorScheme
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content
+            // `Color.primary`, not `.primary`: the hierarchical style resolves
+            // against the inherited one and stays the cover's light text.
+            .foregroundStyle(Color.primary)
+            .tint(nil as Color?)
+            .environment(\.colorScheme, systemColorScheme ?? colorScheme)
+            .environment(\.onAccent, .onAccent)
+            .environment(\.smokedFill, nil)
     }
 }
 

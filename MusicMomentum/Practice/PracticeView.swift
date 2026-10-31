@@ -228,9 +228,11 @@ struct PracticeView: View {
             }
             // `RootTabView` tints the tab bar with the cover's near-white text
             // colour, and sheets inherit it; on a light sheet it all but vanishes.
-            // Cleared rather than set to the accent: an explicit tint also turns
-            // the toolbar's Close coral, which a sheet from Saved doesn't do.
-            .tint(nil as Color?)
+            // The tint is cleared rather than set to the accent: an explicit tint
+            // also turns the toolbar's Close coral, which a sheet from Saved
+            // doesn't do. On the Mac the whole window is the ground, so the
+            // scheme and text colour come back too.
+            .outsideArtworkGround()
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { controller.refreshPlaybackTime() }
