@@ -88,4 +88,13 @@ struct LoopChainTests {
         #expect(step(verseChorus, at: 200, current: 7) == .wait)
         #expect(step([], at: 12, current: 0) == .wait)
     }
+
+    @Test("An unsaved clip from the marker sheet loops like a saved one")
+    func draftClipRepeats() {
+        // The sheet's start and end, before any marker exists to give an ID.
+        let draft: [Range<TimeInterval>] = [96..<112.4]
+        #expect(Loop.step(ranges: draft, time: 100, current: nil) == .inside(0))
+        #expect(Loop.step(ranges: draft, time: 112.4, current: 0) == .jump(to: 0))
+        #expect(Loop.step(ranges: draft, time: 130, current: nil) == .wait)
+    }
 }

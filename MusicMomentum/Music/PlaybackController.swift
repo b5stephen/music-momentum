@@ -63,6 +63,10 @@ final class PlaybackController {
     /// Which segment of a clip chain the playhead was last inside. `nil` after
     /// a jump or scrub: the ticker waits until it plays back into the chain.
     private var loopIndex: Int?
+    /// The clip open in the marker sheet, looped in place of `loop` while the
+    /// sheet's own Loop is on. `loop` is left alone underneath, so Practice's
+    /// loop is as it was when the sheet closes.
+    private(set) var draftLoop: Range<TimeInterval>?
 
     var playbackRate: Double = 1.0 {
         didSet {
@@ -176,17 +180,17 @@ final class PlaybackController {
     /// Whole-song looping isn't here: that's the player's own repeat mode,
     /// which wraps seamlessly instead of up to a poll late.
     private func advanceChainIfNeeded() {
-        let segments = loop?.segments ?? []
-        guard !segments.isEmpty else { return }
+        let ranges = draftLoop.map { [$0] } ?? (loop?.segments ?? []).map { $0.start..<$0.end }
+        guard !ranges.isEmpty else { return }
 
-        switch Loop.step(segments: segments, time: playbackTime, current: loopIndex) {
+        switch Loop.step(ranges: ranges, time: playbackTime, current: loopIndex) {
         case .inside(let index):
             loopIndex = index
         case .jump(to: let index):
             // Set before the seek: a half-second clip can be swallowed whole by
             // the settling window, leaving the chain unsure where it is.
             loopIndex = index
-            seek(to: segments[index].start)
+            seek(to: ranges[index].lowerBound)
         case .wait:
             break
         }
@@ -226,7 +230,7 @@ final class PlaybackController {
     /// Back to the top of what's looping: a chain's first clip, not the one
     /// the playhead is in, so the whole run is played again.
     func restart() {
-        userSeek(to: loop?.segments.first?.start ?? 0)
+        userSeek(to: draftLoop?.lowerBound ?? loop?.segments.first?.start ?? 0)
     }
 
     /// Called when the user reaches for the library, never on launch, so the
@@ -434,6 +438,20 @@ final class PlaybackController {
         loopIndex = segments.firstIndex { playbackTime >= $0.start && playbackTime < $0.end } ?? segments.firstIndex { $0.markerID == id }
     }
 
+    /// Loops the marker sheet's clip, or with `nil` hands back to `loop`. Like
+    /// the Loop button, never starts playback; like arming a clip, moves a
+    /// playhead that's outside it to its start. Moving the bounds of a running
+    /// draft doesn't seek, as with `reshapeLoop`.
+    func loopDraft(_ range: Range<TimeInterval>?) {
+        let wasOn = draftLoop != nil
+        draftLoop = range
+        loopIndex = range.map { $0.contains(playbackTime) ? 0 : nil } ?? nil
+        applyRepeatMode()
+        if let range, !wasOn, !range.contains(playbackTime) {
+            seek(to: range.lowerBound)
+        }
+    }
+
     /// Deleting the last clip in scope widens to the whole song rather than
     /// switching off, so an edit can never silently stop a loop the user turned on.
     func markerDeleted(_ marker: SongMarker) {
@@ -463,7 +481,7 @@ final class PlaybackController {
     /// A clip chain needs repeat off: the ticker drives it, and a track
     /// repeating underneath would fight it.
     private func applyRepeatMode() {
-        player.state.repeatMode = loop == .wholeSong ? .one : MusicPlayer.RepeatMode.none
+        player.state.repeatMode = loop == .wholeSong && draftLoop == nil ? .one : MusicPlayer.RepeatMode.none
     }
 
     private func applyRateIfPossible() {

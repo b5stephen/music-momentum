@@ -6,6 +6,8 @@
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
+#else
+import AppKit
 #endif
 
 /// A zoomable strip of the track with drag handles for a marker's times.
@@ -316,11 +318,16 @@ struct MarkerRangeEditor: View {
             .offset(x: position - 1, y: 6)
     }
 
-    /// The end handle is hollow, filled with the form cell's colour so the
-    /// clip doesn't show through it.
+    /// The end handle is hollow, filled with what's behind the strip (the form
+    /// cell on iOS, the sheet itself on the Mac) so the clip doesn't show through it.
     private func handle(at position: CGFloat, filled: Bool) -> some View {
-        Circle()
-            .fill(filled ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.secondarySystemGroupedBackground))
+        #if os(macOS)
+        let ground = Color.systemBackground
+        #else
+        let ground = Color.secondarySystemGroupedBackground
+        #endif
+        return Circle()
+            .fill(filled ? AnyShapeStyle(.tint) : AnyShapeStyle(ground))
             .overlay(Circle().strokeBorder(.tint, lineWidth: 3))
             .frame(width: Self.handleSize, height: Self.handleSize)
             .offset(x: position - Self.handleSize / 2, y: (Self.barHeight - Self.handleSize) / 2)
@@ -438,7 +445,12 @@ struct MarkerRangeEditor: View {
                     scrubSpeed = 1
                 }
                 if case .pan = drag {} else {
-                    let speed = Self.scrubSpeed(forDistance: distanceOffBar(value.location.y))
+                    var speed = Self.scrubSpeed(forDistance: distanceOffBar(value.location.y))
+                    #if os(macOS)
+                    // A mouse can't stray off the strip as a finger does without
+                    // leaving the sheet, so the finest speed is under ⌥ instead.
+                    if NSEvent.modifierFlags.contains(.option) { speed = Self.fineSpeed }
+                    #endif
                     if speed != scrubSpeed, let current = draggedTime {
                         anchor = (value.location.x, current)
                         scrubSpeed = speed
@@ -507,15 +519,17 @@ struct MarkerRangeEditor: View {
         case ..<100: 1
         case ..<140: 0.5
         case ..<180: 0.25
-        default: 0.125
+        default: fineSpeed
         }
     }
+
+    nonisolated static let fineSpeed: Double = 0.125
 
     nonisolated static func speedName(_ speed: Double) -> String? {
         switch speed {
         case 0.5: "Half speed"
         case 0.25: "Quarter speed"
-        case 0.125: "Fine"
+        case fineSpeed: "Fine"
         default: nil
         }
     }

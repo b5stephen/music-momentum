@@ -35,11 +35,16 @@ extension Loop {
     }
 
     static func step(segments: [Segment], time: TimeInterval, current: Int?) -> Step {
+        step(ranges: segments.map { $0.start..<$0.end }, time: time, current: current)
+    }
+
+    /// For a clip that isn't a marker yet, which has no ID to make a `Segment` from.
+    static func step(ranges: [Range<TimeInterval>], time: TimeInterval, current: Int?) -> Step {
         // Checked first, so clips butted end to end hand over without a seek.
-        if let inside = segments.firstIndex(where: { time >= $0.start && time < $0.end }) {
+        if let inside = ranges.firstIndex(where: { $0.contains(time) }) {
             return .inside(inside)
         }
-        guard let current, current < segments.count, time >= segments[current].end else { return .wait }
-        return .jump(to: (current + 1) % segments.count)
+        guard let current, current < ranges.count, time >= ranges[current].upperBound else { return .wait }
+        return .jump(to: (current + 1) % ranges.count)
     }
 }

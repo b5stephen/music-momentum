@@ -16,20 +16,27 @@ struct MarkerEditorView: View {
     let onSave: (_ name: String, _ start: TimeInterval, _ end: TimeInterval?) -> Void
     var onDelete: () -> Void = {}
 
-    @Environment(\.dismiss) private var dismiss
-    @State private var name: String
-    @State private var start: TimeInterval
-    @State private var end: TimeInterval?
-    @State private var confirmingDelete = false
+    @Environment(\.dismiss) var dismiss
+    @State var name: String
+    @State var start: TimeInterval
+    @State var end: TimeInterval?
+    @State var confirmingDelete = false
     /// Which time the nudge row and Now act on.
-    @State private var selected: MarkerHandle = .start
+    @State var selected: MarkerHandle = .start
+    /// What's typed in a time field that hasn't been committed yet. Save
+    /// applies it: a click on Save, or Return in a field on the Mac, can land
+    /// before the field's focus change commits it.
+    @State var typedTimes: [MarkerHandle: String] = [:]
+    /// The sheet's own Loop: it loops this clip as edited, over whatever
+    /// Practice was looping, until it's turned off or the sheet closes.
+    @State var isLoopingDraft = false
 
     /// How far before the end handle the End cue drops the playhead.
-    private static let leadIn: TimeInterval = 2
+    static let leadIn: TimeInterval = 2
     private static let defaultClipLength: TimeInterval = 4
     /// Half Practice's 10: here it's for finding a spot, and 10 would leap
     /// clean across the 5s zoom.
-    private static let skipInterval: TimeInterval = 5
+    static let skipInterval: TimeInterval = 5
 
     init(
         marker: SongMarker? = nil,
@@ -50,14 +57,14 @@ struct MarkerEditorView: View {
         _selected = State(initialValue: marker?.endTime == nil ? .start : .end)
     }
 
-    private var isEditing: Bool { marker != nil }
-    private var canAddEnd: Bool { start + SongMarker.minimumClipLength <= duration }
+    var isEditing: Bool { marker != nil }
+    var canAddEnd: Bool { start + SongMarker.minimumClipLength <= duration }
 
-    private enum Kind: Hashable {
+    enum Kind: Hashable {
         case point, clip
     }
 
-    private var kind: Binding<Kind> {
+    var kind: Binding<Kind> {
         Binding(
             get: { end == nil ? .point : .clip },
             set: { newKind in
@@ -77,7 +84,7 @@ struct MarkerEditorView: View {
 
     /// Writes are dropped once the marker is a point again: a field being
     /// torn off screen mustn't bring the end back.
-    private var endBinding: Binding<TimeInterval> {
+    var endBinding: Binding<TimeInterval> {
         Binding(get: { end ?? start }, set: { if end != nil { end = $0 } })
     }
 
@@ -88,11 +95,11 @@ struct MarkerEditorView: View {
         }
     }
 
-    private var startRange: ClosedRange<TimeInterval> {
+    var startRange: ClosedRange<TimeInterval> {
         0...max(0, end.map { $0 - SongMarker.minimumClipLength } ?? duration)
     }
 
-    private var endRange: ClosedRange<TimeInterval> {
+    var endRange: ClosedRange<TimeInterval> {
         min(start + SongMarker.minimumClipLength, duration)...duration
     }
 
@@ -101,6 +108,19 @@ struct MarkerEditorView: View {
     }
 
     var body: some View {
+        #if os(macOS)
+        macBody
+            .confirmationDialog(
+                "Delete this marker?",
+                isPresented: $confirmingDelete,
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) {
+                    onDelete()
+                    dismiss()
+                }
+            }
+        #else
         NavigationStack {
             Form {
                 Section {
@@ -172,8 +192,7 @@ struct MarkerEditorView: View {
                     // capsule inside the toolbar's own glass, so it's left to the
                     // toolbar to draw it like Close.
                     Button {
-                        onSave(name, start, end)
-                        dismiss()
+                        save()
                     } label: {
                         Image(systemName: "checkmark")
                             .foregroundStyle(Color.accentColor)
@@ -192,6 +211,18 @@ struct MarkerEditorView: View {
                 }
             }
         }
+        #endif
+    }
+
+    func save() {
+        if let typed = typedTimes[.start], let time = PreciseTime.parse(typed) {
+            start = max(startRange.lowerBound, min(time, startRange.upperBound))
+        }
+        if let typed = typedTimes[.end], let time = PreciseTime.parse(typed), end != nil {
+            end = max(endRange.lowerBound, min(time, endRange.upperBound))
+        }
+        onSave(name, start, end)
+        dismiss()
     }
 
     /// Drawn as the pills themselves, since that's what the choice looks like.
@@ -237,7 +268,7 @@ struct MarkerEditorView: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
-    private var times: some View {
+    var times: some View {
         // No divider: one panel is always tinted, and that separates them.
         HStack(spacing: 6) {
             if end != nil {
@@ -274,7 +305,12 @@ struct MarkerEditorView: View {
                     playheadChip(for: title)
                 }
             }
-            PreciseTimeField(time: time, range: range) { selected = handle }
+            PreciseTimeField(
+                time: time,
+                range: range,
+                onFocus: { selected = handle },
+                onType: { typedTimes[handle] = $0 }
+            )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 8)
@@ -283,7 +319,7 @@ struct MarkerEditorView: View {
         // light mode, and the coral is left to the clip and the handles.
         .background(
             isSelected ? AnyShapeStyle(.tint.opacity(0.16)) : AnyShapeStyle(.clear),
-            in: .rect(cornerRadius: 16, style: .continuous)
+            in: .rect(cornerRadius: Self.panelRadius, style: .continuous)
         )
         .contentShape(.rect)
         .onTapGesture { selected = handle }
@@ -295,6 +331,14 @@ struct MarkerEditorView: View {
     /// "Now" read as the clock, not the song. The glyph is the strip's
     /// playhead in miniature. Half a clip on a mini can't fit both beside the
     /// column title, so it sheds the glyph, then the word.
+    #if os(macOS)
+    private static let panelRadius: CGFloat = 10
+    private static let nudgeFont: Font = .callout
+    #else
+    private static let panelRadius: CGFloat = 16
+    private static let nudgeFont: Font = .footnote
+    #endif
+
     private func playheadChip(for title: String) -> some View {
         Button {
             setSelected(controller.playbackTime)
@@ -338,18 +382,18 @@ struct MarkerEditorView: View {
         .padding(.vertical, 4)
     }
 
-    private func nudge(_ amount: TimeInterval) -> some View {
+    func nudge(_ amount: TimeInterval) -> some View {
         Button {
             setSelected(selectedTime.wrappedValue + amount)
         } label: {
             Text(amount > 0 ? "+\(PreciseTime.nudgeLabel(amount))" : "−\(PreciseTime.nudgeLabel(-amount))")
-                .font(.footnote.monospacedDigit())
+                .font(Self.nudgeFont.monospacedDigit())
                 .frame(maxWidth: .infinity)
         }
         .accessibilityLabel(amount > 0 ? "Later by \(PreciseTime.nudgeLabel(amount))" : "Earlier by \(PreciseTime.nudgeLabel(-amount))")
     }
 
-    private func setSelected(_ value: TimeInterval) {
+    func setSelected(_ value: TimeInterval) {
         let range = selectedRange
         selectedTime.wrappedValue = max(range.lowerBound, min(value, range.upperBound))
     }
@@ -447,23 +491,43 @@ private struct FillButtonStyle: ButtonStyle {
 // MARK: - Time field
 
 /// Only writes back a time it could parse, and only once editing ends.
+/// Until then `onType` hears the text, and `nil` once it's committed.
 private struct PreciseTimeField: View {
     @Binding var time: TimeInterval
     let range: ClosedRange<TimeInterval>
     var onFocus: () -> Void = {}
+    var onType: (String?) -> Void = { _ in }
 
     @State private var text = ""
     @FocusState private var focused: Bool
 
+    #if os(macOS)
+    private static let size: CGFloat = 26
+    #else
+    private static let size: CGFloat = 32
+    #endif
+
     var body: some View {
         TextField("0:00.0", text: $text)
-            .font(.system(size: 32, weight: .semibold, design: .rounded).monospacedDigit())
+            .font(.system(size: Self.size, weight: .semibold, design: .rounded).monospacedDigit())
             #if os(iOS)
             .keyboardType(.numbersAndPunctuation)
+            #else
+            .textFieldStyle(.plain)
+            .onKeyPress(keys: [.upArrow, .downArrow]) { press in
+                commit()
+                let step: TimeInterval = press.modifiers.contains(.shift) ? 1 : 0.1
+                let nudged = time + (press.key == .upArrow ? step : -step)
+                time = max(range.lowerBound, min(nudged, range.upperBound))
+                text = PreciseTime.format(time)
+                return .handled
+            }
+            .help("↑ or ↓ for a tenth of a second, with ⇧ for a second")
             #endif
             .focused($focused)
             .onSubmit(commit)
             .onChange(of: focused) { focused ? onFocus() : commit() }
+            .onChange(of: text) { if focused { onType(text) } }
             .onChange(of: time, initial: true) { if !focused { text = PreciseTime.format(time) } }
             .accessibilityLabel("Time")
             .accessibilityValue(PreciseTime.format(time))
@@ -474,6 +538,7 @@ private struct PreciseTimeField: View {
             time = max(range.lowerBound, min(parsed, range.upperBound))
         }
         text = PreciseTime.format(time)
+        onType(nil)
     }
 }
 
