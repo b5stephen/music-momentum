@@ -204,7 +204,9 @@ private func panelPreview(loaded: Bool) -> some View {
     SongMarker.add(to: song, name: "Solo", startTime: 142, endTime: 170, in: context)
     SongMarker.add(to: song, name: "Outro lick", startTime: 222, endTime: 250, in: context)
     let controller = PlaybackController()
+    #if DEBUG
     controller.sampleDuration = 260
+    #endif
     controller.playbackRate = 0.75
     controller.toggleLoop()
     controller.loop(only: chorus)

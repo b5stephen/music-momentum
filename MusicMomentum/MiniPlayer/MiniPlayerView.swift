@@ -328,7 +328,9 @@ private func miniPreview(palette: ArtworkPalette? = previewPalette, loop: Bool =
     let chorus = SongMarker.add(to: song, name: "Chorus", startTime: 62, endTime: 96, in: context)
     SongMarker.add(to: song, name: "Solo", startTime: 142, endTime: 170, in: context)
     let controller = PlaybackController()
+    #if DEBUG
     controller.sampleDuration = 260
+    #endif
     controller.playbackRate = rate
     if loop {
         controller.toggleLoop()
