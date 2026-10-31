@@ -6,14 +6,19 @@
 /// What the Mac's mini player and menu bar ask of the controller, so they
 /// share the lane's rules rather than each restating them.
 extension PlaybackController {
-    /// The lane's click rule, for every surface that lists clips: with the
-    /// loop on, narrow it to this clip; with it off, only jump to its start,
-    /// since only the Loop button turns looping on.
-    func choose(_ clip: SongMarker) {
-        if isLoopOn, clip.isClip {
-            loop(only: clip)
+    /// The lane's click rule, for every surface that lists markers: with the
+    /// loop on, narrow it to this clip, or with `chaining` add it to the chain
+    /// or take it out; otherwise only jump to its start, since only the Loop
+    /// button turns looping on.
+    func choose(_ marker: SongMarker, chaining: Bool = false) {
+        guard isLoopOn, marker.isClip else {
+            jump(to: marker)
+            return
+        }
+        if chaining {
+            toggleLoop(for: marker)
         } else {
-            jump(to: clip)
+            loop(only: marker)
         }
     }
 

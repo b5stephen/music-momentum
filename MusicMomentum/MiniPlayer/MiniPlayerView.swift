@@ -77,11 +77,14 @@ struct MiniPlayerView: View {
                         Text(track.title)
                             .font(.system(size: 13, weight: .bold))
                             .lineLimit(1)
-                        Text(loopCaption(clips))
-                            .font(.system(size: 11))
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary.opacity(controller.isLoopOn ? 1 : 0.7))
-                            .lineLimit(1)
+                        LoopScopeMenu(controller: controller, markers: savedSong?.sortedMarkers ?? [], chevronSize: 7) {
+                            Text(loopCaption(clips))
+                                .font(.system(size: 11))
+                                .monospacedDigit()
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(.secondary.opacity(controller.isLoopOn ? 1 : 0.7))
+                        .accessibilityValue(loopCaption(clips))
                     }
                     Spacer(minLength: 0)
                     speedChip
