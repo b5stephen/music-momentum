@@ -201,7 +201,7 @@ struct SavedSongsView: View {
             }
             #endif
             .sheet(isPresented: $showPicker) {
-                SongPickerView(onSelect: add)
+                SongPickerView { song in SavedSong.add(song: song, in: modelContext) }
             }
             .alert(
                 "Couldn't open that song",
@@ -249,6 +249,7 @@ struct SavedSongsView: View {
                 }
                 .presentationDetents([.medium])
             }
+            .focusedSceneValue(\.isSavedSheetOpen, showPicker || marking != nil || editing != nil)
         }
     }
 
@@ -283,15 +284,6 @@ struct SavedSongsView: View {
 
     private func chooseSong() {
         Task { showPicker = await controller.requestAuthorizationIfNeeded() }
-    }
-
-    /// Re-adding a song keeps its tuned speed rather than resetting to 100%.
-    private func add(_ song: Song) {
-        if let existing = SavedSong.find(song: song, in: modelContext) {
-            SavedSong.touch(existing, in: modelContext)
-        } else {
-            SavedSong.save(song: song, speed: 1.0, in: modelContext)
-        }
     }
 
     /// `select` resets the playhead, so the jump has to come after it even

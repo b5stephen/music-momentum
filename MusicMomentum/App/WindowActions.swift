@@ -3,11 +3,11 @@
 //  MusicMomentum
 //
 
-#if os(macOS)
 import SwiftUI
 
-/// What the Mac's menus can ask of the window around Practice, published by
-/// `MacWindow` as a focused scene value.
+/// What the menus can ask of the window around Practice, published as a
+/// focused scene value by `MacWindow`, and on iOS by `PracticeView`, which
+/// presents the pickers there.
 struct WindowActions {
     var canPickSong = false
     /// A song picker is up; its search field is for typing.
@@ -18,5 +18,6 @@ struct WindowActions {
 
 extension FocusedValues {
     @Entry var windowActions: WindowActions?
+    /// One of Saved's sheets is up on iOS, where Practice can't see it.
+    @Entry var isSavedSheetOpen: Bool?
 }
-#endif

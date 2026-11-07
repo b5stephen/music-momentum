@@ -264,7 +264,7 @@ struct MiniPlayerView: View {
     }
 
     /// What the menus can ask of the mini player while it is the key window;
-    /// see `MacCommands`. Anything that needs Practice's screen (marking,
+    /// see `AppCommands`. Anything that needs Practice's screen (marking,
     /// zooming) stays off.
     /// What `actions` is built from, so it's handed to the menus again
     /// whenever one of its flags or the clips its 1-9 keys reach change.

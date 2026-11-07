@@ -233,48 +233,19 @@ extension PracticeView {
         return first...max(first, last)
     }
 
-    /// Pauses and opens the marker sheet, as iOS's Mark does.
-    func macMark() {
-        markerSheet = .new(start: controller.pauseForMarking())
-    }
-
-    // MARK: Menu
-
-    /// What the menus can ask of this window; see `MacCommands`.
-    var macActions: PracticeActions {
-        let duration = controller.duration
-        let clips = savedSong?.sortedClips ?? []
-        return PracticeActions(
-            hasSong: track != nil,
-            hasDuration: duration != nil,
-            isPlaying: controller.isPlaying,
-            isLoopOn: controller.isLoopOn,
-            canSaveSpeed: track != nil && !isSpeedSaved,
-            canZoomIn: duration.map { timelineViewport.canZoomIn(duration: $0) } ?? false,
-            canZoomOut: timelineViewport.isZoomed,
-            clipNames: clips.prefix(9).map(\.name),
-            isBlocked: markerSheet != nil,
-            playPause: { controller.togglePlayPause() },
-            skip: { controller.skip(by: $0) },
-            restart: { controller.restart() },
-            toggleLoop: { controller.toggleLoop() },
-            mark: macMark,
-            stepSpeed: { controller.stepSpeed(up: $0) },
-            saveSpeed: { controller.saveCurrentSong() },
-            loopClip: { number in
-                guard clips.indices.contains(number - 1) else { return }
-                controller.choose(clips[number - 1])
-            },
-            zoomIn: macZoomIn,
-            zoomOut: macZoomOut,
-            zoomToFit: macZoomToFit
-        )
-    }
-
     // MARK: Zoom
 
-    /// Zooming for Phase 5's menu and keys, around the playhead as the
-    /// buttons do.
+    func withMacZoom(_ actions: PracticeActions) -> PracticeActions {
+        var actions = actions
+        actions.canZoomIn = controller.duration.map { timelineViewport.canZoomIn(duration: $0) } ?? false
+        actions.canZoomOut = timelineViewport.isZoomed
+        actions.zoomIn = macZoomIn
+        actions.zoomOut = macZoomOut
+        actions.zoomToFit = macZoomToFit
+        return actions
+    }
+
+    /// Zooming for the menu and keys, around the playhead as the buttons do.
     func macZoomIn() { macZoom(by: TimelineViewport.step) }
     func macZoomOut() { macZoom(by: 1 / TimelineViewport.step) }
     func macZoomToFit() { timelineViewport.fit() }
@@ -376,7 +347,7 @@ extension PracticeView {
     }
 
     private var macMarkButton: some View {
-        Button(action: macMark) {
+        Button(action: mark) {
             HStack(spacing: 6) {
                 MarkGlyph()
                     .frame(width: 13, height: 13)

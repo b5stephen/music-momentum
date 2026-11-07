@@ -3,11 +3,10 @@
 //  MusicMomentum
 //
 
-#if os(macOS)
 import SwiftUI
 
-/// What the Mac's menus can ask of Practice, published by the window's
-/// `PracticeView` as a focused scene value so `MacCommands` never holds a
+/// What the menus can ask of Practice, published by the scene's
+/// `PracticeView` as a focused scene value so `AppCommands` never holds a
 /// player of its own: every closure ends at `RootTabView`'s one
 /// `PlaybackController`. The flags say which items can act.
 struct PracticeActions {
@@ -16,6 +15,7 @@ struct PracticeActions {
     var isPlaying = false
     var isLoopOn = false
     var canSaveSpeed = false
+    /// Only the Mac's timeline zooms.
     var canZoomIn = false
     var canZoomOut = false
     /// The mini player has no marker sheet to open.
@@ -41,4 +41,3 @@ struct PracticeActions {
 extension FocusedValues {
     @Entry var practiceActions: PracticeActions?
 }
-#endif

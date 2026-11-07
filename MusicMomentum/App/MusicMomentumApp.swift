@@ -15,6 +15,8 @@ struct MusicMomentumApp: App {
     @State private var palette: ArtworkPalette?
     #if os(macOS)
     @State private var miniPlayer = MiniPlayerSwitch()
+    #else
+    @UIApplicationDelegateAdaptor private var keyCommandPriority: KeyCommandPriority
     #endif
     #if DEBUG
     @AppStorage(SampleSong.loadedKey) private var sampleSongID = SampleSong.tracks[0].id
@@ -55,7 +57,9 @@ struct MusicMomentumApp: App {
         #if os(macOS)
         // Wide enough to show Saved as a sidebar beside Practice.
         .defaultSize(width: 1180, height: 820)
-        .commands { MacCommands(miniPlayer: miniPlayer) }
+        .commands { AppCommands(miniPlayer: miniPlayer) }
+        #else
+        .commands { AppCommands() }
         #endif
 
         #if os(macOS)

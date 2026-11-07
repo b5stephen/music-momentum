@@ -157,6 +157,16 @@ extension SavedSong {
         )
     }
 
+    /// Re-adding a song keeps its tuned speed rather than resetting to 100%.
+    /// It doesn't load the song: that's Change Song's job.
+    static func add(song: Song, in context: ModelContext) {
+        if let existing = find(song: song, in: context) {
+            touch(existing, in: context)
+        } else {
+            save(song: song, speed: 1.0, in: context)
+        }
+    }
+
     static func touch(_ song: SavedSong, in context: ModelContext) {
         song.lastPracticed = .now
         try? context.save()

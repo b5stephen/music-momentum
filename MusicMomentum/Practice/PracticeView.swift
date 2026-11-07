@@ -32,7 +32,7 @@ struct PracticeView: View {
     #endif
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Query private var savedSongs: [SavedSong]
-    @State private var showPicker = false
+    @State private var picking: Picking?
     @State var markerSheet: MarkerSheet?
     #if os(macOS)
     /// Which part of the song the Mac timeline shows. Not saved, and fitted
@@ -56,6 +56,13 @@ struct PracticeView: View {
     /// Measured, so the wide layout's cover takes exactly what the player leaves.
     /// Measured, so the title fades out just short of a save prompt growing over it.
     @State private var headerButtonsWidth: CGFloat = 0
+
+    /// Change Song loads what's picked; Add only saves it, as the menu's
+    /// Add Song to Saved does.
+    private enum Picking: Identifiable {
+        case change, add
+        var id: Self { self }
+    }
 
     /// Editing carries the marker's identity so switching straight from one
     /// marker to another rebuilds the sheet.
@@ -198,9 +205,18 @@ struct PracticeView: View {
         .onChange(of: track?.palette, initial: true) { _, palette in
             onPalette(palette)
         }
-        .sheet(isPresented: $showPicker) {
-            SongPickerView { song in
-                Task { await controller.select(song: song) }
+        .sheet(item: $picking) { picking in
+            Group {
+                switch picking {
+                case .change:
+                    SongPickerView { song in
+                        Task { await controller.select(song: song) }
+                    }
+                case .add:
+                    SongPickerView(title: "Add Song to Saved", confirmTitle: "Add") { song in
+                        SavedSong.add(song: song, in: modelContext)
+                    }
+                }
             }
             .tint(nil as Color?)
         }
@@ -237,8 +253,17 @@ struct PracticeView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { controller.refreshPlaybackTime() }
         }
-        #if os(macOS)
-        .focusedSceneValue(\.practiceActions, macActions)
+        .focusedSceneValue(\.practiceActions, menuActions)
+        #if os(iOS)
+        .focusedSceneValue(
+            \.windowActions,
+            WindowActions(
+                canPickSong: controller.canUseMusic,
+                isSheetOpen: picking != nil || markerSheet != nil,
+                changeSong: { pick(.change) },
+                addSong: { pick(.add) }
+            )
+        )
         #endif
     }
 
@@ -691,7 +716,7 @@ struct PracticeView: View {
 
     private func markButton(showsTitle: Bool) -> some View {
         Button {
-            markerSheet = .new(start: controller.pauseForMarking())
+            mark()
         } label: {
             Group {
                 if showsTitle {
@@ -1016,7 +1041,7 @@ struct PracticeView: View {
 
     private var changeSongButton: some View {
         Button {
-            Task { showPicker = await controller.requestAuthorizationIfNeeded() }
+            pick(.change)
         } label: {
             Image(systemName: "arrow.left.arrow.right")
                 .font(.subheadline.weight(.semibold))
@@ -1036,6 +1061,50 @@ struct PracticeView: View {
         return savedSongs.first { $0.matches(songID: track.id, catalogID: track.catalogID) }
     }
 
+    private func pick(_ picking: Picking) {
+        Task {
+            if await controller.requestAuthorizationIfNeeded() { self.picking = picking }
+        }
+    }
+
+    /// Pauses and opens the marker sheet.
+    func mark() {
+        markerSheet = .new(start: controller.pauseForMarking())
+    }
+
+    // MARK: - Menu
+
+    /// What the menus can ask of this screen; see `AppCommands`.
+    private var menuActions: PracticeActions {
+        let duration = controller.duration
+        let clips = savedSong?.sortedClips ?? []
+        let actions = PracticeActions(
+            hasSong: track != nil,
+            hasDuration: duration != nil,
+            isPlaying: controller.isPlaying,
+            isLoopOn: controller.isLoopOn,
+            canSaveSpeed: track != nil && !isSpeedSaved,
+            clipNames: clips.prefix(9).map(\.name),
+            isBlocked: markerSheet != nil || picking != nil,
+            playPause: { controller.togglePlayPause() },
+            skip: { controller.skip(by: $0) },
+            restart: { controller.restart() },
+            toggleLoop: { controller.toggleLoop() },
+            mark: mark,
+            stepSpeed: { controller.stepSpeed(up: $0) },
+            saveSpeed: { controller.saveCurrentSong() },
+            loopClip: { number in
+                guard clips.indices.contains(number - 1) else { return }
+                controller.choose(clips[number - 1])
+            }
+        )
+        #if os(macOS)
+        return withMacZoom(actions)
+        #else
+        return actions
+        #endif
+    }
+
     // MARK: - Arriving
 
     @ViewBuilder
@@ -1053,7 +1122,7 @@ struct PracticeView: View {
                 ? "Or tap one of your saved songs."
                 : "Or open Saved to pick up where you left off."
         ) {
-            Task { showPicker = await controller.requestAuthorizationIfNeeded() }
+            pick(.change)
         }
     }
 

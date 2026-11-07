@@ -134,7 +134,9 @@ struct MacWindow: View {
                     Task { await controller.select(song: song) }
                 }
             case .add:
-                SongPickerView(title: "Add Song to Saved", confirmTitle: "Add", onSelect: add)
+                SongPickerView(title: "Add Song to Saved", confirmTitle: "Add") { song in
+                    SavedSong.add(song: song, in: modelContext)
+                }
             }
         }
     }
@@ -176,16 +178,6 @@ struct MacWindow: View {
     private func pick(_ picking: Picking) {
         Task {
             if await controller.requestAuthorizationIfNeeded() { self.picking = picking }
-        }
-    }
-
-    /// Re-adding a song keeps its tuned speed rather than resetting to 100%.
-    /// It doesn't load the song: that's Change Song's job.
-    private func add(_ song: Song) {
-        if let existing = SavedSong.find(song: song, in: modelContext) {
-            SavedSong.touch(existing, in: modelContext)
-        } else {
-            SavedSong.save(song: song, speed: 1.0, in: modelContext)
         }
     }
 }
