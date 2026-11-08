@@ -3,7 +3,7 @@
 //  MusicMomentum
 //
 
-/// What the Mac's mini player and menu bar ask of the controller, so they
+/// What the Mac's mini player, menu bar and menus ask of the controller, so they
 /// share the lane's rules rather than each restating them.
 extension PlaybackController {
     /// The lane's click rule, for every surface that lists markers: with the
@@ -38,5 +38,17 @@ extension PlaybackController {
         let percent = Int((playbackRate * 100).rounded())
         let range = SpeedKnobGeometry.minPercent...SpeedKnobGeometry.maxPercent
         playbackRate = Double(SpeedInput.stepped(from: percent, up: up, in: range)) / 100
+    }
+
+    /// ±1% for ⌥↑ and ⌥↓, the knob's finest detent.
+    func nudgeSpeed(up: Bool) {
+        setSpeed(percent: Int((playbackRate * 100).rounded()) + (up ? 1 : -1))
+    }
+
+    /// A whole percent, clamped to the knob's range, for the presets.
+    func setSpeed(percent: Int) {
+        let clamped = min(max(percent, SpeedKnobGeometry.minPercent), SpeedKnobGeometry.maxPercent)
+        let rate = Double(clamped) / 100
+        if rate != playbackRate { playbackRate = rate }
     }
 }

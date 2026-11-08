@@ -15,6 +15,10 @@ struct PracticeActions {
     var isPlaying = false
     var isLoopOn = false
     var canSaveSpeed = false
+    var speedPercent = 100
+    var savedSpeedPercent: Int?
+    /// A knob is on screen to type the speed into.
+    var canEditSpeed = false
     /// Only the Mac's timeline zooms.
     var canZoomIn = false
     var canZoomOut = false
@@ -31,6 +35,9 @@ struct PracticeActions {
     var toggleLoop: @MainActor () -> Void = {}
     var mark: @MainActor () -> Void = {}
     var stepSpeed: @MainActor (_ up: Bool) -> Void = { _ in }
+    var nudgeSpeed: @MainActor (_ up: Bool) -> Void = { _ in }
+    var setSpeed: @MainActor (_ percent: Int) -> Void = { _ in }
+    var editSpeed: @MainActor () -> Void = {}
     var saveSpeed: @MainActor () -> Void = {}
     var loopClip: @MainActor (_ number: Int) -> Void = { _ in }
     var zoomIn: @MainActor () -> Void = {}

@@ -133,6 +133,35 @@ nonisolated struct SpeedKnobGeometry: Equatable {
             .0
     }
 
+    /// How near the saved dot, in percent, a click on the scale has to be to
+    /// land on it rather than the 5% grid, since it's often off the grid.
+    static let savedDotReach: Double = 1
+
+    /// Where a click at `location` lands on the Mac, which the hover pointer
+    /// shows before the click. The scale is the coarse zone: the nearest 5%,
+    /// whether or not a small knob draws that tick, or the saved dot when
+    /// it's right on it. The skirt is the fine one: the whole percent under
+    /// the pointer, or with `toGrid` (⇧) the nearest 5% as everywhere else.
+    /// Just past a stop lands on it, deep in the gap or in the cap on nothing.
+    func pointedPercent(at location: CGPoint, saved: Int? = nil, toGrid: Bool = false) -> Int? {
+        let dx = location.x - radius
+        let dy = location.y - radius
+        let distance = hypot(dx, dy)
+        guard distance > capRadius, distance <= radius else { return nil }
+
+        var offset = (atan2(dy, dx) * 180 / .pi - Self.startAngle).truncatingRemainder(dividingBy: 360)
+        if offset < 0 { offset += 360 }
+        // Past the halfway point of the gap is just before the bottom stop.
+        if offset > Self.sweep + (360 - Self.sweep) / 2 { offset -= 360 }
+        let raw = Double(Self.minPercent) + offset / Self.degreesPerPercent
+
+        let range = Self.minPercent...Self.maxPercent
+        guard raw >= Double(range.lowerBound) - 1, raw <= Double(range.upperBound) + 1 else { return nil }
+        guard distance >= skirtRadius else { return SpeedInput.snapped(raw, toGrid: toGrid, in: range) }
+        if let saved, abs(Double(saved) - raw) <= Self.savedDotReach { return saved }
+        return SpeedInput.snapped(raw, toGrid: true, in: range)
+    }
+
     static func angle(for percent: Double) -> Angle {
         .degrees(startAngle + (percent - Double(minPercent)) * degreesPerPercent)
     }

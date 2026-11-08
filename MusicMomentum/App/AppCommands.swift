@@ -10,7 +10,7 @@ import SwiftUI
 /// `PracticeActions` and `WindowActions`, or the mini player's while it's
 /// open, so with no window (or a sheet up) they grey out.
 ///
-/// Single keys (Space, the arrows, L, M, 1-9) are plain menu key equivalents, not
+/// Single keys (Space, the arrows, L, M, S, 1-9) are plain menu key equivalents, not
 /// `.onKeyPress`, so they work wherever focus is and Space never presses a
 /// focused button. On the Mac the menu sees a key before a text field does,
 /// so `TextFieldFocus` hands them to a field being edited; UIKit gives a text
@@ -87,15 +87,34 @@ struct AppCommands: Commands {
             Button("Mark This Point\u{2026}") { practice?.mark() }
                 .keyboardShortcut("m", modifiers: [])
                 .disabled(!canSeek || practice?.canMark != true)
+        }
 
-            Divider()
-
+        CommandMenu("Speed") {
             Button("Speed Up") { practice?.stepSpeed(true) }
                 .keyboardShortcut(.upArrow, modifiers: [])
                 .disabled(!canPractise)
             Button("Slow Down") { practice?.stepSpeed(false) }
                 .keyboardShortcut(.downArrow, modifiers: [])
                 .disabled(!canPractise)
+            Button("Speed Up 1%") { practice?.nudgeSpeed(true) }
+                .keyboardShortcut(.upArrow, modifiers: .option)
+                .disabled(!canPractise)
+            Button("Slow Down 1%") { practice?.nudgeSpeed(false) }
+                .keyboardShortcut(.downArrow, modifiers: .option)
+                .disabled(!canPractise)
+            Button("Set Speed\u{2026}") { practice?.editSpeed() }
+                .keyboardShortcut("s", modifiers: [])
+                .disabled(!canPractise || practice?.canEditSpeed != true)
+
+            Divider()
+
+            SpeedPresetItems(percent: practice?.speedPercent ?? 100, savedPercent: practice?.savedSpeedPercent) {
+                practice?.setSpeed($0)
+            }
+            .disabled(!canPractise)
+
+            Divider()
+
             Button("Save Speed") { practice?.saveSpeed() }
                 .keyboardShortcut("s")
                 .disabled(!canPractise || practice?.canSaveSpeed != true)

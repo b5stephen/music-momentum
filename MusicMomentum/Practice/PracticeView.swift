@@ -41,6 +41,8 @@ struct PracticeView: View {
     /// Whether the timeline is crowded enough to show its zoom controls.
     @State var isZoomOffered = false
     #endif
+    /// Bumped by Set Speed… to open the knob's readout for typing.
+    @State var speedEditRequest = 0
     /// The selected song's palette, kept so `track` doesn't rebuild it on
     /// every read: `Artwork.backgroundColor`'s, then the sampled cover's.
     @State private var palette: (songID: String, palette: ArtworkPalette?)?
@@ -342,7 +344,8 @@ struct PracticeView: View {
             SpeedWheelPicker(
                 speed: $controller.playbackRate,
                 savedSpeed: savedSong?.speed,
-                diameter: layout.wheelDiameter
+                diameter: layout.wheelDiameter,
+                editRequest: speedEditRequest
             )
 
             Spacer(minLength: layout.wheelGap - lift / 2)
@@ -437,7 +440,8 @@ struct PracticeView: View {
                 SpeedWheelPicker(
                     speed: $controller.playbackRate,
                     savedSpeed: savedSong?.speed,
-                    diameter: layout.wheelDiameter
+                    diameter: layout.wheelDiameter,
+                    editRequest: speedEditRequest
                 )
                 Spacer(minLength: PracticeLayout.creaseWheelGap)
             }
@@ -478,7 +482,8 @@ struct PracticeView: View {
                 SpeedWheelPicker(
                     speed: $controller.playbackRate,
                     savedSpeed: savedSong?.speed,
-                    diameter: layout.wheelDiameter
+                    diameter: layout.wheelDiameter,
+                    editRequest: speedEditRequest
                 )
             }
             .frame(width: PracticeLayout.wideLeadingWidth(size.width))
@@ -1084,6 +1089,9 @@ struct PracticeView: View {
             isPlaying: controller.isPlaying,
             isLoopOn: controller.isLoopOn,
             canSaveSpeed: track != nil && !isSpeedSaved,
+            speedPercent: Int((controller.playbackRate * 100).rounded()),
+            savedSpeedPercent: savedSong?.percent,
+            canEditSpeed: true,
             clipNames: clips.prefix(9).map(\.name),
             isBlocked: markerSheet != nil || picking != nil,
             playPause: { controller.togglePlayPause() },
@@ -1092,6 +1100,9 @@ struct PracticeView: View {
             toggleLoop: { controller.toggleLoop() },
             mark: mark,
             stepSpeed: { controller.stepSpeed(up: $0) },
+            nudgeSpeed: { controller.nudgeSpeed(up: $0) },
+            setSpeed: { controller.setSpeed(percent: $0) },
+            editSpeed: { speedEditRequest += 1 },
             saveSpeed: { controller.saveCurrentSong() },
             loopClip: { number in
                 guard clips.indices.contains(number - 1) else { return }

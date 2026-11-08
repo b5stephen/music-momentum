@@ -13,18 +13,24 @@ nonisolated enum SpeedInput {
     /// range is one long drag down a Mac window.
     static let pointsPerPercent: CGFloat = 4
 
-    /// Each step a held ⇧ takes, in percent.
+    /// Each step a held ⇧ takes, in percent, and the grid it lands on.
     static let shiftStep = 5
 
     /// The whole percent to land on `travel` points above where the drag
     /// began, from `start`. Plain, a percent per `pointsPerPercent`; with ⇧,
-    /// `shiftStep` percent per that distance. Stops dead at either end.
+    /// `shiftStep` percent per that distance, on the 5% grid. Stops dead at
+    /// either end.
     static func dragged(from start: Double, travel: CGFloat, shift: Bool, in range: ClosedRange<Int>) -> Int {
         let steps = Double(travel / pointsPerPercent)
-        let raw = shift
-            ? start + steps.rounded() * Double(shiftStep)
-            : start + steps
-        return min(max(Int(raw.rounded()), range.lowerBound), range.upperBound)
+        return snapped(start + steps * Double(shift ? shiftStep : 1), toGrid: shift, in: range)
+    }
+
+    /// `raw` as a whole percent, or with ⇧ the nearest stop on the 5% grid,
+    /// so a snapped drag lands on 75 rather than 77 whatever it began on.
+    static func snapped(_ raw: Double, toGrid: Bool, in range: ClosedRange<Int>) -> Int {
+        let grid = Double(shiftStep)
+        let rounded = toGrid ? (raw / grid).rounded() * grid : raw.rounded()
+        return min(max(Int(rounded), range.lowerBound), range.upperBound)
     }
 
     /// The speed a typed readout asks for, clamped to `range`, or `nil` for
@@ -49,6 +55,10 @@ nonisolated enum SpeedInput {
 
     /// The menu bar's one-click speeds, in percent.
     static let presets = [50, 60, 75, 90, 100]
+
+    /// The Speed menu's and right-click menus' speeds: every 5% from 50,
+    /// where the menu bar panel's segmented row has room for only five.
+    static let menuSpeeds = Array(stride(from: 50, through: 100, by: shiftStep))
 
     /// The preset `rate` is showing as, matched on the whole percent the knob
     /// reads out (0.749 is 75%), or `nil` between presets.

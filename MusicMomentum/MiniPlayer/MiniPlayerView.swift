@@ -21,6 +21,9 @@ struct MiniPlayerView: View {
     @Environment(\.onAccent) private var onAccent
     @Query private var savedSongs: [SavedSong]
     @State private var showsWheel = false
+    /// The knob's popover was opened by Set Speed…, so it opens typing.
+    @State private var wheelOpensTyping = false
+    @State private var speedEditRequest = 0
 
     static let size = CGSize(width: 452, height: 120)
     private static let radius: CGFloat = 20
@@ -142,7 +145,13 @@ struct MiniPlayerView: View {
         .speedDragInput(speed: $controller.playbackRate, range: PlaybackController.speedRange)
         .onTapGesture { showsWheel.toggle() }
         .popover(isPresented: $showsWheel, arrowEdge: .bottom) { speedWheel }
-        .help("Click for the speed knob; drag, scroll or \u{2191} \u{2193} to change speed")
+        .onChange(of: showsWheel) { _, shows in if !shows { wheelOpensTyping = false } }
+        .contextMenu {
+            Button("Type Speed\u{2026}") { editSpeed() }
+            Divider()
+            SpeedPresetItems(percent: speedPercent, savedPercent: savedSong?.percent) { controller.setSpeed(percent: $0) }
+        }
+        .help("Click for the speed knob; drag, scroll or \u{2191} \u{2193} to change speed, \u{21E7} for 5% steps")
         .accessibilityElement()
         .accessibilityLabel("Speed")
         .accessibilityValue("\(speedPercent)%")
@@ -156,9 +165,23 @@ struct MiniPlayerView: View {
     /// Practice's knob, on the card's mesh, for anyone who clicks the chip
     /// rather than dragging it.
     private var speedWheel: some View {
-        SpeedWheelPicker(speed: $controller.playbackRate, savedSpeed: savedSong?.speed, diameter: 200)
+        SpeedWheelPicker(
+            speed: $controller.playbackRate, savedSpeed: savedSong?.speed, diameter: 200,
+            startsEditing: wheelOpensTyping, editRequest: speedEditRequest
+        )
             .padding(18)
             .modifier(ArtworkGround(palette: track?.palette, isPlaying: controller.isPlaying))
+    }
+
+    /// Opens the knob with its readout ready to type into, or, if it's
+    /// already open, starts typing there.
+    private func editSpeed() {
+        if showsWheel {
+            speedEditRequest += 1
+        } else {
+            wheelOpensTyping = true
+            showsWheel = true
+        }
     }
 
     // MARK: - Controls
@@ -274,6 +297,8 @@ struct MiniPlayerView: View {
         var isPlaying: Bool
         var isLoopOn: Bool
         var canSaveSpeed: Bool
+        var speedPercent: Int
+        var savedSpeedPercent: Int?
         var clips: [PersistentIdentifier]
         var clipNames: [String]
     }
@@ -286,6 +311,8 @@ struct MiniPlayerView: View {
             isPlaying: controller.isPlaying,
             isLoopOn: controller.isLoopOn,
             canSaveSpeed: track != nil && savedSong?.percent != speedPercent,
+            speedPercent: speedPercent,
+            savedSpeedPercent: savedSong?.percent,
             clips: clips.map(\.persistentModelID),
             clipNames: clips.prefix(9).map(\.name)
         )
@@ -299,6 +326,9 @@ struct MiniPlayerView: View {
             isPlaying: controller.isPlaying,
             isLoopOn: controller.isLoopOn,
             canSaveSpeed: track != nil && savedSong?.percent != speedPercent,
+            speedPercent: speedPercent,
+            savedSpeedPercent: savedSong?.percent,
+            canEditSpeed: true,
             canMark: false,
             clipNames: clips.prefix(9).map(\.name),
             playPause: { controller.togglePlayPause() },
@@ -306,6 +336,9 @@ struct MiniPlayerView: View {
             restart: { controller.restart() },
             toggleLoop: { controller.toggleLoop() },
             stepSpeed: { controller.stepSpeed(up: $0) },
+            nudgeSpeed: { controller.nudgeSpeed(up: $0) },
+            setSpeed: { controller.setSpeed(percent: $0) },
+            editSpeed: editSpeed,
             saveSpeed: { controller.saveCurrentSong() },
             loopClip: { number in
                 guard clips.indices.contains(number - 1) else { return }

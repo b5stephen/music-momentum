@@ -6,6 +6,7 @@
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
+import UIKit.UIGestureRecognizerSubclass
 #else
 import AppKit
 #endif
@@ -13,7 +14,9 @@ import AppKit
 /// An amp-style knob for practice speed, one haptic detent per percent.
 /// Where it points is the speed: it stops dead at either limit, and the
 /// scale around it lights up to the pointer. A tap on one of the scale's
-/// ticks, or on the saved speed's dot, jumps straight to it.
+/// ticks, or on the saved speed's dot, jumps straight to it; on the Mac a
+/// click on the scale goes to the nearest 5%, and on the skirt to the
+/// percent under it (`pointedPercent`).
 /// A two-finger scroll over it, or a mouse wheel, turns it too.
 struct SpeedWheelPicker: View {
     @Binding var speed: Double
@@ -39,16 +42,29 @@ struct SpeedWheelPicker: View {
     /// than a tap's slop on a small knob, doesn't.
     @State private var touchDownPercent: Int?
 
-    /// Whether the readout is a text field. Only the Mac ever starts it.
+    /// Whether the readout is a text field. Only a mouse, trackpad or
+    /// Pencil, or Set Speed…, ever starts it: a finger in the cap is turning.
     @State private var isEditing = false
     @State private var draft = ""
     @FocusState private var fieldFocused: Bool
-    #if os(macOS)
-    @State private var lastDoubleClick = Date.distantPast
-    @State private var editTask: Task<Void, Never>?
-    @State private var clickAway: Any?
-    /// Starts in the editing state, for previews, which can't click.
+    /// ⇧ held during the current turn, which lands it on the 5% grid.
+    @State private var snapsToGrid = false
+    /// Where the pointer is over the knob, for the faint pointer that shows
+    /// where a click will land, and whether ⇧ is down to snap it.
+    @State private var hoverLocation: CGPoint?
+    @State private var hoverShift = false
+    /// Starts in the editing state: for previews, which can't click, and for
+    /// a knob opened by Set Speed….
     var startsEditing = false
+    /// Opens the readout for typing each time it changes, for Set Speed….
+    var editRequest = 0
+    #if os(macOS)
+    @State private var clickAway: Any?
+    #else
+    /// The latest press came from a mouse, trackpad or Pencil, which click
+    /// as the Mac does, rather than a finger.
+    @State private var pressIsPrecise = false
+    @State private var selection: TextSelection?
     #endif
 
     #if canImport(UIKit)
@@ -67,6 +83,28 @@ struct SpeedWheelPicker: View {
             #if canImport(UIKit)
             .gesture(rotationGesture)
             .gesture(TrackpadScroll(onChanged: scroll(by:), onEnded: endScroll))
+            .gesture(PressKind { pressIsPrecise = $0 })
+            // The touch drag gesture has `minimumDistance: 0`, so a plain
+            // `.onTapGesture` never fires. The drag a double tap also
+            // triggers moves no distance and commits the value unchanged.
+            // Not for a mouse, whose first click already pointed the knob or
+            // opened the readout, as on the Mac.
+            .simultaneousGesture(TapGesture(count: 2).onEnded {
+                guard !pressIsPrecise else { return }
+                toggleFullSpeed()
+            })
+            .onContinuousHover { phase in
+                if case .active(let location) = phase {
+                    if hoverLocation == nil {
+                        hoverShift = ShiftKey.isDown
+                        ShiftKey.observe { hoverShift = $0 }
+                    }
+                    hoverLocation = location
+                } else {
+                    hoverLocation = nil
+                    ShiftKey.observe(nil)
+                }
+            }
             #elseif os(macOS)
             // Round with the pointer, as a finger turns it on iOS: dragging
             // up or down, Logic-style, ignored where the pointer went.
@@ -78,19 +116,16 @@ struct SpeedWheelPicker: View {
             )
             // A click is a tap rather than a drag of no distance, which the
             // drag's few points of slop would otherwise swallow.
+            // No double-click for the saved or full speed, as iOS has: its
+            // first click would already have pointed the knob somewhere, or
+            // opened the readout. ↺ and the menus reach both.
             .simultaneousGesture(SpatialTapGesture().onEnded { click(at: $0.location) })
-            .help("Drag round, scroll, or press ↑ ↓ · double-click for full speed")
+            .onContinuousHover { phase in
+                if case .active(let location) = phase { hoverLocation = location } else { hoverLocation = nil }
+            }
+            .onModifierKeysChanged(mask: .shift, initial: true) { _, keys in hoverShift = keys.contains(.shift) }
+            .contextMenu { contextMenu }
             #endif
-            // The touch drag gesture has `minimumDistance: 0`, so a plain
-            // `.onTapGesture` never fires. The drag a double tap also
-            // triggers moves no distance and commits the value unchanged.
-            .simultaneousGesture(TapGesture(count: 2).onEnded {
-                #if os(macOS)
-                lastDoubleClick = .now
-                cancelEditing()
-                #endif
-                toggleFullSpeed()
-            })
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Playback speed")
             .accessibilityValue("\(displayPercent) percent")
@@ -111,10 +146,9 @@ struct SpeedWheelPicker: View {
                 }
             }
             .animation(.snappy(duration: 0.25), value: savedPercent.map { $0 == currentPercent })
-            #if os(macOS)
             .onAppear { if startsEditing { beginEditing() } }
+            .onChange(of: editRequest) { beginEditing() }
             .onDisappear { cancelEditing() }
-            #endif
     }
 
     // MARK: - Knob
@@ -136,6 +170,7 @@ struct SpeedWheelPicker: View {
             markings(geometry)
                 .rotationEffect(SpeedKnobGeometry.angle(for: ringPercent) - .degrees(270))
                 .animation(isDragging ? nil : .snappy(duration: 0.35), value: ringPercent)
+            hoverPointer(geometry)
             cap(geometry)
         }
     }
@@ -287,7 +322,14 @@ struct SpeedWheelPicker: View {
     /// The digits' own width plus a little for the caret, so the field grows
     /// as it's typed into and the readout stays centred.
     private func readoutField(size: CGFloat) -> some View {
-        TextField("", text: $draft)
+        #if os(macOS)
+        let field = TextField("", text: $draft)
+        #else
+        let field = TextField("", text: $draft, selection: $selection)
+            .keyboardType(.numbersAndPunctuation)
+            .submitLabel(.done)
+        #endif
+        return field
             .textFieldStyle(.plain)
             .font(.system(size: size, weight: .bold, design: .rounded))
             .monospacedDigit()
@@ -317,13 +359,24 @@ struct SpeedWheelPicker: View {
         isEditing = false
         fieldFocused = false
         #if os(macOS)
-        editTask?.cancel()
         if let clickAway { NSEvent.removeMonitor(clickAway) }
         clickAway = nil
         #endif
     }
 
     // MARK: - Gesture
+
+    /// A tap reaches only the scale's ticks and the saved dot on iOS, where
+    /// a finger covers several percent; a pointer reaches any 5% on the
+    /// scale and any percent on the skirt.
+    private func tapLanding(at location: CGPoint) -> Int? {
+        #if canImport(UIKit)
+        if pressIsPrecise { return clickLanding(at: location) }
+        return geometry.tapPercent(at: location, saved: savedPercent)
+        #else
+        clickLanding(at: location)
+        #endif
+    }
 
     private var rotationGesture: some Gesture {
         // A mouse's clicks are read by their own tap gesture, so the drag
@@ -365,39 +418,91 @@ struct SpeedWheelPicker: View {
             // The tap is read here rather than by its own gesture, which could
             // end before this one and have its jump undone by the commit.
             .onEnded { value in
-                let isTap = touchDownPercent == displayPercent
-                    && hypot(value.translation.width, value.translation.height) < 10
+                let isStill = hypot(value.translation.width, value.translation.height) < 10
+                let isTap = touchDownPercent == displayPercent && isStill
+                #if canImport(UIKit)
+                // A press in the cap never sets `touchDownPercent`, so a
+                // click there is read apart from a tap on the ring.
+                if pressIsPrecise, isStill, touchDownPercent == nil || isTap {
+                    lastTouchAngle = nil
+                    touchDownPercent = nil
+                    dragPercent = nil
+                    click(at: value.startLocation)
+                    return
+                }
+                #endif
                 lastTouchAngle = nil
                 touchDownPercent = nil
-                if isTap, let target = geometry.tapPercent(at: value.startLocation, saved: savedPercent) {
+                if isTap, let target = tapLanding(at: value.startLocation) {
                     jump(to: target)
-                } else if let dragPercent {
-                    commit(dragPercent)
+                } else if dragPercent != nil {
+                    commit(Double(displayPercent))
                 }
                 dragPercent = nil
             }
     }
 
-    #if os(macOS)
-    /// A click on the scale jumps to the tick under it; one in the cap opens
-    /// the readout for typing, once it's clear a double-click isn't coming.
+    /// A click on the knob points it (`clickLanding`); one in the cap opens
+    /// the readout for typing. On the Mac it used to wait out the
+    /// double-click interval first, so the click looked as if it had done
+    /// nothing.
     private func click(at location: CGPoint) {
         if isEditing {
-            cancelEditing()
+            if !isInCap(location) { cancelEditing() }
             return
         }
-        if let target = geometry.tapPercent(at: location, saved: savedPercent) {
-            jump(to: target)
-            return
-        }
-        guard hypot(location.x - diameter / 2, location.y - diameter / 2) <= geometry.capRadius else { return }
-        let clicked = Date.now
-        editTask?.cancel()
-        editTask = Task {
-            try? await Task.sleep(for: .seconds(NSEvent.doubleClickInterval))
-            guard !Task.isCancelled, lastDoubleClick < clicked.addingTimeInterval(-0.1) else { return }
+        if isInCap(location) {
             beginEditing()
+        } else if let target = clickLanding(at: location) {
+            jump(to: target)
         }
+    }
+
+    /// Hidden while turning or typing, or where a click would change nothing.
+    @ViewBuilder
+    private func hoverPointer(_ geometry: SpeedKnobGeometry) -> some View {
+        if let hoverLocation, !isDragging, !isEditing,
+           let percent = geometry.pointedPercent(at: hoverLocation, saved: savedPercent, toGrid: hoverShift),
+           percent != currentPercent {
+            Canvas { context, size in
+                let centre = CGPoint(x: size.width / 2, y: size.height / 2)
+                let angle = SpeedKnobGeometry.angle(for: Double(percent))
+                var pointer = Path()
+                pointer.move(to: SpeedKnobGeometry.point(from: centre, radius: geometry.skirtRadius - 4, angle: angle))
+                pointer.addLine(to: SpeedKnobGeometry.point(from: centre, radius: geometry.capRadius + 4, angle: angle))
+                context.stroke(
+                    pointer,
+                    with: .style(HierarchicalShapeStyle.primary.opacity(0.3)),
+                    style: StrokeStyle(lineWidth: geometry.pointerWidth, lineCap: .round)
+                )
+            }
+            .allowsHitTesting(false)
+        }
+    }
+
+    private func clickLanding(at location: CGPoint) -> Int? {
+        geometry.pointedPercent(at: location, saved: savedPercent, toGrid: ShiftKey.isDown)
+    }
+
+    private func isInCap(_ location: CGPoint) -> Bool {
+        hypot(location.x - diameter / 2, location.y - diameter / 2) <= geometry.capRadius
+    }
+
+    #if canImport(UIKit)
+    private func beginEditing() {
+        draft = "\(currentPercent)"
+        isEditing = true
+        fieldFocused = true
+        // Typing replaces the number, as it would in any other field.
+        DispatchQueue.main.async { selection = TextSelection(range: draft.startIndex..<draft.endIndex) }
+    }
+    #else
+
+    @ViewBuilder
+    private var contextMenu: some View {
+        Button("Type Speed\u{2026}") { beginEditing() }
+        Divider()
+        SpeedPresetItems(percent: currentPercent, savedPercent: savedPercent) { jump(to: $0) }
     }
 
     private func beginEditing() {
@@ -425,7 +530,8 @@ struct SpeedWheelPicker: View {
     /// scrolling setting reports the fingers moving.
     private func scroll(by translation: CGSize) {
         if dragPercent == nil { dragPercent = Double(currentPercent) }
-        update(by: (translation.width - translation.height) / Self.scrollPointsPerPercent)
+        let gear = ShiftKey.isDown ? Double(SpeedInput.shiftStep) : 1
+        update(by: (translation.width - translation.height) / Self.scrollPointsPerPercent * gear)
     }
 
     private func endScroll() {
@@ -453,11 +559,15 @@ struct SpeedWheelPicker: View {
     private var savedPercent: Int? { savedSpeed.map { clamp(Int(($0 * 100).rounded())) } }
 
     private var displayPercent: Int {
-        dragPercent.map { clamp(Int($0.rounded())) } ?? currentPercent
+        dragPercent.map { SpeedInput.snapped($0, toGrid: snapsToGrid, in: SpeedKnobGeometry.minPercent...SpeedKnobGeometry.maxPercent) }
+            ?? currentPercent
     }
 
-    /// Unrounded, so the knob turns smoothly rather than stepping.
-    private var ringPercent: Double { dragPercent ?? Double(currentPercent) }
+    /// Unrounded, so the knob turns smoothly rather than stepping, except
+    /// while ⇧ snaps it, when it jumps from stop to stop.
+    private var ringPercent: Double {
+        snapsToGrid && isDragging ? Double(displayPercent) : dragPercent ?? Double(currentPercent)
+    }
 
     private func clamp(_ percent: Int) -> Int {
         min(max(percent, SpeedKnobGeometry.minPercent), SpeedKnobGeometry.maxPercent)
@@ -469,6 +579,7 @@ struct SpeedWheelPicker: View {
         let previous = dragPercent ?? Double(currentPercent)
         let clamped = min(max(previous + amount, Double(SpeedKnobGeometry.minPercent)), Double(SpeedKnobGeometry.maxPercent))
         let before = displayPercent
+        snapsToGrid = ShiftKey.isDown
         dragPercent = clamped
 
         #if canImport(UIKit)
@@ -547,15 +658,40 @@ private struct TrackpadScroll: UIGestureRecognizerRepresentable {
         }
     }
 }
+
+/// Reports whether each press comes from a mouse, trackpad or Pencil rather
+/// than a finger, which a SwiftUI drag can't tell, then fails at once so it
+/// never holds up the knob's own gestures.
+private struct PressKind: UIGestureRecognizerRepresentable {
+    var onPress: (_ isPrecise: Bool) -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> Recognizer {
+        let recognizer = Recognizer()
+        recognizer.cancelsTouchesInView = false
+        recognizer.delaysTouchesEnded = false
+        return recognizer
+    }
+
+    func updateUIGestureRecognizer(_ recognizer: Recognizer, context: Context) {
+        recognizer.onPress = onPress
+    }
+
+    final class Recognizer: UIGestureRecognizer {
+        var onPress: ((Bool) -> Void)?
+
+        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+            onPress?(touches.contains { $0.type == .indirectPointer || $0.type == .pencil })
+            state = .failed
+        }
+    }
+}
 #endif
 
-#if os(macOS)
 #Preview("Editing") {
     @Previewable @State var speed = 0.7
     SpeedWheelPicker(speed: $speed, savedSpeed: 0.8, diameter: 284, startsEditing: true)
         .padding()
 }
-#endif
 
 #Preview("Phone") {
     @Previewable @State var speed = 0.7

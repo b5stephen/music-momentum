@@ -37,6 +37,24 @@ struct SpeedInputTests {
         #expect(SpeedInput.dragged(from: 70, travel: step * 0.4, shift: true, in: range) == 70)
     }
 
+    @Test("Shift lands on the 5% grid from a speed off it")
+    func shiftFromOffGrid() {
+        let step = SpeedInput.pointsPerPercent
+        #expect(SpeedInput.dragged(from: 72, travel: step, shift: true, in: range) == 75)
+        #expect(SpeedInput.dragged(from: 72, travel: -step, shift: true, in: range) == 65)
+        #expect(SpeedInput.dragged(from: 72, travel: step * 2, shift: true, in: range) == 80)
+    }
+
+    @Test("Snapping rounds to a whole percent, or with shift to the nearest 5%")
+    func snapping() {
+        #expect(SpeedInput.snapped(72.4, toGrid: false, in: range) == 72)
+        #expect(SpeedInput.snapped(72.4, toGrid: true, in: range) == 70)
+        #expect(SpeedInput.snapped(72.6, toGrid: true, in: range) == 75)
+        #expect(SpeedInput.snapped(77.4, toGrid: true, in: range) == 75)
+        #expect(SpeedInput.snapped(29, toGrid: true, in: range) == 30)
+        #expect(SpeedInput.snapped(104, toGrid: true, in: range) == 100)
+    }
+
     @Test("The speed stops at either end")
     func clamping() {
         #expect(SpeedInput.dragged(from: 95, travel: 400, shift: false, in: range) == 100)
@@ -96,6 +114,12 @@ struct SpeedInputTests {
         #expect(SpeedInput.preset(matching: 0.7449) == nil)
         #expect(SpeedInput.preset(matching: 1.0) == 100)
         #expect(SpeedInput.preset(matching: 0.5) == 50)
+    }
+
+    @Test("The menus offer every 5% from 50 to 100, all on the knob's grid")
+    func menuSpeeds() {
+        #expect(SpeedInput.menuSpeeds == [50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100])
+        #expect(SpeedInput.menuSpeeds.allSatisfy { SpeedInput.snapped(Double($0), toGrid: true, in: range) == $0 })
     }
 
     @Test("Between presets, none is current")

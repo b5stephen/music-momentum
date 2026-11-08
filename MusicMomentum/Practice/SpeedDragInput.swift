@@ -16,7 +16,8 @@ extension View {
     }
 }
 
-/// Up is faster; holding ⇧ takes `SpeedInput.shiftStep` percent at a time.
+/// Up is faster; holding ⇧ takes `SpeedInput.shiftStep` percent at a time,
+/// on the 5% grid.
 /// The drag starts after a few points, so a click is left to whatever taps
 /// the view.
 struct SpeedDragInput: ViewModifier {
@@ -65,13 +66,16 @@ struct SpeedDragInput: ViewModifier {
     }
 
     /// Up or right is faster, in whichever direction the system's natural
-    /// scrolling setting reports the fingers moving.
+    /// scrolling setting reports the fingers moving. ⇧ goes five times as
+    /// far and lands on the 5% grid, as it does dragging.
     private func scroll(by translation: CGSize) {
+        let shift = NSEvent.modifierFlags.contains(.shift)
         let start = scrolled ?? (speed * 100).rounded()
         let amount = (translation.width - translation.height) / SpeedInput.pointsPerPercent
+            * Double(shift ? SpeedInput.shiftStep : 1)
         let next = min(max(start + amount, Double(percentRange.lowerBound)), Double(percentRange.upperBound))
         scrolled = next
-        set(percent: Int(next.rounded()))
+        set(percent: SpeedInput.snapped(next, toGrid: shift, in: percentRange))
     }
 
     private func set(percent: Int) {
@@ -114,7 +118,13 @@ private struct ScrollWheel: ViewModifier {
         // where they stopped it.
         guard event.momentumPhase.isEmpty else { return true }
         let scale = event.hasPreciseScrollingDeltas ? 1 : Self.pointsPerLine
-        onChanged(CGSize(width: event.scrollingDeltaX * scale, height: event.scrollingDeltaY * scale))
+        var delta = CGSize(width: event.scrollingDeltaX * scale, height: event.scrollingDeltaY * scale)
+        // AppKit turns a ⇧-held mouse wheel sideways, which would read here
+        // as the opposite way round.
+        if !event.hasPreciseScrollingDeltas, event.modifierFlags.contains(.shift) {
+            delta = CGSize(width: 0, height: delta.width + delta.height)
+        }
+        onChanged(delta)
         // A mouse wheel's clicks have no phase; each is a whole scroll.
         if event.phase.isEmpty || event.phase.contains(.ended) || event.phase.contains(.cancelled) {
             onEnded()

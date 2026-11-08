@@ -174,7 +174,8 @@ extension PracticeView {
             SpeedWheelPicker(
                 speed: $controller.playbackRate,
                 savedSpeed: savedSong?.speed,
-                diameter: layout.knobDiameter
+                diameter: layout.knobDiameter,
+                editRequest: speedEditRequest
             )
             VolumeSlider(tint: track?.palette?.foreground, hidesWhenFixed: true)
                 .frame(width: layout.volumeWidth)

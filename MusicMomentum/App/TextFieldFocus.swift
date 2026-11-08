@@ -15,7 +15,7 @@ enum TextFieldFocus {
     /// Windows already opened, whose focus is now the user's to keep.
     private static var settled: Set<ObjectIdentifier> = []
 
-    private static let characters: Set<String> = [" ", "l", "m", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+    private static let characters: Set<String> = [" ", "l", "m", "s", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
     /// ←, →, ↓, ↑.
     private static let arrows: Set<UInt16> = [123, 124, 125, 126]
 
@@ -27,8 +27,10 @@ enum TextFieldFocus {
         // the caret. Only these keys: Return and Escape must still reach a
         // sheet's Open and Cancel while its search is focused.
         monitors.append(NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard event.modifierFlags.isDisjoint(with: [.command, .control, .option]),
-                  isPlaybackKey(event),
+            // ⌥↑ and ⌥↓ change the speed by 1%, and in a field move the caret.
+            let option = event.modifierFlags.contains(.option)
+            guard event.modifierFlags.isDisjoint(with: [.command, .control]),
+                  option ? arrows.contains(event.keyCode) : isPlaybackKey(event),
                   let window = event.window,
                   window.firstResponder is NSText
             else { return event }

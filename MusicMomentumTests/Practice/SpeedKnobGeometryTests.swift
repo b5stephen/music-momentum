@@ -73,4 +73,57 @@ struct SpeedKnobGeometryTests {
         #expect(full.tapPercent(at: onSkirt) == nil)
         #expect(full.tapPercent(at: CGPoint(x: full.radius, y: full.radius)) == nil)
     }
+
+    // MARK: - Pointed clicks (Mac)
+
+    /// Midway across the skirt, between the cap and the scale.
+    private func onSkirt(_ geometry: SpeedKnobGeometry, at percent: Double) -> CGPoint {
+        SpeedKnobGeometry.point(
+            from: CGPoint(x: geometry.radius, y: geometry.radius),
+            radius: (geometry.capRadius + geometry.skirtRadius) / 2,
+            angle: SpeedKnobGeometry.angle(for: percent)
+        )
+    }
+
+    @Test("A click on the skirt lands on the whole percent under it, ticks or not")
+    func pointedOnSkirt() {
+        #expect(full.pointedPercent(at: onSkirt(full, at: 72.6)) == 73)
+        #expect(full.pointedPercent(at: onSkirt(full, at: 74.4)) == 74)
+        #expect(full.pointedPercent(at: onSkirt(full, at: 75.2)) == 75)
+        #expect(small.pointedPercent(at: onSkirt(small, at: 66.3)) == 66)
+    }
+
+    @Test("Shift lands a click on the skirt on the nearest 5%")
+    func pointedGrid() {
+        #expect(full.pointedPercent(at: onSkirt(full, at: 72.6), toGrid: true) == 75)
+        #expect(full.pointedPercent(at: onSkirt(full, at: 72.4), toGrid: true) == 70)
+    }
+
+    @Test("A click on the scale lands on the nearest 5%, shift or not")
+    func pointedOnScale() {
+        #expect(full.pointedPercent(at: tap(full, at: 72.6)) == 75)
+        #expect(full.pointedPercent(at: tap(full, at: 72.4)) == 70)
+        #expect(full.pointedPercent(at: tap(full, at: 81)) == 80)
+        #expect(full.pointedPercent(at: tap(full, at: 81), toGrid: true) == 80)
+        #expect(small.pointedPercent(at: tap(small, at: 74)) == 75)
+    }
+
+    @Test("The saved dot takes a click on the scale right on it, and only there")
+    func pointedSaved() {
+        #expect(full.pointedPercent(at: tap(full, at: 71.4), saved: 72) == 72)
+        #expect(full.pointedPercent(at: tap(full, at: 70.7), saved: 72) == 70)
+        #expect(full.pointedPercent(at: tap(full, at: 71.4)) == 70)
+        #expect(full.pointedPercent(at: onSkirt(full, at: 71.4), saved: 72) == 71)
+    }
+
+    @Test("A click on the skirt just past a stop lands on it, deep in the gap or in the cap on nothing")
+    func pointedLimits() {
+        #expect(full.pointedPercent(at: onSkirt(full, at: 100.6)) == 100)
+        #expect(full.pointedPercent(at: onSkirt(full, at: 29.4)) == 30)
+        let bottom = CGPoint(x: full.radius, y: full.radius + (full.capRadius + full.skirtRadius) / 2)
+        #expect(full.pointedPercent(at: bottom) == nil)
+        #expect(full.pointedPercent(at: CGPoint(x: full.radius, y: full.radius)) == nil)
+        let inCap = CGPoint(x: full.radius, y: full.radius - full.capRadius + 2)
+        #expect(full.pointedPercent(at: inCap) == nil)
+    }
 }
