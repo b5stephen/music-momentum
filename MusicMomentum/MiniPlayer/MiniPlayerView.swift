@@ -94,9 +94,9 @@ struct MiniPlayerView: View {
                 }
                 Spacer(minLength: 0)
                 HStack(spacing: 4) {
-                    skipButton("backward.end.fill", label: "Previous clip", hint: "Previous clip", clip: previous)
+                    skipButton("backward.end.fill", label: "Previous loop", hint: "Previous loop", clip: previous)
                     playButton
-                    skipButton("forward.end.fill", label: "Next clip", hint: "Next clip", clip: next)
+                    skipButton("forward.end.fill", label: "Next loop", hint: "Next loop", clip: next)
                     Spacer(minLength: 0)
                     loopButton
                     expandButton

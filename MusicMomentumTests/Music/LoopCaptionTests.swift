@@ -27,12 +27,12 @@ struct LoopCaptionTests {
 
     @Test("A clip that is no longer in the song is still a clip")
     func unnamed() {
-        #expect(LoopCaption.text(isOn: true, clips: [.init(name: nil, length: 20)]) == "Looping one clip \u{00B7} 0:20")
+        #expect(LoopCaption.text(isOn: true, clips: [.init(name: nil, length: 20)]) == "Looping a single loop \u{00B7} 0:20")
     }
 
     @Test("A chain counts its clips and adds their lengths")
     func chain() {
         let clips: [LoopCaption.Clip] = [.init(name: "A", length: 20), .init(name: "B", length: 45)]
-        #expect(LoopCaption.text(isOn: true, clips: clips) == "Looping 2 clips \u{00B7} 1:05")
+        #expect(LoopCaption.text(isOn: true, clips: clips) == "Chaining 2 loops \u{00B7} 1:05")
     }
 }

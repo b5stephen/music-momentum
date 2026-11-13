@@ -854,11 +854,11 @@ struct PracticeView: View {
         case 0:
             return "Looping whole song"
         case 1:
-            guard let name = marker(for: segments[0].markerID)?.name else { return "Looping one clip" }
+            guard let name = marker(for: segments[0].markerID)?.name else { return "Looping a single loop" }
             return "Looping \(name)"
         default:
             let total = segments.reduce(0) { $0 + ($1.end - $1.start) }
-            return "Looping \(segments.count) clips · \(PlaybackScrubber.lengthLabel(total))"
+            return "Chaining \(segments.count) loops · \(PlaybackScrubber.lengthLabel(total))"
         }
     }
 
@@ -868,8 +868,8 @@ struct PracticeView: View {
         let clips = loop.segments.count
         switch clips {
         case 0: return "Whole song"
-        case 1: return "One clip"
-        default: return "\(clips) clips"
+        case 1: return "One loop"
+        default: return "\(clips) loops"
         }
     }
 

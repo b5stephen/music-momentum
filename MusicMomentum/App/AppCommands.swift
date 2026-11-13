@@ -76,10 +76,10 @@ struct AppCommands: Commands {
             Toggle("Loop", isOn: Binding(get: { practice?.isLoopOn == true }, set: { _ in practice?.toggleLoop() }))
                 .keyboardShortcut("l", modifiers: [])
                 .disabled(!canSeek)
-            Menu("Loop Clip") {
+            Menu("Saved Loops") {
                 ForEach(1...9, id: \.self) { number in
                     let names = practice?.clipNames ?? []
-                    Button(number <= names.count ? names[number - 1] : "Clip \(number)") { practice?.loopClip(number) }
+                    Button(number <= names.count ? names[number - 1] : "Loop \(number)") { practice?.loopClip(number) }
                         .keyboardShortcut(KeyEquivalent(Character("\(number)")), modifiers: [])
                         .disabled(!canSeek || number > names.count)
                 }

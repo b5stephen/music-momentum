@@ -18,7 +18,6 @@ struct MarkerLaneActions {
     /// text straight through.
     var rename: (PlaybackScrubber.Marker, String) -> Void = { _, _ in }
     var editTimes: (PlaybackScrubber.Marker) -> Void = { _ in }
-    var makePoint: (PlaybackScrubber.Marker) -> Void = { _ in }
     var delete: (PlaybackScrubber.Marker) -> Void = { _ in }
     /// A clip dragged out in the lane, named or not. Blank takes the default.
     var createClip: (_ name: String, _ start: TimeInterval, _ end: TimeInterval) -> Void = { _, _, _ in }

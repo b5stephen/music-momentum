@@ -220,7 +220,7 @@ struct MarkerPills: View {
     }
 
     private func accessibilityLabel(_ marker: SongMarker, state: PillState) -> String {
-        let kind = marker.isClip ? "clip" : "marker"
+        let kind = marker.isClip ? "loop" : "marker"
         switch state {
         case .idle: return "\(marker.name), \(kind)"
         case .joinable: return "\(marker.name), \(kind), not looping"

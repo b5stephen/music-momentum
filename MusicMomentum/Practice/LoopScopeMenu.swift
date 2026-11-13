@@ -36,7 +36,7 @@ struct LoopScopeMenu<Label: View>: View {
             .disabled(!controller.isLoopOn)
 
             if !clips.isEmpty {
-                Section("Clips") {
+                Section("Loops") {
                     ForEach(Array(clips.enumerated()), id: \.element.persistentModelID) { index, clip in
                         Toggle(
                             Self.title(clip, number: index < 9 ? index + 1 : nil),
@@ -67,7 +67,7 @@ struct LoopScopeMenu<Label: View>: View {
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
-        .help("Choose what loops, or jump to a marker. \u{2318}-click a clip to add or remove it")
+        .help("Choose what loops, or jump to a marker. \u{2318}-click a loop to add or remove it")
         .accessibilityLabel("Loop scope")
     }
 

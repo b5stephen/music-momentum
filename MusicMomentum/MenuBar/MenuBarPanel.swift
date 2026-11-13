@@ -113,7 +113,7 @@ struct MenuBarPanel: View {
             }
         }
         VStack(alignment: .leading, spacing: 4) {
-            Text("Clips")
+            Text("Loops")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 8)

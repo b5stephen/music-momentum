@@ -174,7 +174,7 @@ struct MarkerLane: View {
 
     /// The same height as one row, so loading a song never moves Practice.
     private var emptyHint: some View {
-        Text("No markers yet \u{00B7} press \(Text("M").fontWeight(.semibold)) to mark a point, or drag here to mark a clip")
+        Text("No markers yet \u{00B7} press \(Text("M").fontWeight(.semibold)) to mark a point, or drag here to make a loop")
             .font(.system(size: 12))
             .foregroundStyle(.primary.opacity(0.55))
             .lineLimit(1)
@@ -279,7 +279,7 @@ struct MarkerLane: View {
         .modifier(LaneItemInput(id: marker.id, hovered: $hovered, renaming: renaming))
         .contextMenu { menu(for: marker) }
         .offset(x: clip.x, y: top)
-        .accessibilityLabel("\(marker.name), clip\(marker.isLooping ? ", looping" : "")")
+        .accessibilityLabel("\(marker.name), loop\(marker.isLooping ? ", looping" : "")")
         .accessibilityValue(timeLabel(marker))
     }
 
@@ -559,7 +559,7 @@ struct MarkerLane: View {
     @ViewBuilder
     private func menu(for marker: PlaybackScrubber.Marker) -> some View {
         if marker.isClip {
-            Button("Loop This Clip") { actions.clip(marker, false) }
+            Button("Loop Just This") { actions.clip(marker, false) }
                 .disabled(!isLoopOn)
             Button(marker.isLooping && isLoopOn ? "Remove from Loop" : "Add to Loop") { actions.clip(marker, true) }
                 .disabled(!isLoopOn)
@@ -568,9 +568,6 @@ struct MarkerLane: View {
         Divider()
         Button("Rename") { renaming.wrappedValue = marker.id }
         Button("Edit Times\u{2026}") { actions.editTimes(marker) }
-        if marker.isClip {
-            Button("Make a Point") { actions.makePoint(marker) }
-        }
         Divider()
         // Shown for the hint; the key itself comes in Phase 5.
         Button("Delete", role: .destructive) { actions.delete(marker) }

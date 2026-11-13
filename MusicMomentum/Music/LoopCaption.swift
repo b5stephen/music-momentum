@@ -20,10 +20,10 @@ nonisolated enum LoopCaption {
         case 0:
             return "Looping whole song"
         case 1:
-            return "Looping \(clips[0].name ?? "one clip") \u{00B7} \(PlaybackScrubber.timeLabel(clips[0].length))"
+            return "Looping \(clips[0].name ?? "a single loop") \u{00B7} \(PlaybackScrubber.timeLabel(clips[0].length))"
         default:
             let total = clips.reduce(0) { $0 + $1.length }
-            return "Looping \(clips.count) clips \u{00B7} \(PlaybackScrubber.timeLabel(total))"
+            return "Chaining \(clips.count) loops \u{00B7} \(PlaybackScrubber.timeLabel(total))"
         }
     }
 }

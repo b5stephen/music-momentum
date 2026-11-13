@@ -51,7 +51,7 @@ struct SongMarkerTests {
         let c = SongMarker.add(to: song, name: "", startTime: 3, endTime: 8, in: context)
         #expect(a.name == "Marker 1")
         #expect(b.name == "Marker 2")
-        #expect(c.name == "Clip 1")
+        #expect(c.name == "Loop 1")
     }
 
     @Test("An end too close to the start is dropped rather than making a zero-length clip")

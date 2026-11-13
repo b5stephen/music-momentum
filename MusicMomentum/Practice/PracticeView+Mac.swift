@@ -307,16 +307,11 @@ extension PracticeView {
             rename: { scrubberMarker, name in
                 guard let marker = marker(for: scrubberMarker.id) else { return }
                 if justMarked?.id == marker.persistentModelID { justMarked = nil }
-                // A blank name would become "Clip 3"; renaming keeps the old one.
+                // A blank name would become "Loop 3"; renaming keeps the old one.
                 let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
                 update(marker, name: trimmed.isEmpty ? marker.name : trimmed, start: marker.startTime, end: marker.endTime)
             },
             editTimes: { if let marker = marker(for: $0.id) { markerSheet = .edit(marker) } },
-            makePoint: {
-                guard let marker = marker(for: $0.id) else { return }
-                marker.clearEnd(in: modelContext)
-                controller.markerChanged(marker)
-            },
             delete: { if let marker = marker(for: $0.id) { delete(marker) } },
             createClip: { name, start, end in addMarker(name: name, start: start, end: end) },
             trimming: { scrubberMarker, start, end in
@@ -382,10 +377,10 @@ extension PracticeView {
             let range = "\(PlaybackScrubber.timeLabel(segment.start)) \u{2013} \(PlaybackScrubber.timeLabel(segment.end))"
             let length = PlaybackScrubber.lengthLabel(segment.end - segment.start)
             let name = marker(for: segment.markerID)?.name
-            return (name.map { "Looping \($0)" } ?? "Looping one clip", "\(range) \u{00B7} \(length)")
+            return (name.map { "Looping \($0)" } ?? "Looping a single loop", "\(range) \u{00B7} \(length)")
         default:
             let total = segments.reduce(0) { $0 + ($1.end - $1.start) }
-            return ("Looping \(segments.count) clips", PlaybackScrubber.lengthLabel(total))
+            return ("Chaining \(segments.count) loops", PlaybackScrubber.lengthLabel(total))
         }
     }
 
