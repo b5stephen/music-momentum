@@ -37,11 +37,13 @@ struct PracticeView: View {
     @Query private var savedSongs: [SavedSong]
     @State private var picking: Picking?
     @State var markerSheet: MarkerSheet?
-    @State private var justMarked: JustMarked?
+    @State var justMarked: JustMarked?
     #if os(macOS)
     /// Which part of the song the Mac timeline shows. Not saved, and fitted
     /// again when the song changes.
     @State var timelineViewport = TimelineViewport()
+    /// The lane item whose name is being typed in place.
+    @State var macRenaming: AnyHashable?
     /// Whether the timeline is crowded enough to show its zoom controls.
     @State var isZoomOffered = false
     #endif
@@ -1251,7 +1253,7 @@ struct PracticeView: View {
             }
         )
         #if os(macOS)
-        return withMacZoom(actions)
+        return withMacMarkerKeys(withMacZoom(actions))
         #else
         return actions
         #endif

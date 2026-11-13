@@ -210,12 +210,22 @@ extension PracticeView {
                 onScrub: { _ in controller.isScrubbing = true },
                 isLoopOn: controller.isLoopOn,
                 laneActions: macLaneActions,
+                renaming: $macRenaming,
+                justMarked: justMarked?.id,
                 viewport: $timelineViewport,
                 onZoomNeeded: { isZoomOffered = $0 },
                 onCommit: { controller.endScrub(at: $0) }
             )
         }
-        .onChange(of: track?.id) { timelineViewport.fit() }
+        .onChange(of: track?.id) {
+            timelineViewport.fit()
+            macRenaming = nil
+        }
+        .task(id: justMarked) {
+            guard justMarked != nil else { return }
+            try? await Task.sleep(for: .seconds(6))
+            if !Task.isCancelled { justMarked = nil }
+        }
         .onChange(of: controller.playbackTime) { old, new in
             guard let duration = controller.duration else { return }
             timelineViewport.follow(playhead: new, previous: old, duration: duration)
@@ -256,6 +266,37 @@ extension PracticeView {
         timelineViewport.zoom(by: factor, around: controller.playbackTime, duration: duration)
     }
 
+    // MARK: Marker keys
+
+    /// What Return and ⌥Return act on: the point Mark just made, else the
+    /// last point at or before the playhead.
+    private var macKeyTarget: SongMarker? {
+        if let justMarked, let marker = marker(for: justMarked.id) { return marker }
+        return (savedSong?.markers ?? [])
+            .filter { $0.endTime == nil && $0.startTime <= controller.playbackTime }
+            .max { $0.startTime < $1.startTime }
+    }
+
+    func withMacMarkerKeys(_ actions: PracticeActions) -> PracticeActions {
+        var actions = actions
+        actions.canRenameMarker = macKeyTarget != nil
+        actions.renameMarker = {
+            guard let marker = macKeyTarget else { return }
+            macReveal(marker)
+            macRenaming = marker.persistentModelID
+        }
+        actions.editMarkerTimes = {
+            guard let marker = macKeyTarget else { return }
+            markerSheet = .edit(marker)
+        }
+        return actions
+    }
+
+    private func macReveal(_ marker: SongMarker) {
+        guard let duration = controller.duration else { return }
+        timelineViewport.reveal(marker.startTime...marker.startTime, duration: duration)
+    }
+
     /// The lane hands back ids, never models: a menu can be open while the
     /// store changes under it.
     private var macLaneActions: MarkerLaneActions {
@@ -265,6 +306,7 @@ extension PracticeView {
             jump: { if let marker = marker(for: $0.id) { controller.jump(to: marker) } },
             rename: { scrubberMarker, name in
                 guard let marker = marker(for: scrubberMarker.id) else { return }
+                if justMarked?.id == marker.persistentModelID { justMarked = nil }
                 // A blank name would become "Clip 3"; renaming keeps the old one.
                 let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
                 update(marker, name: trimmed.isEmpty ? marker.name : trimmed, start: marker.startTime, end: marker.endTime)

@@ -29,6 +29,11 @@ struct MarkerLane: View {
     /// can only jump.
     var isLoopOn = false
     var actions = MarkerLaneActions()
+    /// The item being renamed in place. Practice owns it, so the Return key
+    /// can start a rename from outside the lane.
+    var renaming: Binding<AnyHashable?> = .constant(nil)
+    /// The point Mark just made, offered for naming: a bubble and a halo.
+    var justMarked: AnyHashable?
     /// Preview only: hovers this marker, or opens its rename field with
     /// `startsRenaming`, without a pointer.
     var previewHover: AnyHashable?
@@ -54,7 +59,6 @@ struct MarkerLane: View {
     @Environment(\.onAccent) private var onAccent
     @Environment(\.displayScale) private var displayScale
     @State private var hovered: AnyHashable?
-    @State private var renaming: AnyHashable?
     @State private var ghost: ClipDraft?
     @State private var naming: ClipDraft?
     @State private var trim: TrimDraft?
@@ -74,8 +78,11 @@ struct MarkerLane: View {
     private var shownTrim: TrimDraft? { trim ?? previewTrim }
     private var shownNaming: ClipDraft? { naming ?? previewNaming }
     private var shownGhost: ClipDraft? { ghost ?? shownNaming ?? previewGhost }
+    private var isIdle: Bool {
+        renaming.wrappedValue == nil && shownTrim == nil && ghost == nil && shownNaming == nil
+    }
     private var shownHover: AnyHashable? {
-        renaming == nil && shownTrim == nil && ghost == nil && shownNaming == nil ? hovered ?? previewHover : nil
+        renaming.wrappedValue == nil && shownTrim == nil && ghost == nil && shownNaming == nil ? hovered ?? previewHover : nil
     }
 
     /// The markers as drawn: the one being trimmed at its dragged bounds.
@@ -125,8 +132,10 @@ struct MarkerLane: View {
                     }
                     if let id = shownHover, let marker = marker(id) {
                         bubble(for: marker, in: layout, width: proxy.size.width)
+                    } else if let id = justMarked, shownHover == nil, isIdle, let marker = marker(id), !marker.isClip {
+                        justMarkedBubble(for: marker, in: layout, width: proxy.size.width)
                     }
-                    if let id = renaming ?? (startsRenaming ? markers.first?.id : nil), let marker = marker(id) {
+                    if let id = renaming.wrappedValue ?? (startsRenaming ? markers.first?.id : nil), let marker = marker(id) {
                         renameField(for: marker, in: layout, width: proxy.size.width)
                     }
                 }
@@ -191,6 +200,13 @@ struct MarkerLane: View {
                 Circle()
                     .fill(.primary)
                     .frame(width: dot, height: dot)
+                    .background {
+                        if justMarked == marker.id, isIdle {
+                            Circle()
+                                .fill(.primary.opacity(0.25))
+                                .frame(width: 20, height: 20)
+                        }
+                    }
                     .overlay { Circle().stroke(.black.opacity(0.15), lineWidth: 2) }
                 if point.showsName {
                     Text(marker.name)
@@ -205,7 +221,7 @@ struct MarkerLane: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .modifier(LaneItemInput(id: marker.id, hovered: $hovered, renaming: $renaming))
+        .modifier(LaneItemInput(id: marker.id, hovered: $hovered, renaming: renaming))
         .contextMenu { menu(for: marker) }
         .offset(x: point.x - dot / 2 - padding)
         .accessibilityLabel("\(marker.name), point")
@@ -260,7 +276,7 @@ struct MarkerLane: View {
             .contentShape(shape)
         }
         .buttonStyle(.plain)
-        .modifier(LaneItemInput(id: marker.id, hovered: $hovered, renaming: $renaming))
+        .modifier(LaneItemInput(id: marker.id, hovered: $hovered, renaming: renaming))
         .contextMenu { menu(for: marker) }
         .offset(x: clip.x, y: top)
         .accessibilityLabel("\(marker.name), clip\(marker.isLooping ? ", looping" : "")")
@@ -478,6 +494,18 @@ struct MarkerLane: View {
         .transition(.opacity)
     }
 
+    private func justMarkedBubble(for marker: PlaybackScrubber.Marker, in layout: MarkerLaneLayout, width: CGFloat) -> some View {
+        let (minX, maxX) = extent(of: marker.id, in: layout)
+        return floatingBubble(
+            MarkerBubble(
+                name: marker.name.isEmpty ? "Untitled" : marker.name,
+                detail: "\(PreciseTime.format(marker.start)) \u{00B7} Return to name \u{00B7} \u{2318}Z to undo"
+            ),
+            minX: minX, maxX: maxX, width: width
+        )
+        .transition(.opacity)
+    }
+
     private func extent(of id: AnyHashable, in layout: MarkerLaneLayout) -> (CGFloat, CGFloat) {
         if let clip = layout.clips.first(where: { $0.id == id }) { return (clip.x, clip.x + clip.width) }
         let x = layout.points.first { $0.id == id }?.x ?? 0
@@ -494,15 +522,20 @@ struct MarkerLane: View {
         let (minX, _) = extent(of: marker.id, in: layout)
         let x = max(0, min(minX, width - fieldWidth - InlineNameField.hintWidth - 8))
         let y = clip.map { layout.top(ofRow: $0.row) - 1 } ?? -4
+        let others = markers.filter { $0.id != marker.id }
+        let suggestions = marker.isClip
+            ? MarkerNameSuggestions.forLoop(among: others.filter(\.isClip).map(\.name))
+            : MarkerNameSuggestions.forMarker(at: marker.start, among: others.filter { !$0.isClip }.map { (name: $0.name, start: $0.start) })
         return InlineNameField(
             initialText: marker.name,
             width: fieldWidth,
             startsFocused: startsRenaming,
+            suggestions: suggestions,
             onCommit: { name in
-                renaming = nil
+                renaming.wrappedValue = nil
                 actions.rename(marker, name)
             },
-            onCancel: { renaming = nil }
+            onCancel: { renaming.wrappedValue = nil }
         )
         .id(marker.id)
         .offset(x: x, y: y)
@@ -533,7 +566,7 @@ struct MarkerLane: View {
         }
         Button("Jump to Start") { actions.jump(marker) }
         Divider()
-        Button("Rename") { renaming = marker.id }
+        Button("Rename") { renaming.wrappedValue = marker.id }
         Button("Edit Times\u{2026}") { actions.editTimes(marker) }
         if marker.isClip {
             Button("Make a Point") { actions.makePoint(marker) }
@@ -655,17 +688,17 @@ private let previewMarkers: [PlaybackScrubber.Marker] = [
 @MainActor
 private func lanePreview(
     markers: [PlaybackScrubber.Marker] = previewMarkers,
-    hover: AnyHashable? = nil, renames: Bool = false, isLoopOn: Bool = true,
+    hover: AnyHashable? = nil, renames: Bool = false, isLoopOn: Bool = true, justMarked: AnyHashable? = nil,
     ghost: MarkerLane.ClipDraft? = nil, naming: MarkerLane.ClipDraft? = nil, trim: MarkerLane.TrimDraft? = nil
 ) -> some View {
     MarkerLane(
-        markers: markers, duration: 258, isLoopOn: isLoopOn,
+        markers: markers, duration: 258, isLoopOn: isLoopOn, justMarked: justMarked,
         previewHover: hover, startsRenaming: renames,
         previewGhost: ghost, previewNaming: naming, previewTrim: trim
     )
     .padding(.top, 56)
     .padding(.horizontal, 24)
-    .padding(.bottom, 40)
+    .padding(.bottom, renames ? 150 : 40)
     .frame(width: 680)
     .modifier(ArtworkGround(palette: ArtworkPalette(cover: OKLCH(red: 0.18, green: 0.42, blue: 0.45)), isPlaying: false))
 }
@@ -700,7 +733,14 @@ private func lanePreview(
     lanePreview(markers: [], ghost: .init(start: 100, end: 124))
 }
 
-#Preview("Lane, renaming", traits: .fixedLayout(width: 680, height: 150)) {
+#Preview("Lane, just marked", traits: .fixedLayout(width: 680, height: 150)) {
+    lanePreview(
+        markers: previewMarkers + [.init(id: "Marker 7", name: "Marker 7", start: 140.1, end: nil)],
+        justMarked: "Marker 7"
+    )
+}
+
+#Preview("Lane, renaming", traits: .fixedLayout(width: 680, height: 240)) {
     lanePreview(renames: true)
 }
 #endif

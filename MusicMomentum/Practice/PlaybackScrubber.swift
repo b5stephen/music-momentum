@@ -27,6 +27,11 @@ struct PlaybackScrubber: View {
     /// The lane's clicks and menu. The scrubber only reports them; what they
     /// mean is Practice's call.
     var laneActions = MarkerLaneActions()
+    /// The lane's item being renamed in place, owned by Practice so a menu
+    /// key can start one.
+    var renaming: Binding<AnyHashable?> = .constant(nil)
+    /// The point Mark just made, for the lane's bubble and halo.
+    var justMarked: AnyHashable?
     /// The part of the song the lane and track show. Practice owns it, since
     /// the zoom controls in its header act on it too.
     var viewport: Binding<TimelineViewport> = .constant(TimelineViewport())
@@ -107,7 +112,9 @@ struct PlaybackScrubber: View {
                         duration: duration,
                         visible: range,
                         isLoopOn: isLoopOn,
-                        actions: laneActions
+                        actions: laneActions,
+                        renaming: renaming,
+                        justMarked: justMarked
                     )
                 }
                 // Over the track below, for the bubbles that rise out of it.

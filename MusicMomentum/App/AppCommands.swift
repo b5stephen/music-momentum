@@ -10,7 +10,7 @@ import SwiftUI
 /// `PracticeActions` and `WindowActions`, or the mini player's while it's
 /// open, so with no window (or a sheet up) they grey out.
 ///
-/// Single keys (Space, the arrows, L, M, ⇧M, S, 1-9) are plain menu key equivalents, not
+/// Single keys (Space, the arrows, Return, L, M, ⇧M, S, 1-9) are plain menu key equivalents, not
 /// `.onKeyPress`, so they work wherever focus is and Space never presses a
 /// focused button. On the Mac the menu sees a key before a text field does,
 /// so `TextFieldFocus` hands them to a field being edited; UIKit gives a text
@@ -93,6 +93,15 @@ struct AppCommands: Commands {
             Button("Mark and Edit\u{2026}") { practice?.markAndEdit() }
                 .keyboardShortcut("m", modifiers: .shift)
                 .disabled(!canSeek || practice?.canMark != true)
+            #if os(macOS)
+            Divider()
+            Button("Rename Marker\u{2026}") { practice?.renameMarker() }
+                .keyboardShortcut(.return, modifiers: [])
+                .disabled(!canSeek || practice?.canMark != true || practice?.canRenameMarker != true)
+            Button("Edit Marker Times\u{2026}") { practice?.editMarkerTimes() }
+                .keyboardShortcut(.return, modifiers: .option)
+                .disabled(!canSeek || practice?.canMark != true || practice?.canRenameMarker != true)
+            #endif
         }
 
         CommandMenu("Speed") {

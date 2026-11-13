@@ -18,21 +18,26 @@ enum TextFieldFocus {
     private static let characters: Set<String> = [" ", "l", "m", "s", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
     /// ←, →, ↓, ↑.
     private static let arrows: Set<UInt16> = [123, 124, 125, 126]
+    /// Return and the keypad's Enter.
+    private static let returns: Set<UInt16> = [36, 76]
 
     static func install() {
         guard monitors.isEmpty else { return }
 
         // AppKit offers every key to the menu before the first responder, so
         // without this ← in the sidebar search moved the playhead instead of
-        // the caret. Only these keys: Return and Escape must still reach a
-        // sheet's Open and Cancel while its search is focused.
+        // the caret. Return is the Markers menu's Rename, so a field gets it
+        // too or it could never submit; but not in a sheet, whose Return is
+        // Open and whose menus are off. Escape stays out: no menu has it.
         monitors.append(NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            // ⌥↑ and ⌥↓ change the speed by 1%, and in a field move the caret.
+            // ⌥↑ and ⌥↓ change the speed by 1%, and in a field move the caret;
+            // ⌥Return is Edit Marker Times.
             let option = event.modifierFlags.contains(.option)
             guard event.modifierFlags.isDisjoint(with: [.command, .control]),
-                  option ? arrows.contains(event.keyCode) : isPlaybackKey(event),
+                  option ? arrows.contains(event.keyCode) || returns.contains(event.keyCode) : isPlaybackKey(event),
                   let window = event.window,
-                  window.firstResponder is NSText
+                  window.firstResponder is NSText,
+                  !returns.contains(event.keyCode) || window.sheetParent == nil
             else { return event }
             // Straight to the window, which gives it to the field editor,
             // skipping the application's pass through the menu.
@@ -72,6 +77,7 @@ enum TextFieldFocus {
 
     private static func isPlaybackKey(_ event: NSEvent) -> Bool {
         arrows.contains(event.keyCode)
+            || returns.contains(event.keyCode)
             || characters.contains(event.charactersIgnoringModifiers?.lowercased() ?? "")
     }
 }

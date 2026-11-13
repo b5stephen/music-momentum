@@ -24,6 +24,8 @@ struct PracticeActions {
     var canZoomOut = false
     /// The mini player has no lane or toast to name a marker in, so it doesn't mark.
     var canMark = true
+    /// The Mac's Return and ⌥Return have a marker to act on.
+    var canRenameMarker = false
     /// Names of the first nine clips in start order, for the 1-9 items.
     var clipNames: [String] = []
     /// A marker sheet is up, and its fields are for typing.
@@ -35,6 +37,8 @@ struct PracticeActions {
     var toggleLoop: @MainActor () -> Void = {}
     var mark: @MainActor () -> Void = {}
     var markAndEdit: @MainActor () -> Void = {}
+    var renameMarker: @MainActor () -> Void = {}
+    var editMarkerTimes: @MainActor () -> Void = {}
     var stepSpeed: @MainActor (_ up: Bool) -> Void = { _ in }
     var nudgeSpeed: @MainActor (_ up: Bool) -> Void = { _ in }
     var setSpeed: @MainActor (_ percent: Int) -> Void = { _ in }
