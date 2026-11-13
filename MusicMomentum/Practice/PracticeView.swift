@@ -17,6 +17,8 @@ struct PracticeView: View {
     /// Stands in for `controller.selectedSong` in previews, since `Song` has
     /// no public initialiser.
     var previewTrack: Track?
+    /// Shows the naming toast for the marker with this id in previews.
+    var previewJustMarked: PersistentIdentifier?
     /// Set when Saved is on screen beside it rather than in another tab.
     var savedIsBeside = false
     /// Off when the window behind paints the cover's mesh, so the sidebar
@@ -254,6 +256,9 @@ struct PracticeView: View {
             // scheme and text colour come back too.
             .outsideArtworkGround()
         }
+        .onAppear {
+            if let previewJustMarked { justMarked = JustMarked(id: previewJustMarked, date: .now) }
+        }
         .onChange(of: controller.selectedSong?.id) {
             justMarked = nil
         }
@@ -262,6 +267,7 @@ struct PracticeView: View {
         }
         .focusedSceneValue(\.practiceActions, menuActions)
         #if os(iOS)
+        .sensoryFeedback(.impact(weight: .light), trigger: justMarked) { _, new in new != nil }
         .focusedSceneValue(
             \.windowActions,
             WindowActions(
@@ -356,6 +362,9 @@ struct PracticeView: View {
             Spacer(minLength: layout.wheelGap - lift / 2)
 
             player(layout)
+                #if os(iOS)
+                .modifier(MarkToastAbove { markToast })
+                #endif
 
             // Last, so on a screen with nothing spare the gaps above take
             // their minimums before this takes anything.
@@ -452,6 +461,9 @@ struct PracticeView: View {
             }
             .padding(.top, layout.topMargin + placement.drop)
             .frame(height: crease.lowerBound)
+            #if os(iOS)
+            .overlay(alignment: .bottom) { markToast.padding(.bottom, 8) }
+            #endif
 
             Color.clear.frame(height: crease.upperBound - crease.lowerBound)
 
@@ -492,6 +504,9 @@ struct PracticeView: View {
                 )
             }
             .frame(width: PracticeLayout.wideLeadingWidth(size.width))
+            #if os(iOS)
+            .overlay(alignment: .bottom) { markToast }
+            #endif
 
             player(layout, height: panel.height - 2 * PracticeLayout.widePanelPadding)
             .padding(.vertical, PracticeLayout.widePanelPadding)
@@ -725,35 +740,54 @@ struct PracticeView: View {
     }
 
     private func markButton(showsTitle: Bool) -> some View {
+        #if os(iOS)
+        Menu {
+            Button { markAndEdit() } label: { Label("Mark and Edit…", systemImage: "square.and.pencil") }
+        } label: {
+            markLabel(showsTitle: showsTitle)
+        } primaryAction: {
+            mark()
+        }
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .fixedSize()
+        .disabled(controller.duration == nil)
+        .accessibilityLabel("Mark this point")
+        #else
         Button {
             mark()
         } label: {
-            Group {
-                if showsTitle {
-                    Label {
-                        Text("Mark")
-                    } icon: {
-                        MarkGlyph()
-                            .frame(width: 17, height: 17)
-                    }
-                    .padding(.horizontal, 14)
-                    .frame(minHeight: Self.headerButtonSide)
-                } else {
-                    MarkGlyph()
-                        .frame(width: 20, height: 20)
-                        .frame(width: Self.markGlassSide, height: Self.markGlassSide)
-                }
-            }
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(Color.primary)
-            .modifier(ButtonGlass())
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(.rect)
+            markLabel(showsTitle: showsTitle)
         }
         .buttonStyle(.plain)
         .fixedSize()
         .disabled(controller.duration == nil)
         .accessibilityLabel("Mark this point")
+        #endif
+    }
+
+    private func markLabel(showsTitle: Bool) -> some View {
+        Group {
+            if showsTitle {
+                Label {
+                    Text("Mark")
+                } icon: {
+                    MarkGlyph()
+                        .frame(width: 17, height: 17)
+                }
+                .padding(.horizontal, 14)
+                .frame(minHeight: Self.headerButtonSide)
+            } else {
+                MarkGlyph()
+                    .frame(width: 20, height: 20)
+                    .frame(width: Self.markGlassSide, height: Self.markGlassSide)
+            }
+        }
+        .font(.subheadline.weight(.semibold))
+        .foregroundStyle(Color.primary)
+        .modifier(ButtonGlass())
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(.rect)
     }
 
     /// Compact, Mark sits in the clip row, and shorter than the header's 44pt
@@ -1098,7 +1132,59 @@ struct PracticeView: View {
         guard let marker = addMarker(name: "", start: time, end: nil) else { return }
         justMarked = JustMarked(id: marker.persistentModelID, date: .now)
         registerMarkUndo(for: marker.persistentModelID)
+        #if os(iOS)
+        AccessibilityNotification.Announcement("\(marker.name) saved").post()
+        #endif
     }
+
+    #if os(iOS)
+    /// Hidden behind a sheet, which would leave it counting down unseen.
+    private var toastMarker: SongMarker? {
+        guard let justMarked, picking == nil, markerSheet == nil else { return nil }
+        return marker(for: justMarked.id)
+    }
+
+    @ViewBuilder
+    private var markToast: some View {
+        ZStack {
+            if let marker = toastMarker {
+                let others = (savedSong?.markers ?? [])
+                    .filter { $0.persistentModelID != marker.persistentModelID && $0.endTime == nil }
+                    .map { (name: $0.name, start: $0.startTime) }
+                MarkToast(
+                    name: marker.name,
+                    time: PreciseTime.format(marker.startTime),
+                    suggestions: MarkerNameSuggestions.forMarker(at: marker.startTime, among: others),
+                    onPick: { name in
+                        update(marker, name: name, start: marker.startTime, end: marker.endTime)
+                        justMarked = nil
+                    },
+                    onEdit: {
+                        markerSheet = .edit(marker)
+                        justMarked = nil
+                    },
+                    onUndo: {
+                        if let undoManager, undoManager.canUndo, undoManager.undoActionName == "Mark" {
+                            undoManager.undo()
+                        } else {
+                            delete(marker)
+                        }
+                        justMarked = nil
+                    },
+                    onTimeout: { justMarked = nil }
+                )
+                .id(marker.persistentModelID)
+                .padding(.horizontal, Self.sideMargin)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy(duration: 0.25), value: toastMarker?.persistentModelID)
+        // Once hidden by a sheet it would only come back with a fresh countdown.
+        .onChange(of: toastMarker == nil) { _, gone in
+            if gone { justMarked = nil }
+        }
+    }
+    #endif
 
     /// Pauses and opens the marker sheet.
     func markAndEdit() {
@@ -1381,6 +1467,21 @@ private struct HeaderButtonsBeside<Buttons: View, Fade: View>: ViewModifier {
     }
 }
 
+#if os(iOS)
+/// Puts `toast` just above the view's top edge, clear of everything below it.
+private struct MarkToastAbove<Toast: View>: ViewModifier {
+    @ViewBuilder var toast: Toast
+
+    func body(content: Content) -> some View {
+        content.overlay(alignment: .top) {
+            toast
+                .padding(.bottom, 8)
+                .alignmentGuide(.top) { $0[.bottom] }
+        }
+    }
+}
+#endif
+
 private struct PanelGlass: ViewModifier {
     @Environment(\.smokedFill) private var smokedFill
 
@@ -1562,6 +1663,28 @@ private struct DialSilhouette: View {
     loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)))
 }
 
+#if os(iOS)
+#Preview("Toast, iPhone", traits: .fixedLayout(width: 402, height: 780)) {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)), toast: true)
+}
+
+#Preview("Toast, iPhone SE", traits: .fixedLayout(width: 375, height: 580)) {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)), rate: 0.72, loopOn: true, toast: true)
+}
+
+#Preview("Toast, landscape phone", traits: .fixedLayout(width: 750, height: 350)) {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)), rate: 0.72, toast: true)
+}
+
+#Preview("Toast, iPad window, wide", traits: .fixedLayout(width: 880, height: 640)) {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)), rate: 0.72, toast: true)
+}
+
+#Preview("Toast, iPad portrait", traits: .fixedLayout(width: 834, height: 1090)) {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)), toast: true)
+}
+#endif
+
 #Preview("Landscape, nothing loaded", traits: .landscapeLeft) {
     PracticeView(controller: PlaybackController())
         .modelContainer(try! AppSchema.inMemoryContainer())
@@ -1587,7 +1710,8 @@ private func loadedPreview(
     title: String = "Little Wing",
     artistName: String = "Jimi Hendrix",
     rate: Double = 0.6,
-    loopOn: Bool = false
+    loopOn: Bool = false,
+    toast: Bool = false
 ) -> some View {
     let container = try! AppSchema.inMemoryContainer()
     let song = SavedSong.save(
@@ -1597,12 +1721,16 @@ private func loadedPreview(
     SongMarker.add(to: song, name: "Intro", startTime: 0, endTime: 22, in: container.mainContext)
     SongMarker.add(to: song, name: "Solo", startTime: 96, endTime: 112, in: container.mainContext)
     SongMarker.add(to: song, name: "Verse 2", startTime: 150, endTime: nil, in: container.mainContext)
+    let fresh = toast
+        ? SongMarker.add(to: song, name: "", startTime: 140.1, endTime: nil, in: container.mainContext)
+        : nil
     let controller = PlaybackController()
     controller.playbackRate = rate
     if loopOn { controller.toggleLoop() }
     return PracticeView(
         controller: controller,
-        previewTrack: .init(id: "1", title: title, artistName: artistName, palette: palette)
+        previewTrack: .init(id: "1", title: title, artistName: artistName, palette: palette),
+        previewJustMarked: fresh?.persistentModelID
     )
     .modelContainer(container)
 }
