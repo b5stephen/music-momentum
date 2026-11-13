@@ -73,14 +73,17 @@ struct PracticeView: View {
     }
 
     /// Editing carries the marker's identity so switching straight from one
-    /// marker to another rebuilds the sheet.
+    /// marker to another rebuilds the sheet. `newLoop` is what Make a loop
+    /// swaps a marker's sheet for: a loop that isn't saved yet.
     enum MarkerSheet: Identifiable {
         case new(start: TimeInterval)
+        case newLoop(start: TimeInterval, end: TimeInterval)
         case edit(SongMarker)
 
         var id: String {
             switch self {
             case .new: "new"
+            case .newLoop: "new-loop"
             case .edit(let marker): "edit-\(marker.persistentModelID.hashValue)"
             }
         }
@@ -231,12 +234,29 @@ struct PracticeView: View {
         .sheet(item: $markerSheet) { sheet in
             Group {
                 if let duration = controller.duration {
+                    let song = savedSong
                     switch sheet {
                     case .new(let start):
                         MarkerEditorView(
                             initialStart: start,
                             duration: duration,
                             controller: controller,
+                            otherPoints: song?.pointSpans(excluding: nil) ?? [],
+                            otherLoopNames: song?.loopNames(excluding: nil) ?? [],
+                            onSave: { addMarker(name: $0, start: $1, end: $2) },
+                            onMakeLoop: { name, start, end in
+                                addMarker(name: name, start: start, end: nil)
+                                markerSheet = .newLoop(start: start, end: end)
+                            }
+                        )
+                    case .newLoop(let start, let end):
+                        MarkerEditorView(
+                            initialStart: start,
+                            initialEnd: end,
+                            duration: duration,
+                            controller: controller,
+                            otherPoints: song?.pointSpans(excluding: nil) ?? [],
+                            otherLoopNames: song?.loopNames(excluding: nil) ?? [],
                             onSave: { addMarker(name: $0, start: $1, end: $2) }
                         )
                     case .edit(let marker):
@@ -244,7 +264,13 @@ struct PracticeView: View {
                             marker: marker,
                             duration: duration,
                             controller: controller,
+                            otherPoints: song?.pointSpans(excluding: marker) ?? [],
+                            otherLoopNames: song?.loopNames(excluding: marker) ?? [],
                             onSave: { name, start, end in update(marker, name: name, start: start, end: end) },
+                            onMakeLoop: { name, start, end in
+                                update(marker, name: name, start: start, end: nil)
+                                markerSheet = .newLoop(start: start, end: end)
+                            },
                             onDelete: { delete(marker) }
                         )
                     }

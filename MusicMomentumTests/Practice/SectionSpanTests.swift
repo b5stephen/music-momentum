@@ -48,4 +48,13 @@ struct SectionSpanTests {
         #expect(SectionSpan.name(containing: 5, among: later) == nil)
         #expect(SectionSpan.name(containing: 5, among: []) == nil)
     }
+
+    @Test("A loop from a point runs to its section's end, at least the shortest loop")
+    func loopEnd() {
+        #expect(SectionSpan.loopEnd(from: 5, among: points, duration: 200) == 20)
+        #expect(SectionSpan.loopEnd(from: 60, among: points, duration: 200) == 200)
+        #expect(SectionSpan.loopEnd(from: 19.8, among: points, duration: 200) == 20.3)
+        #expect(SectionSpan.loopEnd(from: 199.8, among: [], duration: 200) == nil)
+        #expect(SectionSpan.loopEnd(from: 199.5, among: [], duration: 200) == 200)
+    }
 }

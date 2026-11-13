@@ -45,12 +45,14 @@ struct SavedSongsView: View {
         /// `nil` when adding one.
         let marker: SongMarker?
         let start: TimeInterval
+        /// Set for a loop that isn't saved yet, made from a marker.
+        var end: TimeInterval?
 
         /// Carries the marker's identity so opening one marker straight after
         /// another rebuilds the sheet.
         var id: String {
             marker.map { "edit-\($0.persistentModelID.hashValue)" }
-                ?? "new-\(song.persistentModelID.hashValue)"
+                ?? "new\(end == nil ? "" : "-loop")-\(song.persistentModelID.hashValue)"
         }
     }
 
@@ -216,31 +218,44 @@ struct SavedSongsView: View {
             }
             .sheet(item: $marking) { marking in
                 if let duration = controller.duration {
-                    if let marker = marking.marker {
-                        MarkerEditorView(
-                            marker: marker,
-                            duration: duration,
-                            controller: controller,
-                            onSave: { name, start, end in
+                    let marker = marking.marker
+                    MarkerEditorView(
+                        marker: marker,
+                        initialStart: marking.start,
+                        initialEnd: marking.end,
+                        duration: duration,
+                        controller: controller,
+                        otherPoints: marking.song.pointSpans(excluding: marker),
+                        otherLoopNames: marking.song.loopNames(excluding: marker),
+                        onSave: { name, start, end in
+                            if let marker {
                                 update(marker, name: name, start: start, end: end)
-                            },
-                            onDelete: { delete(marker) }
-                        )
-                    } else {
-                        MarkerEditorView(
-                            initialStart: marking.start,
-                            duration: duration,
-                            controller: controller
-                        ) { name, start, end in
-                            SongMarker.add(
-                                to: marking.song,
-                                name: name,
-                                startTime: start,
-                                endTime: end,
-                                in: modelContext
-                            )
-                        }
-                    }
+                            } else {
+                                SongMarker.add(
+                                    to: marking.song,
+                                    name: name,
+                                    startTime: start,
+                                    endTime: end,
+                                    in: modelContext
+                                )
+                            }
+                        },
+                        onMakeLoop: { name, start, end in
+                            if let marker {
+                                update(marker, name: name, start: start, end: nil)
+                            } else {
+                                SongMarker.add(
+                                    to: marking.song,
+                                    name: name,
+                                    startTime: start,
+                                    endTime: nil,
+                                    in: modelContext
+                                )
+                            }
+                            self.marking = .init(song: marking.song, marker: nil, start: start, end: end)
+                        },
+                        onDelete: { if let marker { delete(marker) } }
+                    )
                 }
             }
             .sheet(item: $editing) { song in

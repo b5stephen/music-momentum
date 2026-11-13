@@ -6,14 +6,23 @@
 import SwiftData
 import SwiftUI
 
-/// The sheet for placing or adjusting a marker. Nothing is written until
-/// Save, and the view never touches the store: it reports what the user
-/// settled on and the caller decides where it goes.
+/// The sheet for placing or adjusting a marker (a point) or a loop (a point
+/// with an end). Which one is fixed when the sheet opens; there's no turning one
+/// into the other. Nothing is written until Save, and the view never touches
+/// the store: it reports what the user settled on and the caller decides where
+/// it goes. What it shows about the rest of the song comes in as plain values.
 struct MarkerEditorView: View {
     let marker: SongMarker?
+    let isLoop: Bool
     let duration: TimeInterval
     let controller: PlaybackController
+    /// The song's other points, for the suggested names and "Runs until".
+    let otherPoints: [(name: String, start: TimeInterval)]
+    let otherLoopNames: [String]
     let onSave: (_ name: String, _ start: TimeInterval, _ end: TimeInterval?) -> Void
+    /// Saves the marker as edited, then the caller swaps this sheet for a new
+    /// loop's; the sheet doesn't dismiss itself. `nil` hides Make a loop.
+    var onMakeLoop: ((_ name: String, _ start: TimeInterval, _ end: TimeInterval) -> Void)?
     var onDelete: () -> Void = {}
 
     @Environment(\.dismiss) var dismiss
@@ -21,78 +30,72 @@ struct MarkerEditorView: View {
     @State var start: TimeInterval
     @State var end: TimeInterval?
     @State var confirmingDelete = false
-    /// Which time the nudge row and Now act on.
+    /// Which time the nudge row and Set to playhead act on.
     @State var selected: MarkerHandle = .start
     /// What's typed in a time field that hasn't been committed yet. Save
     /// applies it: a click on Save, or Return in a field on the Mac, can land
     /// before the field's focus change commits it.
     @State var typedTimes: [MarkerHandle: String] = [:]
-    /// The sheet's own Loop: it loops this clip as edited, over whatever
+    /// The sheet's own Loop: it loops this loop as edited, over whatever
     /// Practice was looping, until it's turned off or the sheet closes.
-    @State var isLoopingDraft = false
+    @State var isLoopingDraft: Bool
 
-    /// How far before the end handle the End cue drops the playhead.
+    /// How far before a time the cues drop the playhead, so you hear the run-up.
     static let leadIn: TimeInterval = 2
-    private static let defaultClipLength: TimeInterval = 4
     /// Half Practice's 10: here it's for finding a spot, and 10 would leap
     /// clean across the 5s zoom.
     static let skipInterval: TimeInterval = 5
 
+    #if os(macOS)
+    static let panelRadius: CGFloat = 10
+    static let actionHeight: CGFloat? = nil
+    static let nudgeFont: Font = .callout
+    #else
+    static let panelRadius: CGFloat = 16
+    /// With the capsule's padding, a 44pt target.
+    static let actionHeight: CGFloat? = 32
+    static let nudgeFont: Font = .footnote
+    #endif
+
+    /// A loop that isn't saved yet comes with `initialEnd`, and starts with
+    /// Loop on so it's heard straight away.
     init(
         marker: SongMarker? = nil,
         initialStart: TimeInterval = 0,
+        initialEnd: TimeInterval? = nil,
         duration: TimeInterval,
         controller: PlaybackController,
+        otherPoints: [(name: String, start: TimeInterval)] = [],
+        otherLoopNames: [String] = [],
         onSave: @escaping (_ name: String, _ start: TimeInterval, _ end: TimeInterval?) -> Void,
+        onMakeLoop: ((_ name: String, _ start: TimeInterval, _ end: TimeInterval) -> Void)? = nil,
         onDelete: @escaping () -> Void = {}
     ) {
+        let end = marker?.endTime ?? initialEnd
         self.marker = marker
+        isLoop = end != nil
         self.duration = duration
         self.controller = controller
+        self.otherPoints = otherPoints
+        self.otherLoopNames = otherLoopNames
         self.onSave = onSave
+        self.onMakeLoop = onMakeLoop
         self.onDelete = onDelete
         _name = State(initialValue: marker?.name ?? "")
         _start = State(initialValue: marker?.startTime ?? initialStart)
-        _end = State(initialValue: marker?.endTime)
-        _selected = State(initialValue: marker?.endTime == nil ? .start : .end)
+        _end = State(initialValue: end)
+        _selected = State(initialValue: end == nil ? .start : .end)
+        _isLoopingDraft = State(initialValue: marker == nil && initialEnd != nil)
     }
 
     var isEditing: Bool { marker != nil }
-    var canAddEnd: Bool { start + SongMarker.minimumClipLength <= duration }
 
-    enum Kind: Hashable {
-        case point, clip
-    }
-
-    var kind: Binding<Kind> {
-        Binding(
-            get: { end == nil ? .point : .clip },
-            set: { newKind in
-                withAnimation {
-                    switch newKind {
-                    case .point:
-                        end = nil
-                        selected = .start
-                    case .clip:
-                        end = min(duration, start + Self.defaultClipLength)
-                        selected = .end
-                    }
-                }
-            }
-        )
-    }
-
-    /// Writes are dropped once the marker is a point again: a field being
-    /// torn off screen mustn't bring the end back.
     var endBinding: Binding<TimeInterval> {
-        Binding(get: { end ?? start }, set: { if end != nil { end = $0 } })
+        Binding(get: { end ?? start }, set: { end = $0 })
     }
 
     private var selectedTime: Binding<TimeInterval> {
-        switch selected {
-        case .end where end != nil: endBinding
-        default: $start
-        }
+        selected == .end && end != nil ? endBinding : $start
     }
 
     var startRange: ClosedRange<TimeInterval> {
@@ -107,13 +110,27 @@ struct MarkerEditorView: View {
         selected == .end && end != nil ? endRange : startRange
     }
 
+    var title: String {
+        switch (isLoop, isEditing) {
+        case (false, false): "New Marker"
+        case (false, true): "Edit Marker"
+        case (true, false): "New Loop"
+        case (true, true): "Edit Loop"
+        }
+    }
+
+    var deleteTitle: String { isLoop ? "Delete this loop?" : "Delete this marker?" }
+
     var body: some View {
         editor
+            // A sheet swapped for another (Make a loop) is torn down and built
+            // afresh, and which of the two runs first isn't promised. Only a
+            // loop turns the draft on or off, and a marker sheet never does, so
+            // the marker's `onDisappear` can't undo the loop's `onAppear`.
+            .onAppear { if isLoopingDraft { controller.loopDraft(draftRange) } }
             .onChange(of: isLoopingDraft) { controller.loopDraft(draftRange) }
             .onChange(of: start) { if isLoopingDraft { controller.loopDraft(draftRange) } }
-            .onChange(of: end) {
-                if end == nil { isLoopingDraft = false } else if isLoopingDraft { controller.loopDraft(draftRange) }
-            }
+            .onChange(of: end) { if isLoopingDraft { controller.loopDraft(draftRange) } }
             .onDisappear { if isLoopingDraft { controller.loopDraft(nil) } }
     }
 
@@ -126,65 +143,20 @@ struct MarkerEditorView: View {
     private var editor: some View {
         #if os(macOS)
         macBody
-            .confirmationDialog(
-                "Delete this marker?",
-                isPresented: $confirmingDelete,
-                titleVisibility: .visible
-            ) {
-                Button("Delete", role: .destructive) {
-                    onDelete()
-                    dismiss()
-                }
+            .confirmationDialog(deleteTitle, isPresented: $confirmingDelete, titleVisibility: .visible) {
+                deleteConfirmation
             }
         #else
         NavigationStack {
             Form {
-                Section {
-                    HStack(spacing: 12) {
-                        TextField(end == nil ? "Marker" : "Clip", text: $name)
-                            #if os(iOS)
-                            .textInputAutocapitalization(.words)
-                            #endif
-                        kindSwitch
-                    }
-                }
-
-                Section {
-                    MarkerRangeEditor(
-                        start: $start,
-                        end: $end,
-                        duration: duration,
-                        playhead: controller.playbackTime,
-                        onGrab: { selected = $0 },
-                        onScrub: { controller.isScrubbing = true },
-                        onSeek: { controller.endScrub(at: $0) }
-                    )
-                    .padding(.vertical, 8)
-                }
-
-                Section {
-                    times
-                    nudgeRow
-                } footer: {
-                    if end == nil {
-                        Text(canAddEnd
-                            ? "Switch to Clip to give this an end time you can loop."
-                            : "Too close to the end of the song for a clip.")
-                    }
-                }
-
-                Section {
-                    transportRow
-                }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
+                if isLoop { loopSections } else { markerSections }
 
                 if isEditing {
                     Section {
                         Button(role: .destructive) {
                             confirmingDelete = true
                         } label: {
-                            Text("Delete Marker")
+                            Text(isLoop ? "Delete Loop" : "Delete Marker")
                                 .frame(maxWidth: .infinity)
                         }
                     }
@@ -194,7 +166,7 @@ struct MarkerEditorView: View {
             .listSectionSpacing(20)
             #endif
             .contentMargins(.top, 4, for: .scrollContent)
-            .navigationTitle(isEditing ? "Edit Marker" : "New Marker")
+            .navigationTitle(title)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -216,197 +188,116 @@ struct MarkerEditorView: View {
                     .accessibilityLabel("Save")
                 }
             }
-            .confirmationDialog(
-                "Delete this marker?",
-                isPresented: $confirmingDelete,
-                titleVisibility: .visible
-            ) {
-                Button("Delete", role: .destructive) {
-                    onDelete()
-                    dismiss()
-                }
+            .confirmationDialog(deleteTitle, isPresented: $confirmingDelete, titleVisibility: .visible) {
+                deleteConfirmation
             }
         }
         #endif
     }
 
-    func save() {
+    private var deleteConfirmation: some View {
+        Button("Delete", role: .destructive) {
+            onDelete()
+            dismiss()
+        }
+    }
+
+    #if !os(macOS)
+    @ViewBuilder
+    private var markerSections: some View {
+        Section {
+            nameField
+            nameChips.listRowInsets(.init(top: 0, leading: 0, bottom: 10, trailing: 0))
+        }
+
+        Section { times }
+
+        Section {
+            rangeEditor.padding(.vertical, 8)
+        }
+
+        Section {
+            nudgeRow
+            infoLine
+        }
+
+        Section {
+            HStack(spacing: 8) {
+                previewButton
+                makeLoopButton
+            }
+            .buttonStyle(FillButtonStyle())
+        }
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
+    }
+
+    @ViewBuilder
+    private var loopSections: some View {
+        Section {
+            nameField
+            nameChips.listRowInsets(.init(top: 0, leading: 0, bottom: 10, trailing: 0))
+        }
+
+        Section { times }
+
+        Section {
+            rangeEditor.padding(.vertical, 8)
+        }
+
+        Section {
+            nudgeRow
+            infoLine
+        }
+
+        Section { listeningControls }
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+    }
+    #endif
+
+    var nameField: some View {
+        TextField(isLoop ? "Loop" : "Marker", text: $name)
+            #if os(iOS)
+            .textInputAutocapitalization(.words)
+            #endif
+    }
+
+    var rangeEditor: some View {
+        MarkerRangeEditor(
+            start: $start,
+            end: $end,
+            duration: duration,
+            playhead: controller.playbackTime,
+            onGrab: { selected = $0 },
+            onScrub: { controller.isScrubbing = true },
+            onSeek: { controller.endScrub(at: $0) }
+        )
+    }
+
+    func commitTypedTimes() {
         if let typed = typedTimes[.start], let time = PreciseTime.parse(typed) {
             start = max(startRange.lowerBound, min(time, startRange.upperBound))
         }
         if let typed = typedTimes[.end], let time = PreciseTime.parse(typed), end != nil {
             end = max(endRange.lowerBound, min(time, endRange.upperBound))
         }
+    }
+
+    func save() {
+        commitTypedTimes()
         onSave(name, start, end)
         dismiss()
     }
 
-    /// Drawn as the pills themselves, since that's what the choice looks like.
-    private var kindSwitch: some View {
-        HStack(spacing: 6) {
-            kindButton(.point, title: "Point") {
-                Circle().frame(width: 6, height: 6)
-            }
-            kindButton(.clip, title: "Clip") {
-                SpanGlyph()
-            }
-            .disabled(end == nil && !canAddEnd)
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Kind")
+    var canMakeLoop: Bool {
+        SectionSpan.loopEnd(from: start, among: otherPoints, duration: duration) != nil
     }
 
-    private func kindButton(
-        _ value: Kind,
-        title: String,
-        @ViewBuilder glyph: () -> some View
-    ) -> some View {
-        let isSelected = kind.wrappedValue == value
-        return Button {
-            kind.wrappedValue = value
-        } label: {
-            HStack(spacing: 5) {
-                glyph()
-                    .opacity(isSelected ? 0.8 : 0.55)
-                Text(title)
-                    .font(.footnote.weight(.medium))
-            }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 7)
-            .background(
-                isSelected ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary),
-                in: Capsule()
-            )
-            .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentText) : AnyShapeStyle(.primary))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-
-    var times: some View {
-        // No divider: one panel is always tinted, and that separates them.
-        HStack(spacing: 6) {
-            if end != nil {
-                timeColumn("Start", time: $start, range: startRange, handle: .start)
-                timeColumn("End", time: endBinding, range: endRange, handle: .end)
-            } else {
-                timeColumn("Time", time: $start, range: startRange, handle: .start)
-            }
-        }
-        .padding(.vertical, 4)
-    }
-
-    private func timeColumn(
-        _ title: String,
-        time: Binding<TimeInterval>,
-        range: ClosedRange<TimeInterval>,
-        handle: MarkerHandle
-    ) -> some View {
-        let isSelected = selected == handle || end == nil
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(handle == .start ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear))
-                    .strokeBorder(.tint, lineWidth: 2)
-                    .frame(width: 9, height: 9)
-                Text(title.uppercased())
-                    .font(.caption2.weight(.semibold))
-                    .tracking(0.4)
-                    .foregroundStyle(isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-                    .fixedSize()
-                    .layoutPriority(1)
-                Spacer(minLength: 4)
-                if isSelected {
-                    playheadChip(for: title)
-                }
-            }
-            PreciseTimeField(
-                time: time,
-                range: range,
-                onFocus: { selected = handle },
-                onType: { typedTimes[handle] = $0 }
-            )
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 8)
-        .padding(.horizontal, 10)
-        // A tinted panel rather than tinted text: the big time stays legible in
-        // light mode, and the coral is left to the clip and the handles.
-        .background(
-            isSelected ? AnyShapeStyle(.tint.opacity(0.16)) : AnyShapeStyle(.clear),
-            in: .rect(cornerRadius: Self.panelRadius, style: .continuous)
-        )
-        .contentShape(.rect)
-        .onTapGesture { selected = handle }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-
-    /// "Now" read as the clock, not the song. The glyph is the strip's
-    /// playhead in miniature. Half a clip on a mini can't fit both beside the
-    /// column title, so it sheds the glyph, then the word.
-    #if os(macOS)
-    private static let panelRadius: CGFloat = 10
-    private static let nudgeFont: Font = .callout
-    #else
-    private static let panelRadius: CGFloat = 16
-    private static let nudgeFont: Font = .footnote
-    #endif
-
-    private func playheadChip(for title: String) -> some View {
-        Button {
-            setSelected(controller.playbackTime)
-        } label: {
-            ViewThatFits(in: .horizontal) {
-                chipBody { playheadGlyph; Text("Playhead") }
-                chipBody { Text("Playhead") }
-                chipBody { playheadGlyph }
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Set \(title.lowercased()) to the current position")
-    }
-
-    private var playheadGlyph: some View {
-        VStack(spacing: 0) {
-            Circle().frame(width: 5, height: 5)
-            Capsule().frame(width: 1.5, height: 7)
-        }
-    }
-
-    private func chipBody(@ViewBuilder _ content: () -> some View) -> some View {
-        HStack(spacing: 4, content: content)
-            .font(.caption2.weight(.semibold))
-            .fixedSize()
-            .padding(.horizontal, 9)
-            .padding(.vertical, 3)
-            // The cell's colour, so it stands off the tinted panel it sits in.
-            .background(Color.secondarySystemGroupedBackground, in: Capsule())
-            .foregroundStyle(Color.accentText)
-    }
-
-    private var nudgeRow: some View {
-        HStack(spacing: 8) {
-            nudge(-1)
-            nudge(-0.1)
-            nudge(0.1)
-            nudge(1)
-        }
-        .buttonStyle(FillButtonStyle())
-        .padding(.vertical, 4)
-    }
-
-    func nudge(_ amount: TimeInterval) -> some View {
-        Button {
-            setSelected(selectedTime.wrappedValue + amount)
-        } label: {
-            Text(amount > 0 ? "+\(PreciseTime.nudgeLabel(amount))" : "−\(PreciseTime.nudgeLabel(-amount))")
-                .font(Self.nudgeFont.monospacedDigit())
-                .frame(maxWidth: .infinity)
-        }
-        .accessibilityLabel(amount > 0 ? "Later by \(PreciseTime.nudgeLabel(amount))" : "Earlier by \(PreciseTime.nudgeLabel(-amount))")
+    func makeLoop() {
+        commitTypedTimes()
+        guard let loopEnd = SectionSpan.loopEnd(from: start, among: otherPoints, duration: duration) else { return }
+        onMakeLoop?(name, start, loopEnd)
     }
 
     func setSelected(_ value: TimeInterval) {
@@ -414,186 +305,78 @@ struct MarkerEditorView: View {
         selectedTime.wrappedValue = max(range.lowerBound, min(value, range.upperBound))
     }
 
-    /// The cue buttons leave the song running: a snippet that stops itself
-    /// can't tell you whether the clip is the right piece of music.
-    private var transportRow: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                skipButton(-Self.skipInterval)
-                playPauseButton
-                skipButton(Self.skipInterval)
-                loopButton
-            }
-
-            // Each cue carries the dot of the time column it plays from.
-            HStack(spacing: 8) {
-                if let end {
-                    cueButton("Play from start", handle: .start, spoken: "Play from the start of the clip") {
-                        controller.playFrom(start)
-                    }
-                    // Before the end, so you hear the clip run into it.
-                    cueButton("Play into end", handle: .end, spoken: "Play into the end of the clip") {
-                        controller.playFrom(max(start, end - Self.leadIn))
-                    }
-                } else {
-                    cueButton("Play from marker", handle: .start, spoken: "Play from the marker") {
-                        controller.playFrom(start)
-                    }
-                }
-            }
-        }
-        .buttonStyle(FillButtonStyle())
-    }
-
-    private var playPauseButton: some View {
-        Button {
-            controller.togglePlayPause()
-        } label: {
-            Image(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
-                .font(.footnote.weight(.semibold))
-                .frame(maxWidth: .infinity, minHeight: 28)
-        }
-        .accessibilityLabel(controller.isPlaying ? "Pause" : "Play")
-    }
-
-    /// Solid coral when on, as looping is wherever the app isn't on a cover.
-    private var loopButton: some View {
-        Button {
-            isLoopingDraft.toggle()
-        } label: {
-            Image(systemName: "repeat")
-                .font(.subheadline.weight(.medium))
-                .frame(maxWidth: .infinity, minHeight: 28)
-        }
-        .buttonStyle(FillButtonStyle(isOn: isLoopingDraft))
-        .disabled(end == nil)
-        .accessibilityLabel("Loop this clip")
-        .accessibilityAddTraits(isLoopingDraft ? .isSelected : [])
-    }
-
-    private func skipButton(_ offset: TimeInterval) -> some View {
-        let seconds = Int(abs(offset))
-        return Button {
-            controller.skip(by: offset)
-        } label: {
-            Image(systemName: offset < 0 ? "gobackward.\(seconds)" : "goforward.\(seconds)")
-                .font(.subheadline.weight(.medium))
-                .frame(maxWidth: .infinity, minHeight: 28)
-        }
-        .accessibilityLabel(offset < 0 ? "Back \(seconds) seconds" : "Forward \(seconds) seconds")
-    }
-
-    private func cueButton(
-        _ title: String,
-        handle: MarkerHandle,
-        spoken: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Label {
-                Text(title)
-            } icon: {
-                Circle()
-                    .fill(handle == .start ? AnyShapeStyle(.secondary) : AnyShapeStyle(.clear))
-                    .strokeBorder(.secondary, lineWidth: 1.5)
-                    .frame(width: 8, height: 8)
-            }
-            .font(.footnote.weight(.medium))
-            .lineLimit(1)
-            .frame(maxWidth: .infinity, minHeight: 28)
-        }
-        .accessibilityLabel(spoken)
-    }
+    var selectedValue: TimeInterval { selectedTime.wrappedValue }
 }
 
-/// The nudge and cue buttons: a capsule on the lightest system fill, which
-/// keeps them quieter than `.bordered` and leaves the coral to the clip. Loop
-/// fills solid when on.
-private struct FillButtonStyle: ButtonStyle {
-    var isOn = false
+// MARK: - Previews
 
-    @Environment(\.isEnabled) private var isEnabled
+private let previewPoints: [(name: String, start: TimeInterval)] = [
+    ("Intro", 0), ("Verse", 24), ("Chorus", 72), ("Verse 2", 108),
+]
 
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .padding(.vertical, 6)
-            .background(isOn ? Color.accentColor : Color.tertiarySystemFill, in: Capsule())
-            .foregroundStyle(isOn ? AnyShapeStyle(Color.onAccent) : AnyShapeStyle(.primary))
-            .opacity(configuration.isPressed ? 0.5 : isEnabled ? 1 : 0.4)
-    }
+private func previewEditor(
+    marker: SongMarker? = nil,
+    start: TimeInterval = 71,
+    end: TimeInterval? = nil
+) -> some View {
+    MarkerEditorView(
+        marker: marker,
+        initialStart: start,
+        initialEnd: end,
+        duration: 245,
+        controller: PlaybackController(),
+        otherPoints: previewPoints,
+        otherLoopNames: ["Riff"],
+        onSave: { _, _, _ in },
+        onMakeLoop: { _, _, _ in }
+    )
 }
 
-// MARK: - Time field
-
-/// Only writes back a time it could parse, and only once editing ends.
-/// Until then `onType` hears the text, and `nil` once it's committed.
-private struct PreciseTimeField: View {
-    @Binding var time: TimeInterval
-    let range: ClosedRange<TimeInterval>
-    var onFocus: () -> Void = {}
-    var onType: (String?) -> Void = { _ in }
-
-    @State private var text = ""
-    @FocusState private var focused: Bool
-
-    #if os(macOS)
-    private static let size: CGFloat = 26
-    #else
-    private static let size: CGFloat = 32
-    #endif
-
-    var body: some View {
-        TextField("0:00.0", text: $text)
-            .font(.system(size: Self.size, weight: .semibold, design: .rounded).monospacedDigit())
-            #if os(iOS)
-            .keyboardType(.numbersAndPunctuation)
-            #else
-            .textFieldStyle(.plain)
-            .onKeyPress(keys: [.upArrow, .downArrow]) { press in
-                commit()
-                let step: TimeInterval = press.modifiers.contains(.shift) ? 1 : 0.1
-                let nudged = time + (press.key == .upArrow ? step : -step)
-                time = max(range.lowerBound, min(nudged, range.upperBound))
-                text = PreciseTime.format(time)
-                return .handled
-            }
-            .help("↑ or ↓ for a tenth of a second, with ⇧ for a second")
-            #endif
-            .focused($focused)
-            .onSubmit(commit)
-            .onChange(of: focused) { focused ? onFocus() : commit() }
-            .onChange(of: text) { if focused { onType(text) } }
-            .onChange(of: time, initial: true) { if !focused { text = PreciseTime.format(time) } }
-            .accessibilityLabel("Time")
-            .accessibilityValue(PreciseTime.format(time))
-    }
-
-    private func commit() {
-        if let parsed = PreciseTime.parse(text) {
-            time = max(range.lowerBound, min(parsed, range.upperBound))
-        }
-        text = PreciseTime.format(time)
-        onType(nil)
-    }
-}
-
-#Preview("New") {
-    MarkerEditorView(initialStart: 71, duration: 245, controller: PlaybackController()) { _, _, _ in }
-}
-
-#Preview("Edit clip") {
+private func previewMarker(
+    name: String,
+    start: TimeInterval,
+    end: TimeInterval? = nil
+) -> (SongMarker, ModelContainer) {
     let container = try! AppSchema.inMemoryContainer()
     let song = SavedSong(songID: "1", speed: 0.8, title: "Little Wing", artistName: "Jimi Hendrix")
     container.mainContext.insert(song)
-    let marker = SongMarker.add(to: song, name: "Solo", startTime: 96, endTime: 112.4, in: container.mainContext)
-    return MarkerEditorView(marker: marker, duration: 245, controller: PlaybackController()) { _, _, _ in }
-        .modelContainer(container)
+    return (SongMarker.add(to: song, name: name, startTime: start, endTime: end, in: container.mainContext), container)
+}
+
+#Preview("New marker") {
+    previewEditor(start: 71)
+}
+
+#Preview("Edit marker") {
+    let (marker, container) = previewMarker(name: "Chorus", start: 72)
+    return previewEditor(marker: marker).modelContainer(container)
+}
+
+#Preview("Edit marker, last point") {
+    let (marker, container) = previewMarker(name: "Verse 2", start: 108)
+    return previewEditor(marker: marker).modelContainer(container)
+}
+
+#Preview("Edit loop") {
+    let (marker, container) = previewMarker(name: "Solo", start: 96, end: 112.4)
+    return previewEditor(marker: marker).modelContainer(container)
+}
+
+#Preview("New loop, looping") {
+    previewEditor(start: 72, end: 108)
 }
 
 #if os(macOS)
-#Preview("Over a cover, Mac") {
+#Preview("Marker over a cover, Mac") {
     InheritedGround {
-        MarkerEditorView(initialStart: 71, duration: 245, controller: PlaybackController()) { _, _, _ in }
+        previewEditor(start: 71)
+            .outsideArtworkGround()
+    }
+}
+
+#Preview("Loop over a cover, Mac") {
+    InheritedGround {
+        previewEditor(start: 72, end: 108)
             .outsideArtworkGround()
     }
 }

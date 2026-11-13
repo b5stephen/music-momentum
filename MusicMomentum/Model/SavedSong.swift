@@ -223,4 +223,16 @@ extension SavedSong {
     var sortedClips: [SongMarker] {
         sortedMarkers.filter(\.isClip)
     }
+
+    /// What the marker sheet needs to know about the rest of the song, leaving
+    /// out the marker being edited.
+    func pointSpans(excluding marker: SongMarker?) -> [(name: String, start: TimeInterval)] {
+        sortedMarkers
+            .filter { !$0.isClip && $0 !== marker }
+            .map { (name: $0.name, start: $0.startTime) }
+    }
+
+    func loopNames(excluding marker: SongMarker?) -> [String] {
+        sortedClips.filter { $0 !== marker }.map(\.name)
+    }
 }
