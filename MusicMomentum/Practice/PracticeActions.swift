@@ -22,7 +22,7 @@ struct PracticeActions {
     /// Only the Mac's timeline zooms.
     var canZoomIn = false
     var canZoomOut = false
-    /// The mini player has no marker sheet to open.
+    /// The mini player has no lane or toast to name a marker in, so it doesn't mark.
     var canMark = true
     /// Names of the first nine clips in start order, for the 1-9 items.
     var clipNames: [String] = []
@@ -34,6 +34,7 @@ struct PracticeActions {
     var restart: @MainActor () -> Void = {}
     var toggleLoop: @MainActor () -> Void = {}
     var mark: @MainActor () -> Void = {}
+    var markAndEdit: @MainActor () -> Void = {}
     var stepSpeed: @MainActor (_ up: Bool) -> Void = { _ in }
     var nudgeSpeed: @MainActor (_ up: Bool) -> Void = { _ in }
     var setSpeed: @MainActor (_ percent: Int) -> Void = { _ in }

@@ -27,6 +27,7 @@ struct PracticeView: View {
     var onPalette: (ArtworkPalette?) -> Void = { _ in }
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.modelContext) var modelContext
+    @Environment(\.undoManager) private var undoManager
     #if os(iOS)
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     #endif
@@ -34,6 +35,7 @@ struct PracticeView: View {
     @Query private var savedSongs: [SavedSong]
     @State private var picking: Picking?
     @State var markerSheet: MarkerSheet?
+    @State private var justMarked: JustMarked?
     #if os(macOS)
     /// Which part of the song the Mac timeline shows. Not saved, and fitted
     /// again when the song changes.
@@ -231,7 +233,7 @@ struct PracticeView: View {
                             initialStart: start,
                             duration: duration,
                             controller: controller,
-                            onSave: addMarker
+                            onSave: { addMarker(name: $0, start: $1, end: $2) }
                         )
                     case .edit(let marker):
                         MarkerEditorView(
@@ -251,6 +253,9 @@ struct PracticeView: View {
             // doesn't do. On the Mac the whole window is the ground, so the
             // scheme and text colour come back too.
             .outsideArtworkGround()
+        }
+        .onChange(of: controller.selectedSong?.id) {
+            justMarked = nil
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { controller.refreshPlaybackTime() }
@@ -835,9 +840,10 @@ struct PracticeView: View {
     }
 
     /// Markers live on the saved entry, so marking an unsaved song saves it.
-    func addMarker(name: String, start: TimeInterval, end: TimeInterval?) {
-        guard let song = savedSong ?? controller.saveCurrentSong() else { return }
-        SongMarker.add(to: song, name: name, startTime: start, endTime: end, in: modelContext)
+    @discardableResult
+    func addMarker(name: String, start: TimeInterval, end: TimeInterval?) -> SongMarker? {
+        guard let song = savedSong ?? controller.saveCurrentSong() else { return nil }
+        return SongMarker.add(to: song, name: name, startTime: start, endTime: end, in: modelContext)
     }
 
     func update(_ marker: SongMarker, name: String, start: TimeInterval, end: TimeInterval?) {
@@ -1072,9 +1078,57 @@ struct PracticeView: View {
         }
     }
 
-    /// Pauses and opens the marker sheet.
+    /// The marker Mark just made, offered for naming. Its date also spots a double press.
+    struct JustMarked: Equatable {
+        let id: PersistentIdentifier
+        let date: Date
+    }
+
+    /// Saves a point at the playhead without pausing or touching the loop.
     func mark() {
+        guard let duration = controller.duration,
+              !MarkTiming.isRepeat(at: .now, lastMark: justMarked?.date)
+        else { return }
+        let time = MarkTiming.time(
+            playhead: controller.playbackTime,
+            rate: controller.playbackRate,
+            isPlaying: controller.isPlaying,
+            duration: duration
+        )
+        guard let marker = addMarker(name: "", start: time, end: nil) else { return }
+        justMarked = JustMarked(id: marker.persistentModelID, date: .now)
+        registerMarkUndo(for: marker.persistentModelID)
+    }
+
+    /// Pauses and opens the marker sheet.
+    func markAndEdit() {
         markerSheet = .new(start: controller.pauseForMarking())
+    }
+
+    /// Undo and redo are registered by hand, not by giving the model context
+    /// an undo manager, which would also undo speed saves and every other edit.
+    private func registerMarkUndo(for id: PersistentIdentifier) {
+        undoManager?.registerUndo(withTarget: modelContext) { _ in
+            MainActor.assumeIsolated {
+                guard let marker = marker(for: id) else { return }
+                let name = marker.name
+                let start = marker.startTime
+                if justMarked?.id == id { justMarked = nil }
+                delete(marker)
+                registerMarkRedo(name: name, start: start)
+            }
+        }
+        undoManager?.setActionName("Mark")
+    }
+
+    private func registerMarkRedo(name: String, start: TimeInterval) {
+        undoManager?.registerUndo(withTarget: modelContext) { _ in
+            MainActor.assumeIsolated {
+                guard let marker = addMarker(name: name, start: start, end: nil) else { return }
+                registerMarkUndo(for: marker.persistentModelID)
+            }
+        }
+        undoManager?.setActionName("Mark")
     }
 
     // MARK: - Menu
@@ -1099,6 +1153,7 @@ struct PracticeView: View {
             restart: { controller.restart() },
             toggleLoop: { controller.toggleLoop() },
             mark: mark,
+            markAndEdit: markAndEdit,
             stepSpeed: { controller.stepSpeed(up: $0) },
             nudgeSpeed: { controller.nudgeSpeed(up: $0) },
             setSpeed: { controller.setSpeed(percent: $0) },
