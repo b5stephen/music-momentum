@@ -14,8 +14,10 @@ import SwiftUI
 /// one, and a click keeps the row clicked.
 struct InlineNameField: View {
     let initialText: String
-    var width: CGFloat = 140
+    var width: CGFloat = 150
     var showsHint = true
+    /// The hint promises Escape leaves `initialText` as it was, rather than discarding.
+    var escapeKeeps = false
     /// Preview only: draws the focus ring without waiting for a window.
     var startsFocused = false
     var suggestions: [String] = []
@@ -37,23 +39,26 @@ struct InlineNameField: View {
 
     init(
         initialText: String = "",
-        width: CGFloat = 140,
+        width: CGFloat = 150,
         showsHint: Bool = true,
+        escapeKeeps: Bool = false,
         startsFocused: Bool = false,
         suggestions: [String] = [],
-        previewHighlight: Int? = nil,
+        /// The row Return keeps until the user types or arrows, so an offered name is one keystroke away.
+        initialHighlight: Int? = nil,
         onCommit: @escaping (String) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.initialText = initialText
         self.width = width
         self.showsHint = showsHint
+        self.escapeKeeps = escapeKeeps
         self.startsFocused = startsFocused
         self.suggestions = suggestions
         self.onCommit = onCommit
         self.onCancel = onCancel
         _text = State(initialValue: initialText)
-        _highlighted = State(initialValue: previewHighlight)
+        _highlighted = State(initialValue: initialHighlight)
     }
 
     var body: some View {
@@ -107,19 +112,17 @@ struct InlineNameField: View {
                 .overlay(alignment: .topLeading) {
                     if !suggestions.isEmpty {
                         suggestionList
-                            .offset(y: 26 + 4)
+                            .offset(y: 26 + 6)
                     }
                 }
             if showsHint {
-                Text("Return to keep \u{00B7} Esc to discard")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .lineLimit(1)
-                    .fixedSize()
+                Text(escapeKeeps ? "Return to keep \u{00B7} Esc keeps \(initialText)" : "Return to keep \u{00B7} Esc to discard")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.75))
                     // Over a neighbouring clip it would otherwise run into its name.
-                    .padding(.horizontal, 7)
-                    .frame(height: 22)
-                    .background(Self.ground.opacity(0.95), in: .capsule)
+                    .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
+                    .lineLimit(1)
+                    .frame(maxWidth: Self.hintWidth, alignment: .leading)
             }
         }
     }
@@ -132,22 +135,22 @@ struct InlineNameField: View {
                 } label: {
                     Text(name)
                         .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(highlighted == index ? 1 : 0.8))
+                        .foregroundStyle(.white)
                         .lineLimit(1)
-                        .padding(.horizontal, 9)
+                        .padding(.horizontal, 8)
                         .frame(width: width, height: Self.rowHeight, alignment: .leading)
-                        .background(.white.opacity(highlighted == index ? 0.16 : 0), in: .rect(cornerRadius: 5))
+                        .background(.white.opacity(highlighted == index ? 0.18 : 0), in: .rect(cornerRadius: 5))
                         .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(3)
+        .padding(4)
         .background {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Self.ground.opacity(0.96))
-                .strokeBorder(.white.opacity(0.14), lineWidth: 1)
-                .shadow(color: .black.opacity(0.4), radius: 12, y: 8)
+            RoundedRectangle(cornerRadius: 9)
+                .fill(Color(red: 14 / 255, green: 20 / 255, blue: 24 / 255).opacity(0.96))
+                .strokeBorder(.white.opacity(0.16), lineWidth: 1)
+                .shadow(color: .black.opacity(0.4), radius: 12, y: 10)
         }
         .fixedSize()
         .onHover { isOverList = $0 }
@@ -167,18 +170,18 @@ struct InlineNameField: View {
     }
 
     /// The hint's room, for a caller placing the field near an edge.
-    static let hintWidth: CGFloat = 184
+    static let hintWidth: CGFloat = 230
 }
 
-#Preview("Inline name field with suggestions", traits: .fixedLayout(width: 420, height: 230)) {
+#Preview("Inline name field with suggestions", traits: .fixedLayout(width: 480, height: 230)) {
     HStack(alignment: .top, spacing: 24) {
         InlineNameField(
-            initialText: "Marker 7", startsFocused: true,
-            suggestions: ["Chorus", "Verse 2", "Bridge", "Solo", "Pre-chorus"], onCommit: { _ in }, onCancel: {}
+            initialText: "Marker 7", escapeKeeps: true, startsFocused: true,
+            suggestions: ["Chorus", "Verse 2", "Bridge", "Solo", "Pre-chorus"], initialHighlight: 0, onCommit: { _ in }, onCancel: {}
         )
         InlineNameField(
             initialText: "Marker 7", width: 120, showsHint: false, startsFocused: true,
-            suggestions: ["Chorus", "Verse 2", "Bridge", "Solo", "Pre-chorus"], previewHighlight: 1,
+            suggestions: ["Chorus", "Verse 2", "Bridge", "Solo", "Pre-chorus"], initialHighlight: 1,
             onCommit: { _ in }, onCancel: {}
         )
     }

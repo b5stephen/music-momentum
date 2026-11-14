@@ -95,4 +95,13 @@ struct MarkerNameSuggestionsTests {
         let names = MarkerNameSuggestions.forLoop(among: ["Riff", "riff 4", "Fill 2", "Chorus"])
         #expect(names == ["Riff 5", "Lick", "Fill 3", "Solo", "Run"])
     }
+
+    @Test("Only an untouched default name counts as unnamed")
+    func defaultNames() {
+        #expect(MarkerNameSuggestions.isDefaultName("Marker 7"))
+        #expect(MarkerNameSuggestions.isDefaultName("Loop 12"))
+        #expect(!MarkerNameSuggestions.isDefaultName("Chorus 2"))
+        #expect(!MarkerNameSuggestions.isDefaultName("Marker"))
+        #expect(!MarkerNameSuggestions.isDefaultName("Marker 7 again"))
+    }
 }

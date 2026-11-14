@@ -49,7 +49,7 @@ struct LoopScopeMenu<Label: View>: View {
                 }
             }
             if !points.isEmpty {
-                Section("Points") {
+                Section("Markers") {
                     ForEach(points, id: \.persistentModelID) { point in
                         Button(Self.title(point, number: nil)) { controller.choose(point) }
                     }

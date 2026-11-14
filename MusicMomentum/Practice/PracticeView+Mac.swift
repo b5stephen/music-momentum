@@ -393,9 +393,15 @@ extension PracticeView {
             }
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(Color.primary)
-            .padding(.horizontal, 13)
-            .frame(height: Self.macControlHeight)
+            .padding(.horizontal, 14)
+            .frame(height: 32)
             .modifier(ButtonGlass())
+            .overlay {
+                if justMarked != nil {
+                    Capsule().fill(.primary.opacity(0.12))
+                    Capsule().strokeBorder(.primary.opacity(0.45), lineWidth: 1)
+                }
+            }
             .contentShape(.capsule)
         }
         .buttonStyle(.plain)

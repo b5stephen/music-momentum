@@ -174,7 +174,7 @@ struct MarkerLane: View {
 
     /// The same height as one row, so loading a song never moves Practice.
     private var emptyHint: some View {
-        Text("No markers yet \u{00B7} press \(Text("M").fontWeight(.semibold)) to mark a point, or drag here to make a loop")
+        Text("No markers yet \u{00B7} press \(Text("M").fontWeight(.semibold)) to add a marker, or drag here to make a loop")
             .font(.system(size: 12))
             .foregroundStyle(.primary.opacity(0.55))
             .lineLimit(1)
@@ -191,8 +191,9 @@ struct MarkerLane: View {
     // MARK: Points
 
     private func pointView(_ point: MarkerLaneLayout.Point, _ marker: PlaybackScrubber.Marker) -> some View {
-        let dot: CGFloat = 8
+        let dot: CGFloat = 7
         let padding: CGFloat = 4
+        let isHot = justMarked == marker.id && isIdle
         return Button {
             activate(marker)
         } label: {
@@ -201,17 +202,20 @@ struct MarkerLane: View {
                     .fill(.primary)
                     .frame(width: dot, height: dot)
                     .background {
-                        if justMarked == marker.id, isIdle {
+                        if isHot {
+                            Circle()
+                                .fill(.primary.opacity(0.1))
+                                .frame(width: dot + 16, height: dot + 16)
                             Circle()
                                 .fill(.primary.opacity(0.25))
-                                .frame(width: 20, height: 20)
+                                .frame(width: dot + 8, height: dot + 8)
                         }
                     }
                     .overlay { Circle().stroke(.black.opacity(0.15), lineWidth: 2) }
-                if point.showsName {
+                if point.showsName, !isRenamingHere(marker) {
                     Text(marker.name)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.primary.opacity(0.75))
+                        .foregroundStyle(.primary.opacity(isHot ? 1 : 0.85))
                         .lineLimit(1)
                         .fixedSize()
                 }
@@ -224,8 +228,13 @@ struct MarkerLane: View {
         .modifier(LaneItemInput(id: marker.id, hovered: $hovered, renaming: renaming))
         .contextMenu { menu(for: marker) }
         .offset(x: point.x - dot / 2 - padding)
-        .accessibilityLabel("\(marker.name), point")
+        .accessibilityLabel("\(marker.name), marker")
         .accessibilityValue(PlaybackScrubber.timeLabel(marker.start))
+    }
+
+    /// Its field stands where the label would, so the label steps aside.
+    private func isRenamingHere(_ marker: PlaybackScrubber.Marker) -> Bool {
+        marker.id == (renaming.wrappedValue ?? (startsRenaming ? markers.first?.id : nil))
     }
 
     // MARK: Clips
@@ -337,7 +346,7 @@ struct MarkerLane: View {
 
     /// Under the ghost, kept inside the lane when the clip is near its right edge.
     private func nameField(for draft: ClipDraft, top: CGFloat, width: CGFloat) -> some View {
-        let fieldWidth: CGFloat = 140
+        let fieldWidth: CGFloat = 150
         let left = max(0, min(x(draft.start, width: width), width - fieldWidth - InlineNameField.hintWidth - 8))
         return InlineNameField(
             width: fieldWidth,
@@ -453,14 +462,22 @@ struct MarkerLane: View {
     }
 
     /// Above the lane, at the left of `minX...maxX` or the right of it,
-    /// whichever side has room.
-    private func floatingBubble(_ bubble: MarkerBubble, minX: CGFloat, maxX: CGFloat, width: CGFloat) -> some View {
+    /// whichever side has room; a point's is centred over its dot instead.
+    private func floatingBubble(
+        _ bubble: MarkerBubble, minX: CGFloat, maxX: CGFloat, width: CGFloat, centered: Bool = false
+    ) -> some View {
         let leading = (minX + maxX) / 2 < width * 0.6
+        let anchor: Alignment = centered ? .bottom : leading ? .bottomLeading : .bottomTrailing
+        let x = centered ? min(max((minX + maxX) / 2, Self.bubbleReach), width - Self.bubbleReach) : leading ? minX : maxX
         return bubble
-            .frame(width: 0, height: 0, alignment: leading ? .bottomLeading : .bottomTrailing)
-            .offset(x: leading ? minX : maxX, y: -4)
+            .frame(width: 0, height: 0, alignment: anchor)
+            .offset(x: x, y: -Self.bubbleLift)
             .allowsHitTesting(false)
     }
+
+    /// Half the widest bubble, so a centred one stays inside the lane.
+    private static let bubbleReach: CGFloat = 140
+    private static let bubbleLift: CGFloat = 13
 
     // MARK: Text
 
@@ -489,7 +506,7 @@ struct MarkerLane: View {
                 name: marker.name.isEmpty ? "Untitled" : marker.name,
                 detail: "\(timeLabel(marker)) \u{00B7} \(action)"
             ),
-            minX: minX, maxX: maxX, width: width
+            minX: minX, maxX: maxX, width: width, centered: !marker.isClip
         )
         .transition(.opacity)
     }
@@ -501,7 +518,7 @@ struct MarkerLane: View {
                 name: marker.name.isEmpty ? "Untitled" : marker.name,
                 detail: "\(PreciseTime.format(marker.start)) \u{00B7} Return to name \u{00B7} \u{2318}Z to undo"
             ),
-            minX: minX, maxX: maxX, width: width
+            minX: minX, maxX: maxX, width: width, centered: true
         )
         .transition(.opacity)
     }
@@ -518,7 +535,7 @@ struct MarkerLane: View {
     /// the lane when the item is near the right edge.
     private func renameField(for marker: PlaybackScrubber.Marker, in layout: MarkerLaneLayout, width: CGFloat) -> some View {
         let clip = layout.clips.first { $0.id == marker.id }
-        let fieldWidth = max(clip?.width ?? 0, 140)
+        let fieldWidth = max(clip?.width ?? 0, 150)
         let (minX, _) = extent(of: marker.id, in: layout)
         let x = max(0, min(minX, width - fieldWidth - InlineNameField.hintWidth - 8))
         let y = clip.map { layout.top(ofRow: $0.row) - 1 } ?? -4
@@ -529,8 +546,10 @@ struct MarkerLane: View {
         return InlineNameField(
             initialText: marker.name,
             width: fieldWidth,
+            escapeKeeps: true,
             startsFocused: startsRenaming,
             suggestions: suggestions,
+            initialHighlight: MarkerNameSuggestions.isDefaultName(marker.name) && !suggestions.isEmpty ? 0 : nil,
             onCommit: { name in
                 renaming.wrappedValue = nil
                 actions.rename(marker, name)
@@ -565,11 +584,10 @@ struct MarkerLane: View {
                 .disabled(!isLoopOn)
         }
         Button("Jump to Start") { actions.jump(marker) }
-        Divider()
+        if marker.isClip { Divider() }
         Button("Rename") { renaming.wrappedValue = marker.id }
         Button("Edit Times\u{2026}") { actions.editTimes(marker) }
         Divider()
-        // Shown for the hint; the key itself comes in Phase 5.
         Button("Delete", role: .destructive) { actions.delete(marker) }
             .keyboardShortcut(.delete, modifiers: [])
     }
@@ -739,5 +757,12 @@ private func lanePreview(
 
 #Preview("Lane, renaming", traits: .fixedLayout(width: 680, height: 240)) {
     lanePreview(renames: true)
+}
+
+#Preview("Lane, naming a just-marked point", traits: .fixedLayout(width: 680, height: 240)) {
+    lanePreview(
+        markers: [.init(id: "Marker 7", name: "Marker 7", start: 140.1, end: nil)] + previewMarkers,
+        renames: true, justMarked: "Marker 7"
+    )
 }
 #endif

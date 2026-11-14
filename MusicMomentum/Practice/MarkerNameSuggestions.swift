@@ -36,6 +36,11 @@ nonisolated enum MarkerNameSuggestions {
         return order.prefix(count).map { numbered($0, among: others.map(\.name)) }
     }
 
+    /// "Marker 7" or "Loop 2": what a marker is called until someone names it.
+    static func isDefaultName(_ name: String) -> Bool {
+        name.wholeMatch(of: /(Marker|Loop) \d+/) != nil
+    }
+
     static func forLoop(among loopNames: [String]) -> [String] {
         loopVocabulary.map { numbered($0, among: loopNames) }
     }

@@ -17,17 +17,17 @@ struct MarkerBubble: View {
 
     /// "**Chorus** · 1:02 – 1:36 · click to loop".
     init(name: String, detail: String) {
-        self.init(Text("\(Text(name).bold()) \u{00B7} \(detail)"))
+        self.init(Text("\(Text(name).bold().foregroundStyle(.white)) \u{00B7} \(detail)"))
     }
 
     var body: some View {
         text
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(.white)
+            .font(.system(size: 12))
+            .foregroundStyle(.white.opacity(0.8))
             .lineLimit(1)
             .fixedSize()
             .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.vertical, 6)
             .background {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color(red: 30 / 255, green: 34 / 255, blue: 36 / 255).opacity(0.96))
