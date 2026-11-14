@@ -10,9 +10,15 @@ extension MarkerEditorView {
     // MARK: Name
 
     private var suggestions: [String] {
-        isLoop
+        let guessed = isLoop
             ? MarkerNameSuggestions.forLoop(among: otherLoopNames)
             : MarkerNameSuggestions.forMarker(at: start, among: otherPoints)
+        // The name the sheet opened with, so an edit shows it selected. Typing
+        // doesn't add chips: they'd change on every keystroke.
+        guard let opened = marker?.name.trimmingCharacters(in: .whitespaces), !opened.isEmpty,
+              !guessed.contains(where: { $0.caseInsensitiveCompare(opened) == .orderedSame })
+        else { return guessed }
+        return [opened] + guessed
     }
 
     var nameChips: some View {
@@ -25,12 +31,12 @@ extension MarkerEditorView {
                         name = suggestion
                     } label: {
                         Text(suggestion)
-                            .font(.footnote.weight(.medium))
+                            .font(Self.chipFont.weight(isSelected ? .semibold : .regular))
                             .lineLimit(1)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
+                            .padding(.horizontal, Self.chipPadding)
+                            .frame(height: Self.chipHeight)
                             .background(
-                                isSelected ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.quaternary),
+                                isSelected ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(Color.tertiarySystemFill),
                                 in: Capsule()
                             )
                             .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentText) : AnyShapeStyle(.primary))
@@ -46,25 +52,24 @@ extension MarkerEditorView {
         .accessibilityLabel("Suggested names")
     }
 
-    #if os(macOS)
-    private static let chipInset: CGFloat = 0
-    #else
-    private static let chipInset: CGFloat = 16
-    #endif
-
     // MARK: Times
 
     var times: some View {
         // No divider: one panel is always tinted, and that separates them.
-        HStack(spacing: 6) {
+        Group {
             if isLoop {
-                timeColumn("Start", time: $start, range: startRange, handle: .start)
-                timeColumn("End", time: endBinding, range: endRange, handle: .end)
+                HStack(spacing: 8) {
+                    timeColumn("Start", time: $start, range: startRange, handle: .start)
+                    timeColumn("End", time: endBinding, range: endRange, handle: .end)
+                }
             } else {
-                timeColumn("Starts at", time: $start, range: startRange, handle: .start)
+                HStack(alignment: .bottom) {
+                    timeColumn("Starts at", time: $start, range: startRange, handle: .start)
+                    Spacer(minLength: 8)
+                    playheadChip("Set to playhead")
+                }
             }
         }
-        .padding(.vertical, 4)
     }
 
     private func timeColumn(
@@ -73,38 +78,26 @@ extension MarkerEditorView {
         range: ClosedRange<TimeInterval>,
         handle: MarkerHandle
     ) -> some View {
-        let isSelected = selected == handle || !isLoop
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(handle == .start ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear))
-                    .strokeBorder(.tint, lineWidth: 2)
-                    .frame(width: 9, height: 9)
-                Text(title.uppercased())
-                    .font(.caption2.weight(.semibold))
-                    .tracking(0.4)
-                    .foregroundStyle(isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-                    .fixedSize()
-                    .layoutPriority(1)
-                Spacer(minLength: 4)
-                if !isLoop {
-                    playheadChip("Set to playhead", onPanel: true)
-                }
-            }
+        let isSelected = isLoop && selected == handle
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(title.uppercased())
+                .font(.caption.weight(.semibold))
+                .tracking(0.5)
+                .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentText) : AnyShapeStyle(.secondary))
+                .fixedSize()
             PreciseTimeField(
                 time: time,
                 range: range,
                 onFocus: { selected = handle },
-                onType: { typedTimes[handle] = $0 }
+                onType: { typedTimes[handle] = $0 },
+                size: isLoop ? Self.loopTimeSize : nil
             )
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 8)
-        .padding(.horizontal, 10)
-        // A tinted panel rather than tinted text: the big time stays legible in
-        // light mode, and the coral is left to the handles.
+        .frame(maxWidth: isLoop ? .infinity : nil, alignment: .leading)
+        .padding(.vertical, isLoop ? 8 : 0)
+        .padding(.horizontal, isLoop ? 12 : 0)
         .background(
-            isSelected ? AnyShapeStyle(.tint.opacity(0.16)) : AnyShapeStyle(.clear),
+            isLoop ? (isSelected ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(Color.tertiarySystemFill)) : AnyShapeStyle(.clear),
             in: .rect(cornerRadius: Self.panelRadius, style: .continuous)
         )
         .contentShape(.rect)
@@ -116,43 +109,21 @@ extension MarkerEditorView {
 
     // MARK: Set to playhead
 
-    /// The playhead read as the clock, not the song; the glyph is the strip's
-    /// playhead in miniature. Where there's little room it sheds the glyph, then
-    /// the words.
-    func playheadChip(_ title: String, onPanel: Bool) -> some View {
+    /// The playhead read as the clock, not the song.
+    func playheadChip(_ title: String) -> some View {
         Button {
             setSelected(controller.playbackTime)
         } label: {
-            ViewThatFits(in: .horizontal) {
-                chipBody(onPanel: onPanel) { playheadGlyph; Text(title) }
-                chipBody(onPanel: onPanel) { Text(title) }
-                chipBody(onPanel: onPanel) { playheadGlyph }
-            }
+            Text(title)
+                .font(Self.chipFont.weight(.semibold))
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, Self.chipPadding)
+                .frame(height: Self.chipHeight)
+                .background(.tint.opacity(0.14), in: Capsule())
+                .foregroundStyle(Color.accentText)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(title)
-    }
-
-    private var playheadGlyph: some View {
-        VStack(spacing: 0) {
-            Circle().frame(width: 5, height: 5)
-            Capsule().frame(width: 1.5, height: 7)
-        }
-    }
-
-    private func chipBody(onPanel: Bool, @ViewBuilder _ content: () -> some View) -> some View {
-        HStack(spacing: 4, content: content)
-            .font(.caption2.weight(.semibold))
-            .fixedSize()
-            .padding(.horizontal, 9)
-            .padding(.vertical, 3)
-            // On the tinted panel the chip takes the cell's colour so it stands
-            // off it; elsewhere it's a tint like the selected name chip.
-            .background(
-                onPanel ? AnyShapeStyle(Color.secondarySystemGroupedBackground) : AnyShapeStyle(.tint.opacity(0.14)),
-                in: Capsule()
-            )
-            .foregroundStyle(Color.accentText)
     }
 
     // MARK: Nudge and facts
@@ -169,7 +140,6 @@ extension MarkerEditorView {
         #else
         .buttonStyle(.bordered)
         #endif
-        .padding(.vertical, 4)
     }
 
     func nudge(_ amount: TimeInterval) -> some View {
@@ -187,15 +157,16 @@ extension MarkerEditorView {
     @ViewBuilder
     var infoLine: some View {
         if let end {
+            let title = selected == .end ? "Set end to playhead" : "Set start to playhead"
             ViewThatFits(in: .horizontal) {
                 HStack {
                     loopFacts(end: end)
                     Spacer(minLength: 8)
-                    playheadChip(selected == .end ? "Set end to playhead" : "Set start to playhead", onPanel: false)
+                    playheadChip(title)
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     loopFacts(end: end)
-                    playheadChip(selected == .end ? "Set end to playhead" : "Set start to playhead", onPanel: false)
+                    playheadChip(title)
                 }
             }
         } else {
@@ -214,6 +185,7 @@ extension MarkerEditorView {
         return Text("\(long) long\(inside)")
             .font(.footnote)
             .foregroundStyle(.secondary)
+            .lineLimit(1)
     }
 
     // MARK: Marker actions
@@ -225,10 +197,10 @@ extension MarkerEditorView {
         Button {
             controller.playFrom(max(0, start - Self.leadIn))
         } label: {
-            HStack(spacing: 6) { Image(systemName: "play.fill"); Text("Preview") }
-                .font(.footnote.weight(.medium))
+            HStack(spacing: 8) { Image(systemName: "play.fill").imageScale(.small); Text("Preview") }
+                .font(Self.actionFont)
                 .lineLimit(1)
-                .frame(maxWidth: .infinity, minHeight: Self.actionHeight)
+                .frame(maxWidth: .infinity)
         }
         .accessibilityLabel("Preview from just before the marker")
     }
@@ -239,13 +211,13 @@ extension MarkerEditorView {
             Button {
                 makeLoop()
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     SpanGlyph()
                     Text("Make a loop")
                 }
-                .font(.footnote.weight(.medium))
+                .font(Self.actionFont)
                 .lineLimit(1)
-                .frame(maxWidth: .infinity, minHeight: Self.actionHeight)
+                .frame(maxWidth: .infinity)
             }
             .disabled(!canMakeLoop)
             .accessibilityHint("Saves this marker and opens a new loop from it to the end of its section")
@@ -256,7 +228,7 @@ extension MarkerEditorView {
 
     #if !os(macOS)
     /// Loop first, then the transport; the cues drop to a second row since
-    /// six controls at 44pt don't fit a phone's width. The cue buttons leave
+    /// six controls at 48pt don't fit a phone's width. The cue buttons leave
     /// the song running: a snippet that stops itself can't tell you whether the
     /// loop is the right piece of music.
     var listeningControls: some View {
@@ -279,7 +251,8 @@ extension MarkerEditorView {
                 }
             }
         }
-        .buttonStyle(FillButtonStyle())
+        .font(Self.actionFont)
+        .buttonStyle(FillButtonStyle(size: .action))
     }
 
     private var playPauseButton: some View {
@@ -287,8 +260,7 @@ extension MarkerEditorView {
             controller.togglePlayPause()
         } label: {
             Image(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
-                .font(.footnote.weight(.semibold))
-                .frame(maxWidth: .infinity, minHeight: 32)
+                .frame(maxWidth: .infinity)
         }
         .accessibilityLabel(controller.isPlaying ? "Pause" : "Play")
     }
@@ -299,11 +271,10 @@ extension MarkerEditorView {
             isLoopingDraft.toggle()
         } label: {
             HStack(spacing: 6) { Image(systemName: "repeat"); Text("Loop") }
-                .font(.footnote.weight(.medium))
                 .lineLimit(1)
-                .frame(maxWidth: .infinity, minHeight: 32)
+                .frame(maxWidth: .infinity)
         }
-        .buttonStyle(FillButtonStyle(isOn: isLoopingDraft))
+        .buttonStyle(FillButtonStyle(size: .action, isOn: isLoopingDraft))
         .accessibilityLabel("Loop while editing")
         .accessibilityAddTraits(isLoopingDraft ? .isSelected : [])
     }
@@ -314,8 +285,7 @@ extension MarkerEditorView {
             controller.skip(by: offset)
         } label: {
             Image(systemName: offset < 0 ? "gobackward.\(seconds)" : "goforward.\(seconds)")
-                .font(.subheadline.weight(.medium))
-                .frame(maxWidth: .infinity, minHeight: 32)
+                .frame(maxWidth: .infinity)
         }
         .accessibilityLabel(offset < 0 ? "Back \(seconds) seconds" : "Forward \(seconds) seconds")
     }
@@ -327,16 +297,15 @@ extension MarkerEditorView {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 Circle()
                     .fill(handle == .start ? AnyShapeStyle(.secondary) : AnyShapeStyle(.clear))
                     .strokeBorder(.secondary, lineWidth: 1.5)
                     .frame(width: 8, height: 8)
                 Text(title)
             }
-            .font(.footnote.weight(.medium))
             .lineLimit(1)
-            .frame(maxWidth: .infinity, minHeight: 32)
+            .frame(maxWidth: .infinity)
         }
         .accessibilityLabel(spoken)
     }

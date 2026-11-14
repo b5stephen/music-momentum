@@ -17,7 +17,7 @@ extension MarkerEditorView {
                 .font(.headline)
                 .padding(.top, 14)
 
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 10) {
                     TextField(isLoop ? "Loop" : "Marker", text: $name)
                         .textFieldStyle(.roundedBorder)
@@ -146,8 +146,11 @@ extension MarkerEditorView {
             Spacer()
             Button("Cancel", role: .cancel) { dismiss() }
                 .keyboardShortcut(.cancelAction)
+            // Still the default action, but neutral: solid coral is for looping.
             Button(isEditing ? "Save" : "Add") { save() }
                 .keyboardShortcut(.defaultAction)
+                .buttonStyle(.bordered)
+                .tint(.secondary)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

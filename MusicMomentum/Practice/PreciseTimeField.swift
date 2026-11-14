@@ -12,19 +12,20 @@ struct PreciseTimeField: View {
     let range: ClosedRange<TimeInterval>
     var onFocus: () -> Void = {}
     var onType: (String?) -> Void = { _ in }
+    var size: CGFloat?
 
     @State private var text = ""
     @FocusState private var focused: Bool
 
     #if os(macOS)
-    private static let size: CGFloat = 26
+    private static let defaultSize: CGFloat = 26
     #else
-    private static let size: CGFloat = 32
+    private static let defaultSize: CGFloat = 34
     #endif
 
     var body: some View {
         TextField("0:00.0", text: $text)
-            .font(.system(size: Self.size, weight: .semibold, design: .rounded).monospacedDigit())
+            .font(.system(size: size ?? Self.defaultSize, weight: .bold, design: .rounded).monospacedDigit())
             #if os(iOS)
             .keyboardType(.numbersAndPunctuation)
             #else

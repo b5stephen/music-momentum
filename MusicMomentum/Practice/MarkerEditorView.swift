@@ -41,20 +41,29 @@ struct MarkerEditorView: View {
     @State var isLoopingDraft: Bool
 
     /// How far before a time the cues drop the playhead, so you hear the run-up.
-    static let leadIn: TimeInterval = 2
+    static let leadIn: TimeInterval = 1
     /// Half Practice's 10: here it's for finding a spot, and 10 would leap
     /// clean across the 5s zoom.
     static let skipInterval: TimeInterval = 5
 
     #if os(macOS)
     static let panelRadius: CGFloat = 10
-    static let actionHeight: CGFloat? = nil
     static let nudgeFont: Font = .callout
+    static let actionFont: Font = .footnote.weight(.medium)
+    static let chipFont: Font = .system(size: 13)
+    static let chipHeight: CGFloat = 26
+    static let chipPadding: CGFloat = 10
+    static let chipInset: CGFloat = 0
+    static let loopTimeSize: CGFloat = 22
     #else
-    static let panelRadius: CGFloat = 16
-    /// With the capsule's padding, a 44pt target.
-    static let actionHeight: CGFloat? = 32
-    static let nudgeFont: Font = .footnote
+    static let panelRadius: CGFloat = 14
+    static let nudgeFont: Font = .system(size: 15)
+    static let actionFont: Font = .system(size: 16, weight: .semibold)
+    static let chipFont: Font = .system(size: 15)
+    static let chipHeight: CGFloat = 36
+    static let chipPadding: CGFloat = 14
+    static let chipInset: CGFloat = 16
+    static let loopTimeSize: CGFloat = 28
     #endif
 
     /// A loop that isn't saved yet comes with `initialEnd`, and starts with
@@ -84,7 +93,6 @@ struct MarkerEditorView: View {
         _name = State(initialValue: marker?.name ?? "")
         _start = State(initialValue: marker?.startTime ?? initialStart)
         _end = State(initialValue: end)
-        _selected = State(initialValue: end == nil ? .start : .end)
         _isLoopingDraft = State(initialValue: marker == nil && initialEnd != nil)
     }
 
@@ -148,23 +156,38 @@ struct MarkerEditorView: View {
             }
         #else
         NavigationStack {
-            Form {
-                if isLoop { loopSections } else { markerSections }
+            ScrollView {
+                VStack(spacing: 12) {
+                    nameCard
+                    detailsCard
 
-                if isEditing {
-                    Section {
+                    if isLoop {
+                        listeningControls
+                    } else {
+                        HStack(spacing: 8) {
+                            previewButton
+                            makeLoopButton
+                        }
+                        .buttonStyle(FillButtonStyle(size: .action))
+                    }
+
+                    if isEditing {
                         Button(role: .destructive) {
                             confirmingDelete = true
                         } label: {
                             Text(isLoop ? "Delete Loop" : "Delete Marker")
-                                .frame(maxWidth: .infinity)
+                                .font(.system(size: 17))
+                                .frame(maxWidth: .infinity, minHeight: 44)
                         }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.red)
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
             }
-            #if os(iOS)
-            .listSectionSpacing(20)
-            #endif
+            .scrollBounceBehavior(.basedOnSize)
+            .background(Color.systemGroupedBackground)
             .contentMargins(.top, 4, for: .scrollContent)
             .navigationTitle(title)
             #if os(iOS)
@@ -203,56 +226,45 @@ struct MarkerEditorView: View {
     }
 
     #if !os(macOS)
-    @ViewBuilder
-    private var markerSections: some View {
-        Section {
-            nameField
-            nameChips.listRowInsets(.init(top: 0, leading: 0, bottom: 10, trailing: 0))
-        }
-
-        Section { times }
-
-        Section {
-            rangeEditor.padding(.vertical, 8)
-        }
-
-        Section {
-            nudgeRow
-            infoLine
-        }
-
-        Section {
-            HStack(spacing: 8) {
-                previewButton
-                makeLoopButton
-            }
-            .buttonStyle(FillButtonStyle())
-        }
-        .listRowInsets(EdgeInsets())
-        .listRowBackground(Color.clear)
+    private func card(@ViewBuilder _ content: () -> some View) -> some View {
+        content()
+            .background(Color.secondarySystemGroupedBackground, in: .rect(cornerRadius: 18, style: .continuous))
     }
 
-    @ViewBuilder
-    private var loopSections: some View {
-        Section {
-            nameField
-            nameChips.listRowInsets(.init(top: 0, leading: 0, bottom: 10, trailing: 0))
+    private var nameCard: some View {
+        card {
+            VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("NAME")
+                        .font(.caption.weight(.semibold))
+                        .tracking(0.5)
+                        .foregroundStyle(.secondary)
+                    nameField
+                        .font(.system(size: 18))
+                }
+                .padding(.horizontal, 16)
+                nameChips
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 12)
         }
+    }
 
-        Section { times }
-
-        Section {
-            rangeEditor.padding(.vertical, 8)
+    /// The times, the strip, the nudges and the facts are one card: they're
+    /// all about the same spot, and a hairline between them only made it
+    /// look like four things.
+    private var detailsCard: some View {
+        card {
+            VStack(alignment: .leading, spacing: 12) {
+                times
+                rangeEditor
+                nudgeRow
+                infoLine
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 14)
         }
-
-        Section {
-            nudgeRow
-            infoLine
-        }
-
-        Section { listeningControls }
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(Color.clear)
     }
     #endif
 
@@ -271,7 +283,9 @@ struct MarkerEditorView: View {
             playhead: controller.playbackTime,
             onGrab: { selected = $0 },
             onScrub: { controller.isScrubbing = true },
-            onSeek: { controller.endScrub(at: $0) }
+            onSeek: { controller.endScrub(at: $0) },
+            isCompact: true,
+            openSpan: end.map { max(2, ($0 - start) * 1.5) } ?? 10
         )
     }
 

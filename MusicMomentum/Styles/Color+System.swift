@@ -18,11 +18,15 @@ extension Color {
     static var label: Color { Color(uiColor: .label) }
     static var tertiaryLabel: Color { Color(uiColor: .tertiaryLabel) }
     static var tertiarySystemFill: Color { Color(uiColor: .tertiarySystemFill) }
+    static var secondarySystemFill: Color { Color(uiColor: .secondarySystemFill) }
+    static var systemGroupedBackground: Color { Color(uiColor: .systemGroupedBackground) }
     #else
     static var systemBackground: Color { Color(nsColor: .windowBackgroundColor) }
     static var secondarySystemGroupedBackground: Color { Color(nsColor: .controlBackgroundColor) }
     static var label: Color { Color(nsColor: .labelColor) }
     static var tertiaryLabel: Color { Color(nsColor: .tertiaryLabelColor) }
     static var tertiarySystemFill: Color { Color(nsColor: .tertiarySystemFill) }
+    static var secondarySystemFill: Color { Color(nsColor: .secondarySystemFill) }
+    static var systemGroupedBackground: Color { Color(nsColor: .windowBackgroundColor) }
     #endif
 }

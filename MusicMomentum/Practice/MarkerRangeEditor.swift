@@ -23,6 +23,10 @@ struct MarkerRangeEditor: View {
     var onGrab: (MarkerHandle) -> Void = { _ in }
     var onScrub: () -> Void = {}
     var onSeek: (TimeInterval) -> Void = { _ in }
+    /// The sheet's strip: 54pt, on a faint ground, with no zoom row (pinch
+    /// still zooms), opening `openSpan` seconds across and centred on the marker or loop.
+    var isCompact = false
+    var openSpan: TimeInterval?
 
     /// Seconds across the strip.
     @State private var zoomSpan: TimeInterval = .infinity
@@ -53,7 +57,7 @@ struct MarkerRangeEditor: View {
     /// most of a zoomed strip, leaving nowhere to pan from.
     private static let grabRadius: CGFloat = 22
     /// The touch area; the track drawn across its middle is much thinner.
-    private static let barHeight: CGFloat = 44
+    private var barHeight: CGFloat { isCompact ? 40 : 44 }
     private static let trackHeight: CGFloat = 8
     private static let handleSize: CGFloat = 20
     private static let playheadKnobSize: CGFloat = 12
@@ -63,9 +67,9 @@ struct MarkerRangeEditor: View {
     private static let minorTickHeight: CGFloat = 4
     /// Further than this and a touch in the open is a pan, not a tap.
     private static let tapSlop: CGFloat = 6
-    private static let labelHeight: CGFloat = 18
+    private var labelHeight: CGFloat { isCompact ? 12 : 18 }
     /// Below the labels, so the panning lane is an easy target.
-    private static let laneBottomPadding: CGFloat = 14
+    private var laneBottomPadding: CGFloat { isCompact ? 2 : 14 }
     private static let minimumSpan: TimeInterval = 2
 
     private var span: TimeInterval {
@@ -79,17 +83,25 @@ struct MarkerRangeEditor: View {
     var body: some View {
         // Room for the drag bubble, which rides above the strip.
         VStack(spacing: 20) {
-            HStack {
-                zoomChip
-                zoomSlider
+            if !isCompact {
+                HStack {
+                    zoomChip
+                    zoomSlider
+                }
             }
 
             strip
-                .frame(height: Self.barHeight + Self.labelHeight + Self.laneBottomPadding)
+                .frame(height: barHeight + labelHeight + laneBottomPadding)
+                .background {
+                    if isCompact {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.tertiarySystemFill)
+                    }
+                }
         }
         .onAppear {
             // A short clip is a sliver on the whole song, so it opens zoomed in.
-            if let end, end - start <= 25 { zoomSpan = 30 }
+            if let openSpan { zoomSpan = openSpan } else if let end, end - start <= 25 { zoomSpan = 30 }
             recentre()
             zoomBand = Self.zoomDetents.count { $0 > span }
         }
@@ -237,7 +249,7 @@ struct MarkerRangeEditor: View {
     private func track(width: CGFloat) -> some View {
         let songStart = x(0, width: width)
         return Capsule()
-            .fill(.quaternary)
+            .fill(isCompact ? AnyShapeStyle(Color.secondarySystemFill) : AnyShapeStyle(.quaternary))
             .overlay(alignment: .leading) {
                 if let end {
                     let left = x(start, width: width) - songStart
@@ -249,7 +261,7 @@ struct MarkerRangeEditor: View {
             }
             .clipShape(Capsule())
             .frame(width: x(duration, width: width) - songStart, height: Self.trackHeight)
-            .offset(x: songStart, y: (Self.barHeight - Self.trackHeight) / 2)
+            .offset(x: songStart, y: (barHeight - Self.trackHeight) / 2)
     }
 
     /// Half a handle past the edge still shows, so dragging one out of view
@@ -308,7 +320,7 @@ struct MarkerRangeEditor: View {
     private func playheadLine(at position: CGFloat) -> some View {
         Capsule()
             .fill(.primary)
-            .frame(width: 2, height: Self.barHeight - 12)
+            .frame(width: 2, height: barHeight - 12)
             .overlay(alignment: .top) {
                 Circle()
                     .fill(.primary)
@@ -330,7 +342,7 @@ struct MarkerRangeEditor: View {
             .fill(filled ? AnyShapeStyle(.tint) : AnyShapeStyle(ground))
             .overlay(Circle().strokeBorder(.tint, lineWidth: 3))
             .frame(width: Self.handleSize, height: Self.handleSize)
-            .offset(x: position - Self.handleSize / 2, y: (Self.barHeight - Self.handleSize) / 2)
+            .offset(x: position - Self.handleSize / 2, y: (barHeight - Self.handleSize) / 2)
     }
 
     private func ticks(width: CGFloat) -> some View {
@@ -342,12 +354,12 @@ struct MarkerRangeEditor: View {
             let position = x(time, width: width)
             VStack(spacing: 2) {
                 Color.clear
-                    .frame(width: 1, height: Self.barHeight)
+                    .frame(width: 1, height: barHeight)
                 Text(PlaybackScrubber.timeLabel(time))
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .fixedSize()
-                    .frame(height: Self.labelHeight)
+                    .frame(height: labelHeight)
                     // Labels at the ends would hang off the strip.
                     .offset(x: position < 20 ? 14 : position > width - 20 ? -14 : 0)
             }
@@ -392,15 +404,15 @@ struct MarkerRangeEditor: View {
             for step in first...last {
                 let position = x(TimeInterval(step) * minor, width: width)
                 if step % perMajor == 0 {
-                    majorMarks.addRect(CGRect(x: position - 0.5, y: Self.barHeight - Self.majorTickHeight, width: 1, height: Self.majorTickHeight))
+                    majorMarks.addRect(CGRect(x: position - 0.5, y: barHeight - Self.majorTickHeight, width: 1, height: Self.majorTickHeight))
                 } else {
-                    minorMarks.addRect(CGRect(x: position - 0.5, y: Self.barHeight - Self.minorTickHeight, width: 1, height: Self.minorTickHeight))
+                    minorMarks.addRect(CGRect(x: position - 0.5, y: barHeight - Self.minorTickHeight, width: 1, height: Self.minorTickHeight))
                 }
             }
             context.fill(minorMarks, with: .style(.tertiary))
             context.fill(majorMarks, with: .style(.secondary))
         }
-        .frame(width: width, height: Self.barHeight)
+        .frame(width: width, height: barHeight)
     }
 
     // MARK: - Geometry
@@ -507,7 +519,7 @@ struct MarkerRangeEditor: View {
     }
 
     private func distanceOffBar(_ y: CGFloat) -> CGFloat {
-        y < 0 ? -y : max(0, y - Self.barHeight)
+        y < 0 ? -y : max(0, y - barHeight)
     }
 
     /// The further the finger strays from the strip, the slower the drag, as
@@ -580,11 +592,11 @@ struct MarkerRangeEditor: View {
     /// and a tap seeks.
     private func pick(at touch: CGPoint, width: CGFloat) -> Drag {
         let open: Drag = span >= duration ? .playhead : .pan(from: windowStart)
-        guard touch.y <= Self.barHeight else { return open }
+        guard touch.y <= barHeight else { return open }
 
         let playheadDistance = window.contains(playhead)
             ? abs(x(playhead, width: width) - touch.x) : .infinity
-        let aboveTrack = touch.y < (Self.barHeight - Self.trackHeight) / 2
+        let aboveTrack = touch.y < (barHeight - Self.trackHeight) / 2
 
         var nearest: (Drag, CGFloat) = (.start, abs(x(start, width: width) - touch.x))
         if let end {
