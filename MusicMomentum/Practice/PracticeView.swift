@@ -38,6 +38,8 @@ struct PracticeView: View {
     @State private var picking: Picking?
     @State var markerSheet: MarkerSheet?
     @State var justMarked: JustMarked?
+    /// Set by a long press on Mark, whose lift still reaches the button.
+    @State private var markLongPressed = false
     #if os(macOS)
     /// Which part of the song the Mac timeline shows. Not saved, and fitted
     /// again when the song changes.
@@ -186,6 +188,12 @@ struct PracticeView: View {
                 .frame(maxWidth: .infinity, minHeight: proxy.size.height)
             }
             .scrollBounceBehavior(.basedOnSize)
+            #if os(iOS)
+            // 12pt above the tab bar, over the volume row and the pills.
+            .overlay(alignment: .bottom) {
+                if !layout.isWide { markToast.padding(.bottom, 12) }
+            }
+            #endif
             .onChange(of: proxy.size, initial: true) { _, size in
                 laidOutSize = size
             }
@@ -390,9 +398,6 @@ struct PracticeView: View {
             Spacer(minLength: layout.wheelGap - lift / 2)
 
             player(layout)
-                #if os(iOS)
-                .modifier(MarkToastAbove { markToast })
-                #endif
 
             // Last, so on a screen with nothing spare the gaps above take
             // their minimums before this takes anything.
@@ -489,9 +494,6 @@ struct PracticeView: View {
             }
             .padding(.top, layout.topMargin + placement.drop)
             .frame(height: crease.lowerBound)
-            #if os(iOS)
-            .overlay(alignment: .bottom) { markToast.padding(.bottom, 8) }
-            #endif
 
             Color.clear.frame(height: crease.upperBound - crease.lowerBound)
 
@@ -532,13 +534,14 @@ struct PracticeView: View {
                 )
             }
             .frame(width: PracticeLayout.wideLeadingWidth(size.width))
-            #if os(iOS)
-            .overlay(alignment: .bottom) { markToast }
-            #endif
 
             player(layout, height: panel.height - 2 * PracticeLayout.widePanelPadding)
             .padding(.vertical, PracticeLayout.widePanelPadding)
             .modifier(PanelGlass())
+            #if os(iOS)
+            // Over the pills and Mark, which are what the toast is about.
+            .overlay(alignment: .bottom) { markToast.padding(.bottom, PracticeLayout.widePanelPadding) }
+            #endif
             .padding(.top, panel.top)
             .padding(.trailing, 16)
             .frame(maxWidth: .infinity)
@@ -768,22 +771,12 @@ struct PracticeView: View {
     }
 
     private func markButton(showsTitle: Bool) -> some View {
-        #if os(iOS)
-        Menu {
-            Button { markAndEdit() } label: { Label("Mark and Edit…", systemImage: "square.and.pencil") }
-        } label: {
-            markLabel(showsTitle: showsTitle)
-        } primaryAction: {
-            mark()
-        }
-        .menuIndicator(.hidden)
-        .buttonStyle(.plain)
-        .fixedSize()
-        .disabled(controller.duration == nil)
-        .accessibilityLabel("Mark this point")
-        #else
         Button {
-            mark()
+            if markLongPressed {
+                markLongPressed = false
+            } else {
+                mark()
+            }
         } label: {
             markLabel(showsTitle: showsTitle)
         }
@@ -791,23 +784,36 @@ struct PracticeView: View {
         .fixedSize()
         .disabled(controller.duration == nil)
         .accessibilityLabel("Mark this point")
+        #if os(iOS)
+        // A long press is the way to the full sheet; a one-item menu on the
+        // button would cost a second tap.
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+                guard controller.duration != nil else { return }
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                markLongPressed = true
+                markAndEdit()
+            }
+        )
+        .accessibilityAction(named: "Mark and Edit…") { markAndEdit() }
+        // A finger that slid off before lifting never reaches the button.
+        .onChange(of: markerSheet == nil) { _, closed in if closed { markLongPressed = false } }
         #endif
     }
 
     private func markLabel(showsTitle: Bool) -> some View {
         Group {
             if showsTitle {
-                Label {
-                    Text("Mark")
-                } icon: {
+                HStack(spacing: 6) {
                     MarkGlyph()
-                        .frame(width: 17, height: 17)
+                        .frame(width: 16, height: 16)
+                    Text("Mark")
                 }
                 .padding(.horizontal, 14)
-                .frame(minHeight: Self.headerButtonSide)
+                .frame(height: Self.markCapsuleHeight)
             } else {
                 MarkGlyph()
-                    .frame(width: 20, height: 20)
+                    .frame(width: 18, height: 18)
                     .frame(width: Self.markGlassSide, height: Self.markGlassSide)
             }
         }
@@ -822,6 +828,7 @@ struct PracticeView: View {
     /// glass so it doesn't tower over the pills; the touch area stays 44pt.
     /// On its own line it's the save prompt's size, so the two read as a pair.
     private static let markGlassSide: CGFloat = 36
+    private static let markCapsuleHeight: CGFloat = 40
 
     /// Plain like its neighbours until it's on, when it's the one control that
     /// fills: looping is the state that shouts.
@@ -1183,6 +1190,7 @@ struct PracticeView: View {
                     name: marker.name,
                     time: PreciseTime.format(marker.startTime),
                     suggestions: MarkerNameSuggestions.forMarker(at: marker.startTime, among: others),
+                    isPlaying: controller.isPlaying,
                     onPick: { name in
                         update(marker, name: name, start: marker.startTime, end: marker.endTime)
                         justMarked = nil
@@ -1202,7 +1210,7 @@ struct PracticeView: View {
                     onTimeout: { justMarked = nil }
                 )
                 .id(marker.persistentModelID)
-                .padding(.horizontal, Self.sideMargin)
+                .padding(.horizontal, 12)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -1216,7 +1224,15 @@ struct PracticeView: View {
 
     /// Pauses and opens the marker sheet.
     func markAndEdit() {
-        markerSheet = .new(start: controller.pauseForMarking())
+        guard let duration = controller.duration else { return }
+        let start = MarkTiming.time(
+            playhead: controller.playbackTime,
+            rate: controller.playbackRate,
+            isPlaying: controller.isPlaying,
+            duration: duration
+        )
+        _ = controller.pauseForMarking()
+        markerSheet = .new(start: start)
     }
 
     /// Undo and redo are registered by hand, not by giving the model context
@@ -1494,21 +1510,6 @@ private struct HeaderButtonsBeside<Buttons: View, Fade: View>: ViewModifier {
             .overlay(alignment: .topTrailing) { buttons.padding(.top, top).offset(y: -lift) }
     }
 }
-
-#if os(iOS)
-/// Puts `toast` just above the view's top edge, clear of everything below it.
-private struct MarkToastAbove<Toast: View>: ViewModifier {
-    @ViewBuilder var toast: Toast
-
-    func body(content: Content) -> some View {
-        content.overlay(alignment: .top) {
-            toast
-                .padding(.bottom, 8)
-                .alignmentGuide(.top) { $0[.bottom] }
-        }
-    }
-}
-#endif
 
 private struct PanelGlass: ViewModifier {
     @Environment(\.smokedFill) private var smokedFill
