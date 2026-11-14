@@ -76,14 +76,6 @@ struct AppCommands: Commands {
             Toggle("Loop", isOn: Binding(get: { practice?.isLoopOn == true }, set: { _ in practice?.toggleLoop() }))
                 .keyboardShortcut("l", modifiers: [])
                 .disabled(!canSeek)
-            Menu("Saved Loops") {
-                ForEach(1...9, id: \.self) { number in
-                    let names = practice?.clipNames ?? []
-                    Button(number <= names.count ? names[number - 1] : "Loop \(number)") { practice?.loopClip(number) }
-                        .keyboardShortcut(KeyEquivalent(Character("\(number)")), modifiers: [])
-                        .disabled(!canSeek || number > names.count)
-                }
-            }
         }
 
         CommandMenu("Markers") {
@@ -102,6 +94,22 @@ struct AppCommands: Commands {
                 .keyboardShortcut(.return, modifiers: .option)
                 .disabled(!canSeek || practice?.canMark != true || practice?.canRenameMarker != true)
             #endif
+
+            Divider()
+
+            Menu("Saved Loops") {
+                let names = practice?.clipNames ?? []
+                if names.isEmpty {
+                    Button("No Saved Loops") {}.disabled(true)
+                } else {
+                    ForEach(Array(names.enumerated()), id: \.offset) { index, name in
+                        Button(name) { practice?.loopClip(index + 1) }
+                            // Only 1–9 have keys; Character("10") would trap.
+                            .keyboardShortcut(index < 9 ? KeyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: []) : nil)
+                            .disabled(!canSeek)
+                    }
+                }
+            }
         }
 
         CommandMenu("Speed") {
