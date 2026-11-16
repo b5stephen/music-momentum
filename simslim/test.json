@@ -1,0 +1,4 @@
+{
+  "name": "test",
+  "description": "Unit tests: in-memory SwiftData, never MusicKit or CloudKit"
+}

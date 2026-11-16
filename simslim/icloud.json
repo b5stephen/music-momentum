@@ -1,0 +1,5 @@
+{
+  "name": "icloud",
+  "description": "Signed into iCloud for Validate/Push CloudKit Schema",
+  "except": ["icloud"]
+}
