@@ -15,7 +15,9 @@ extension MarkerEditorView {
             : MarkerNameSuggestions.forMarker(at: start, among: otherPoints)
         // The name the sheet opened with, so an edit shows it selected. Typing
         // doesn't add chips: they'd change on every keystroke.
+        // An unnamed "Marker 7" isn't a name worth offering back.
         guard let opened = marker?.name.trimmingCharacters(in: .whitespaces), !opened.isEmpty,
+              !MarkerNameSuggestions.isDefaultName(opened),
               !guessed.contains(where: { $0.caseInsensitiveCompare(opened) == .orderedSame })
         else { return guessed }
         return [opened] + guessed
@@ -171,10 +173,15 @@ extension MarkerEditorView {
             }
         } else {
             let next = SectionSpan.end(after: start, among: otherPoints, duration: duration)
-            Text(next.name.map { "Runs until \($0) at \(PlaybackScrubber.timeLabel(next.time))" }
-                ?? "Runs to the end of the song")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(next.name.map { "Runs until \($0) at \(PlaybackScrubber.timeLabel(next.time))" }
+                    ?? "Runs to the end of the song")
+                if onMakeLoop != nil, case .replaced(let name) = makeLoopMarker {
+                    Text("Make a loop replaces \(name)")
+                }
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
         }
     }
 
@@ -220,7 +227,15 @@ extension MarkerEditorView {
                 .frame(maxWidth: .infinity)
             }
             .disabled(!canMakeLoop)
-            .accessibilityHint("Saves this marker and opens a new loop from it to the end of its section")
+            .accessibilityHint(makeLoopHint)
+        }
+    }
+
+    var makeLoopHint: String {
+        switch makeLoopMarker {
+        case .kept: "Saves this marker and opens a new loop from it to the end of its section"
+        case .replaced(let name): "Opens a new loop from here to the end of its section, in place of \(name)"
+        case .skipped: "Opens a new loop from here to the end of its section, without saving a marker"
         }
     }
 

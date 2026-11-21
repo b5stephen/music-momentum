@@ -295,7 +295,7 @@ extension PracticeView {
         }
         actions.editMarkerTimes = {
             guard let marker = macKeyTarget else { return }
-            markerSheet = .edit(marker)
+            edit(marker)
         }
         return actions
     }
@@ -325,7 +325,13 @@ extension PracticeView {
                 let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
                 update(marker, name: trimmed.isEmpty ? marker.name : trimmed, start: marker.startTime, end: marker.endTime)
             },
-            editTimes: { if let marker = marker(for: $0.id) { markerSheet = .edit(marker) } },
+            editTimes: { scrubberMarker in
+                if scrubberMarker.scratch != nil {
+                    editABTimes()
+                } else if let marker = marker(for: scrubberMarker.id) {
+                    edit(marker)
+                }
+            },
             delete: { if let marker = marker(for: $0.id) { delete(marker) } },
             createClip: { name, start, end in addMarker(name: name, start: start, end: end) },
             trimming: { scrubberMarker, start, end in

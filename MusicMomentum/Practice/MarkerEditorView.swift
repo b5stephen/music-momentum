@@ -20,9 +20,23 @@ struct MarkerEditorView: View {
     let otherPoints: [(name: String, start: TimeInterval)]
     let otherLoopNames: [String]
     let onSave: (_ name: String, _ start: TimeInterval, _ end: TimeInterval?) -> Void
-    /// Saves the marker as edited, then the caller swaps this sheet for a new
-    /// loop's; the sheet doesn't dismiss itself. `nil` hides Make a loop.
+    /// The caller swaps this sheet for a new loop's, and does with the marker
+    /// what `makeLoopMarker` says; the sheet doesn't dismiss itself. `nil`
+    /// hides Make a loop.
     var onMakeLoop: ((_ name: String, _ start: TimeInterval, _ end: TimeInterval) -> Void)?
+    /// What Make a loop does with this marker, so the sheet can say so.
+    var makeLoopMarker: MakeLoopMarker = .kept
+
+    /// A marker that's already a section start stays one, or the sections
+    /// round it would merge. One made seconds ago only to start a loop, or
+    /// not made yet, is left out instead of leaving a stray "Marker 7".
+    enum MakeLoopMarker: Equatable {
+        case kept
+        /// The just-made marker of this name goes once the loop is saved.
+        case replaced(String)
+        /// A new marker's sheet: the loop is made instead.
+        case skipped
+    }
     var onDelete: () -> Void = {}
 
     @Environment(\.dismiss) var dismiss
@@ -78,6 +92,7 @@ struct MarkerEditorView: View {
         otherLoopNames: [String] = [],
         onSave: @escaping (_ name: String, _ start: TimeInterval, _ end: TimeInterval?) -> Void,
         onMakeLoop: ((_ name: String, _ start: TimeInterval, _ end: TimeInterval) -> Void)? = nil,
+        makeLoopMarker: MakeLoopMarker = .kept,
         onDelete: @escaping () -> Void = {}
     ) {
         let end = marker?.endTime ?? initialEnd
@@ -89,6 +104,7 @@ struct MarkerEditorView: View {
         self.otherLoopNames = otherLoopNames
         self.onSave = onSave
         self.onMakeLoop = onMakeLoop
+        self.makeLoopMarker = makeLoopMarker
         self.onDelete = onDelete
         _name = State(initialValue: marker?.name ?? "")
         _start = State(initialValue: marker?.startTime ?? initialStart)
@@ -331,7 +347,8 @@ private let previewPoints: [(name: String, start: TimeInterval)] = [
 private func previewEditor(
     marker: SongMarker? = nil,
     start: TimeInterval = 71,
-    end: TimeInterval? = nil
+    end: TimeInterval? = nil,
+    makeLoopMarker: MarkerEditorView.MakeLoopMarker = .kept
 ) -> some View {
     MarkerEditorView(
         marker: marker,
@@ -342,7 +359,8 @@ private func previewEditor(
         otherPoints: previewPoints,
         otherLoopNames: ["Riff"],
         onSave: { _, _, _ in },
-        onMakeLoop: { _, _, _ in }
+        onMakeLoop: { _, _, _ in },
+        makeLoopMarker: makeLoopMarker
     )
 }
 
@@ -364,6 +382,12 @@ private func previewMarker(
 #Preview("Edit marker") {
     let (marker, container) = previewMarker(name: "Chorus", start: 72)
     return previewEditor(marker: marker).modelContainer(container)
+}
+
+#Preview("Edit marker, just marked") {
+    let (marker, container) = previewMarker(name: "Marker 7", start: 71)
+    return previewEditor(marker: marker, makeLoopMarker: .replaced("Marker 7"))
+        .modelContainer(container)
 }
 
 #Preview("Edit marker, last point") {

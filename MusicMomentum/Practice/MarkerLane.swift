@@ -604,6 +604,9 @@ struct MarkerLane: View {
         if marker.scratch != nil {
             Button("Save Loop") { actions.saveAB() }
                 .disabled(marker.scratch == .growing)
+            Button("Edit Times\u{2026}") { actions.editTimes(marker) }
+                .disabled(marker.scratch == .growing)
+            Divider()
             Button("Discard A\u{2013}B Loop") { actions.discardAB() }
         } else {
             savedMenu(for: marker)

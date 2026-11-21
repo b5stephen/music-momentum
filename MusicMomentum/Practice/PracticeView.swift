@@ -37,6 +37,9 @@ struct PracticeView: View {
     @Query private var savedSongs: [SavedSong]
     @State private var picking: Picking?
     @State var markerSheet: MarkerSheet?
+    /// The marker an Edit Marker sheet was opened on while it was still the
+    /// one Mark just made, so Make a loop can replace it.
+    @State var freshMarkerID: PersistentIdentifier?
     @State var justMarked: JustMarked?
     /// Set by a long press on Mark, whose lift still reaches the button.
     @State private var markLongPressed = false
@@ -76,11 +79,20 @@ struct PracticeView: View {
 
     /// Editing carries the marker's identity so switching straight from one
     /// marker to another rebuilds the sheet. `newLoop` is what Make a loop
-    /// swaps a marker's sheet for: a loop that isn't saved yet.
+    /// swaps a marker's sheet for, and A·B's Edit Times opens: a loop that
+    /// isn't saved yet.
     enum MarkerSheet: Identifiable {
         case new(start: TimeInterval)
-        case newLoop(start: TimeInterval, end: TimeInterval)
+        case newLoop(start: TimeInterval, end: TimeInterval, from: LoopSource = .marker)
         case edit(SongMarker)
+
+        /// What saving a new loop does besides: nothing, remove the
+        /// just-made marker it replaces, or stand in for the A·B loop.
+        enum LoopSource {
+            case marker
+            case replacing(PersistentIdentifier)
+            case ab
+        }
 
         var id: String {
             switch self {
@@ -252,12 +264,12 @@ struct PracticeView: View {
                             otherPoints: song?.pointSpans(excluding: nil) ?? [],
                             otherLoopNames: song?.loopNames(excluding: nil) ?? [],
                             onSave: { addMarker(name: $0, start: $1, end: $2) },
-                            onMakeLoop: { name, start, end in
-                                addMarker(name: name, start: start, end: nil)
+                            onMakeLoop: { _, start, end in
                                 markerSheet = .newLoop(start: start, end: end)
-                            }
+                            },
+                            makeLoopMarker: .skipped
                         )
-                    case .newLoop(let start, let end):
+                    case .newLoop(let start, let end, let source):
                         MarkerEditorView(
                             initialStart: start,
                             initialEnd: end,
@@ -265,9 +277,11 @@ struct PracticeView: View {
                             controller: controller,
                             otherPoints: song?.pointSpans(excluding: nil) ?? [],
                             otherLoopNames: song?.loopNames(excluding: nil) ?? [],
-                            onSave: { addMarker(name: $0, start: $1, end: $2) }
+                            onSave: { saveNewLoop(name: $0, start: $1, end: $2 ?? $1, from: source) }
                         )
                     case .edit(let marker):
+                        let replaces = freshMarkerID == marker.persistentModelID
+                            && marker.endTime == nil && MarkerNameSuggestions.isDefaultName(marker.name)
                         MarkerEditorView(
                             marker: marker,
                             duration: duration,
@@ -276,9 +290,14 @@ struct PracticeView: View {
                             otherLoopNames: song?.loopNames(excluding: marker) ?? [],
                             onSave: { name, start, end in update(marker, name: name, start: start, end: end) },
                             onMakeLoop: { name, start, end in
-                                update(marker, name: name, start: start, end: nil)
-                                markerSheet = .newLoop(start: start, end: end)
+                                if replaces {
+                                    markerSheet = .newLoop(start: start, end: end, from: .replacing(marker.persistentModelID))
+                                } else {
+                                    update(marker, name: name, start: start, end: nil)
+                                    markerSheet = .newLoop(start: start, end: end)
+                                }
                             },
+                            makeLoopMarker: replaces ? .replaced(marker.name) : .kept,
                             onDelete: { delete(marker) }
                         )
                     }
@@ -297,6 +316,9 @@ struct PracticeView: View {
         }
         .onChange(of: controller.selectedSong?.id) {
             justMarked = nil
+        }
+        .onChange(of: markerSheet == nil) { _, closed in
+            if closed { freshMarkerID = nil }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { controller.refreshPlaybackTime() }
@@ -655,7 +677,7 @@ struct PracticeView: View {
             onStartAB: { controller.startAB(at: $0.startTime) },
             onPlayLoop: { controller.playOnLoop($0) },
             onJump: { controller.jump(to: $0) },
-            onEdit: { markerSheet = .edit($0) },
+            onEdit: { edit($0) },
             onDelete: { delete($0) }
         )
     }
@@ -852,6 +874,14 @@ struct PracticeView: View {
         .buttonStyle(.plain)
         .disabled(controller.duration == nil)
         .accessibilityLabel(abLabel)
+        // Nothing to offer until there's a loop: before then a press is all A·B does.
+        .contextMenu {
+            if hasLoopToSave {
+                Button { editABTimes() } label: { Label("Edit Times\u{2026}", systemImage: "slider.horizontal.3") }
+                Button { saveABLoop() } label: { Label("Save Loop", systemImage: "bookmark") }
+                Button(role: .destructive) { controller.discardAB() } label: { Label("Discard", systemImage: "trash") }
+            }
+        }
     }
 
     var abLabel: String {
@@ -984,6 +1014,50 @@ struct PracticeView: View {
         justMarked = JustMarked(id: marker.persistentModelID, date: .now)
         AccessibilityNotification.Announcement("\(marker.name) saved").post()
         #endif
+    }
+
+    /// Opens Edit Marker or Edit Loop, noting whether it's the marker Mark
+    /// just made, which Make a loop then replaces rather than keeps.
+    func edit(_ marker: SongMarker) {
+        freshMarkerID = justMarked?.id == marker.persistentModelID ? marker.persistentModelID : nil
+        markerSheet = .edit(marker)
+    }
+
+    /// The A·B loop's ends in New Loop, for setting them exactly; saving
+    /// there saves it, Cancel leaves it as it was.
+    func editABTimes() {
+        guard case .closed(let range) = controller.ab else { return }
+        markerSheet = .newLoop(start: range.lowerBound, end: range.upperBound, from: .ab)
+    }
+
+    private func saveNewLoop(name: String, start: TimeInterval, end: TimeInterval, from source: MarkerSheet.LoopSource) {
+        let abRange = controller.ab?.range
+        let abLooping = controller.isLoopingAB
+        guard let loop = addMarker(name: name, start: start, end: end) else { return }
+        switch source {
+        case .marker:
+            break
+        case .replacing(let id):
+            guard let old = marker(for: id) else { break }
+            let (oldName, oldStart) = (old.name, old.startTime)
+            delete(old)
+            registerMakeLoopUndo(for: loop.persistentModelID, markerName: oldName, markerStart: oldStart)
+        case .ab:
+            guard let abRange else { break }
+            controller.adoptAB(as: loop)
+            registerSaveLoopUndo(for: loop.persistentModelID, range: abRange, looping: abLooping)
+        }
+    }
+
+    /// Takes the loop away and puts back the marker it replaced.
+    private func registerMakeLoopUndo(for id: PersistentIdentifier, markerName: String, markerStart: TimeInterval) {
+        undoManager?.registerUndo(withTarget: modelContext) { _ in
+            MainActor.assumeIsolated {
+                if let loop = marker(for: id) { delete(loop) }
+                addMarker(name: markerName, start: markerStart, end: nil)
+            }
+        }
+        undoManager?.setActionName("Make Loop")
     }
 
     /// Back to the A·B loop rather than just deleting, so nothing caught on
@@ -1312,7 +1386,7 @@ struct PracticeView: View {
                         justMarked = nil
                     },
                     onEdit: {
-                        markerSheet = .edit(marker)
+                        edit(marker)
                         justMarked = nil
                     },
                     onUndo: {

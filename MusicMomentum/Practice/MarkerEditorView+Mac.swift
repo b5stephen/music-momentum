@@ -110,7 +110,7 @@ extension MarkerEditorView {
             .buttonStyle(.bordered)
             .controlSize(.small)
             .disabled(!canMakeLoop)
-            .help("Save this marker and open a new loop over its section")
+            .help(makeLoopHint)
         }
     }
 

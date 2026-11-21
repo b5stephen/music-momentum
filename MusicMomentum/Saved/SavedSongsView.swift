@@ -243,17 +243,10 @@ struct SavedSongsView: View {
                         onMakeLoop: { name, start, end in
                             if let marker {
                                 update(marker, name: name, start: start, end: nil)
-                            } else {
-                                SongMarker.add(
-                                    to: marking.song,
-                                    name: name,
-                                    startTime: start,
-                                    endTime: nil,
-                                    in: modelContext
-                                )
                             }
                             self.marking = .init(song: marking.song, marker: nil, start: start, end: end)
                         },
+                        makeLoopMarker: marker == nil ? .skipped : .kept,
                         onDelete: { if let marker { delete(marker) } }
                     )
                 }
