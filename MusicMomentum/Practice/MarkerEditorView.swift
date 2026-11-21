@@ -177,15 +177,7 @@ struct MarkerEditorView: View {
                     nameCard
                     detailsCard
 
-                    if isLoop {
-                        listeningControls
-                    } else {
-                        HStack(spacing: 8) {
-                            previewButton
-                            makeLoopButton
-                        }
-                        .buttonStyle(FillButtonStyle(size: .action))
-                    }
+                    listeningControls
 
                     if isEditing {
                         Button(role: .destructive) {

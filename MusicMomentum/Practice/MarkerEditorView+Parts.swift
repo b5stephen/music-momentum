@@ -172,8 +172,29 @@ extension MarkerEditorView {
                 }
             }
         } else {
-            let next = SectionSpan.end(after: start, among: otherPoints, duration: duration)
-            VStack(alignment: .leading, spacing: 2) {
+            #if os(macOS)
+            markerFacts
+            #else
+            // Make a loop sits on the line naming the section it would loop,
+            // where Edit Loop keeps Set start to playhead.
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    markerFacts
+                    Spacer(minLength: 8)
+                    makeLoopChip
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    markerFacts
+                    makeLoopChip
+                }
+            }
+            #endif
+        }
+    }
+
+    private var markerFacts: some View {
+        let next = SectionSpan.end(after: start, among: otherPoints, duration: duration)
+        return VStack(alignment: .leading, spacing: 2) {
                 Text(next.name.map { "Runs until \($0) at \(PlaybackScrubber.timeLabel(next.time))" }
                     ?? "Runs to the end of the song")
                 if onMakeLoop != nil, case .replaced(let name) = makeLoopMarker {
@@ -182,7 +203,6 @@ extension MarkerEditorView {
             }
             .font(.footnote)
             .foregroundStyle(.secondary)
-        }
     }
 
     private func loopFacts(end: TimeInterval) -> some View {
@@ -195,41 +215,35 @@ extension MarkerEditorView {
             .lineLimit(1)
     }
 
-    // MARK: Marker actions
+    // MARK: Make a loop
 
-    /// An explicit play, like Play on Loop: choosing or editing a marker never
-    /// starts the song, but Preview exists to be heard. It starts a little
-    /// before the marker so you hear what leads into it.
-    var previewButton: some View {
-        Button {
-            controller.playFrom(max(0, start - Self.leadIn))
-        } label: {
-            HStack(spacing: 8) { Image(systemName: "play.fill").imageScale(.small); Text("Preview") }
-                .font(Self.actionFont)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity)
-        }
-        .accessibilityLabel("Preview from just before the marker")
-    }
-
+    #if !os(macOS)
+    /// Styled like Set to playhead, which holds this spot on Edit Loop.
     @ViewBuilder
-    var makeLoopButton: some View {
+    private var makeLoopChip: some View {
         if onMakeLoop != nil {
             Button {
                 makeLoop()
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     SpanGlyph()
                     Text("Make a loop")
                 }
-                .font(Self.actionFont)
+                .font(Self.chipFont.weight(.semibold))
                 .lineLimit(1)
-                .frame(maxWidth: .infinity)
+                .fixedSize()
+                .padding(.horizontal, Self.chipPadding)
+                .frame(height: Self.chipHeight)
+                .background(.tint.opacity(0.14), in: Capsule())
+                .foregroundStyle(Color.accentText)
             }
+            .buttonStyle(.plain)
             .disabled(!canMakeLoop)
+            .opacity(canMakeLoop ? 1 : 0.4)
             .accessibilityHint(makeLoopHint)
         }
     }
+    #endif
 
     var makeLoopHint: String {
         switch makeLoopMarker {
@@ -242,27 +256,36 @@ extension MarkerEditorView {
     // MARK: Listening controls
 
     #if !os(macOS)
-    /// Loop first, then the transport; the cues drop to a second row since
-    /// six controls at 48pt don't fit a phone's width. The cue buttons leave
-    /// the song running: a snippet that stops itself can't tell you whether the
-    /// loop is the right piece of music.
+    /// The transport, with Loop first on a loop, then the cues on a second
+    /// row, since six controls at 48pt don't fit a phone's width. The cues
+    /// leave the song running: a snippet that stops itself can't tell you
+    /// whether the loop is the right piece of music, or the marker on the beat.
     var listeningControls: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
-                loopButton
+                if isLoop { loopButton }
                 skipButton(-Self.skipInterval)
                 playPauseButton
                 skipButton(Self.skipInterval)
             }
 
-            // Each cue carries the dot of the time column it plays from.
+            // Each cue carries the dot of the time column it plays from;
+            // into-cues lead in, so you hear what runs into the time.
             HStack(spacing: 8) {
-                cueButton("Play from start", handle: .start, spoken: "Play from the start of the loop") {
-                    controller.playFrom(start)
-                }
-                // Before the end, so you hear the loop run into it.
-                cueButton("Play into end", handle: .end, spoken: "Play into the end of the loop") {
-                    if let end { controller.playFrom(max(start, end - Self.leadIn)) }
+                if isLoop {
+                    cueButton("Play from start", filled: true, spoken: "Play from the start of the loop") {
+                        controller.playFrom(start)
+                    }
+                    cueButton("Play into end", filled: false, spoken: "Play into the end of the loop") {
+                        if let end { controller.playFrom(max(start, end - Self.leadIn)) }
+                    }
+                } else {
+                    cueButton("Play from marker", filled: true, spoken: "Play from exactly the marker") {
+                        controller.playFrom(start)
+                    }
+                    cueButton("Play into marker", filled: false, spoken: "Play from a second before the marker") {
+                        controller.playFrom(max(0, start - Self.leadIn))
+                    }
                 }
             }
         }
@@ -307,14 +330,14 @@ extension MarkerEditorView {
 
     private func cueButton(
         _ title: String,
-        handle: MarkerHandle,
+        filled: Bool,
         spoken: String,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Circle()
-                    .fill(handle == .start ? AnyShapeStyle(.secondary) : AnyShapeStyle(.clear))
+                    .fill(filled ? AnyShapeStyle(.secondary) : AnyShapeStyle(.clear))
                     .strokeBorder(.secondary, lineWidth: 1.5)
                     .frame(width: 8, height: 8)
                 Text(title)
