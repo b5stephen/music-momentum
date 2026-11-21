@@ -184,7 +184,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2630;
-				LastUpgradeCheck = 2660;
+				LastUpgradeCheck = 2720;
 				TargetAttributes = {
 					DCD17B9F304BF15600BC02ED = {
 						CreatedOnToolsVersion = 26.3;
@@ -414,6 +414,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "MusicMomentum/MusicMomentum-macOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 8;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 2FBZHF6G7Q;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -469,6 +470,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "MusicMomentum/MusicMomentum-macOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 8;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 2FBZHF6G7Q;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
