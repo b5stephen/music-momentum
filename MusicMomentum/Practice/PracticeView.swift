@@ -656,7 +656,7 @@ struct PracticeView: View {
                         .accessibilityHidden(loopCaption == nil)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    HStack(spacing: 4) {
+                    HStack(spacing: Self.headerButtonGap) {
                         abButton(layout)
                         markButton(showsTitle: true)
                     }
