@@ -20,7 +20,7 @@ Simulators are slimmed with [simslim](https://github.com/MobAI-App/simslim) prof
 ## Rules the code can't enforce
 
 - `RootTabView` owns the one `PlaybackController`; it's the only thing that talks to `ApplicationMusicPlayer`. Its comments record MusicKit quirks (seek settling, unplayed queues dropping writes, rate changes starting a paused player) — read them before changing it.
-- Choosing something (a song, a marker) never starts playback. The one exception is "Play on Loop", and the comment there explains why.
+- Choosing something (a song, a marker) never starts playback. The exceptions are "Play on Loop" and setting A·B's A (its first press, or Start A·B Here), since B is found by listening; their comments explain why. Setting B never starts it.
 - Only the loop button turns looping on or off, bar A·B: its B starts its unsaved loop, and discarding that loop stops it. Pills reshape scope, and running out of clips widens to whole-song rather than stopping.
 - Speeds are persisted only on explicit save, never from `playbackRate`'s `didSet`.
 - All model mutation goes through `SongMarker.add/set/clearEnd/delete` and `SavedSong.save/touch/markPracticed/setArtwork`, which enforce the invariants and save. New models go in `AppSchema.models`; the app, previews and tests all build from it.

@@ -401,20 +401,31 @@ final class PlaybackController {
         switch ab {
         case nil:
             ab = .started(abPressTime)
+            playForB()
         case .started(let a):
             closeAB(from: a, to: abPressTime)
         case .closed:
             let a = abPressTime
             discardAB()
             ab = .started(a)
+            playForB()
         }
     }
 
-    /// A at a marker's start, from its menu; the playhead goes there so B is
-    /// a matter of listening on.
+    /// The second place the app starts playback by itself, after Play on
+    /// Loop: B is found by listening, so setting A while paused means "play
+    /// from here". Setting B doesn't: paused there, the user put it there.
+    private func playForB() {
+        // The sample shown before any song is picked has nothing to play.
+        if !isPlaying, selectedSong != nil { play() }
+    }
+
+    /// A at a marker's start, from its menu; the playhead goes there and
+    /// plays, so B is a matter of listening on.
     func startAB(at time: TimeInterval) {
         ab = .started(time)
         userSeek(to: time)
+        playForB()
     }
 
     /// Stops the loop if it was the A·B one: there's nothing left to loop.
