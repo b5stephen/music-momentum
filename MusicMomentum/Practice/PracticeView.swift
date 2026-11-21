@@ -1404,8 +1404,10 @@ struct PracticeView: View {
                         edit(marker)
                         justMarked = nil
                     },
+                    onMakeLoop: makeLoop(from: marker),
                     onUndo: { undoJustMarked(marker) },
-                    onTimeout: { justMarked = nil }
+                    onDismiss: { justMarked = nil },
+                    ground: track?.palette?.shadow
                 )
                 .id(marker.persistentModelID)
                 .padding(.horizontal, 12)
@@ -1416,6 +1418,25 @@ struct PracticeView: View {
         // Once hidden by a sheet it would only come back with a fresh countdown.
         .onChange(of: toastMarker == nil) { _, gone in
             if gone { justMarked = nil }
+        }
+    }
+
+    /// What Edit Marker's Make a loop does for the point Mark just made: the
+    /// loop replaces it while it's still unnamed, rather than leaving a stray
+    /// "Marker 7" behind.
+    private func makeLoop(from marker: SongMarker) -> (() -> Void)? {
+        guard !marker.isClip, let duration = controller.duration,
+              let end = SectionSpan.loopEnd(
+                  from: marker.startTime,
+                  among: savedSong?.pointSpans(excluding: marker) ?? [],
+                  duration: duration
+              )
+        else { return nil }
+        let source: MarkerSheet.LoopSource = MarkerNameSuggestions.isDefaultName(marker.name)
+            ? .replacing(marker.persistentModelID) : .marker
+        return {
+            markerSheet = .newLoop(start: marker.startTime, end: end, from: source)
+            justMarked = nil
         }
     }
     #endif

@@ -8,7 +8,8 @@ import SwiftUI
 
 /// Offered after a quick Mark so the point can be named without stopping the
 /// song. It dismisses itself after `duration` unless VoiceOver is running,
-/// where a timeout would take the chips away mid-swipe.
+/// where a timeout would take the chips away mid-swipe, and a swipe down
+/// dismisses it sooner.
 struct MarkToast: View {
     var name: String
     var time: String
@@ -16,18 +17,30 @@ struct MarkToast: View {
     var isPlaying: Bool
     var onPick: (String) -> Void
     var onEdit: () -> Void
+    /// Opens New Loop over the marker's section. `nil` hides the button: a
+    /// loop, or a point with no section after it.
+    var onMakeLoop: (() -> Void)?
     var onUndo: () -> Void
-    var onTimeout: () -> Void
+    var onDismiss: () -> Void
+    /// The cover's darkest tone, as the design board's card was its song's
+    /// ground. `nil` before a cover is loaded.
+    var ground: Color?
     /// Stands in for VoiceOver in previews, which can't turn it on.
     var assumesVoiceOver = false
 
-    static let duration: Duration = .seconds(6)
+    /// Six seconds ran out while still reading the guesses.
+    static let duration: Duration = .seconds(8)
+    /// How far down a drag has to go, or be flung, to dismiss.
+    private static let dismissDistance: CGFloat = 40
 
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverRunning
     @State private var remaining = 1.0
+    @State private var dragOffset: CGFloat = 0
 
     private static let cornerRadius: CGFloat = 26
-    private static let smoke = Color(red: 20 / 255, green: 36 / 255, blue: 44 / 255).opacity(0.94)
+    /// Near-opaque, so the knob and pills under it don't show through.
+    private static let opacity = 0.94
+    private static let fallbackGround = Color(red: 20 / 255, green: 36 / 255, blue: 44 / 255)
 
     private var voiceOverOn: Bool { voiceOverRunning || assumesVoiceOver }
     private var title: String { "\(name) saved at \(time)" }
@@ -65,7 +78,11 @@ struct MarkToast: View {
                     chip(suggestion, emphasised: index == 0) { onPick(suggestion) }
                         .accessibilityLabel("Name it \(suggestion)")
                 }
-                editChip
+                // One item to the flow, so Loop never wraps away from Edit.
+                HStack(spacing: 8) {
+                    editChip
+                    if let onMakeLoop { loopChip(onMakeLoop) }
+                }
             }
         }
         .padding(EdgeInsets(top: 14, leading: 14, bottom: 16, trailing: 14))
@@ -82,21 +99,40 @@ struct MarkToast: View {
                 .accessibilityHidden(true)
             }
         }
-        .background(Self.smoke)
+        .background((ground ?? Self.fallbackGround).opacity(Self.opacity))
         .clipShape(.rect(cornerRadius: Self.cornerRadius))
         .overlay { RoundedRectangle(cornerRadius: Self.cornerRadius).strokeBorder(.primary.opacity(0.18), lineWidth: 1) }
         .shadow(color: .black.opacity(0.35), radius: 16, y: 12)
         .environment(\.colorScheme, .dark)
+        .offset(y: dragOffset)
+        .gesture(swipeToDismiss)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
+        .accessibilityAction(.escape, onDismiss)
         .task(id: voiceOverOn) {
             remaining = 1
             guard !voiceOverOn else { return }
             withAnimation(.linear(duration: Double(Self.duration.components.seconds))) { remaining = 0 }
             try? await Task.sleep(for: Self.duration)
             guard !Task.isCancelled else { return }
-            onTimeout()
+            onDismiss()
         }
+    }
+
+    /// Follows the finger down, and resists a pull up, which has nowhere to go.
+    private var swipeToDismiss: some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                let y = value.translation.height
+                dragOffset = y > 0 ? y : -sqrt(-y) * 2
+            }
+            .onEnded { value in
+                if max(value.translation.height, value.predictedEndTranslation.height) > Self.dismissDistance {
+                    onDismiss()
+                } else {
+                    withAnimation(.snappy(duration: 0.25)) { dragOffset = 0 }
+                }
+            }
     }
 
     private func chip(_ title: String, emphasised: Bool, action: @escaping () -> Void) -> some View {
@@ -125,6 +161,21 @@ struct MarkToast: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Edit marker")
+    }
+
+    private func loopChip(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label { Text("Loop…") } icon: { SpanGlyph() }
+                .font(.subheadline.weight(.semibold))
+                .labelStyle(.titleAndIcon)
+                .padding(.horizontal, 16)
+                .frame(height: 44)
+                .overlay { Capsule().strokeBorder(.primary.opacity(0.2), lineWidth: 1) }
+                .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Make a loop")
+        .accessibilityHint("Opens a new loop from here to the end of its section, in place of this marker")
     }
 }
 
@@ -181,7 +232,7 @@ private struct FlowLayout: Layout {
 }
 
 #Preview("Over a bright cover", traits: .fixedLayout(width: 402, height: 240)) {
-    toastPreview(name: "Marker 7", suggestions: ["Chorus 2", "Verse", "Bridge", "Solo", "Pre-chorus"], ground: Color(red: 0.88, green: 0.64, blue: 0.05).opacity(0.85))
+    toastPreview(name: "Marker 7", suggestions: ["Chorus 2", "Verse", "Bridge", "Solo", "Pre-chorus"], cover: OKLCH(red: 0.88, green: 0.64, blue: 0.05))
 }
 
 #Preview("VoiceOver, no countdown", traits: .fixedLayout(width: 402, height: 240)) {
@@ -192,24 +243,39 @@ private struct FlowLayout: Layout {
     toastPreview(name: "Marker 7", suggestions: ["Chorus 2", "Verse", "Bridge", "Solo", "Pre-chorus"], isPlaying: false)
 }
 
+#Preview("Over a blue cover", traits: .fixedLayout(width: 402, height: 240)) {
+    toastPreview(name: "Marker 7", suggestions: ["Chorus 2", "Verse", "Bridge", "Solo", "Pre-chorus"], cover: OKLCH(red: 0.17, green: 0.43, blue: 0.49))
+}
+
+#Preview("Before the cover loads", traits: .fixedLayout(width: 402, height: 240)) {
+    toastPreview(name: "Marker 7", suggestions: ["Chorus 2", "Verse", "Bridge", "Solo", "Pre-chorus"], cover: nil)
+}
+
+#Preview("Last point, no loop", traits: .fixedLayout(width: 402, height: 240)) {
+    toastPreview(name: "Marker 7", suggestions: ["Chorus 2", "Verse", "Bridge", "Solo", "Pre-chorus"], canLoop: false)
+}
+
 private func toastPreview(
     name: String,
     suggestions: [String],
-    ground: Color = Color(red: 0.2, green: 0.07, blue: 0.07),
+    cover: OKLCH? = OKLCH(red: 0.53, green: 0.19, blue: 0.18),
     voiceOver: Bool = false,
-    isPlaying: Bool = true
+    isPlaying: Bool = true,
+    canLoop: Bool = true
 ) -> some View {
-    MarkToast(
+    let palette = cover.map { ArtworkPalette(cover: $0) }
+    return MarkToast(
         name: name,
         time: "2:20.1",
         suggestions: suggestions,
         isPlaying: isPlaying,
-        onPick: { _ in }, onEdit: {}, onUndo: {}, onTimeout: {},
+        onPick: { _ in }, onEdit: {}, onMakeLoop: canLoop ? {} : nil, onUndo: {}, onDismiss: {},
+        ground: palette?.shadow,
         assumesVoiceOver: voiceOver
     )
     .padding(24)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(ground)
+    .background(palette?.mesh[4] ?? Color(red: 0.2, green: 0.07, blue: 0.07))
     .environment(\.colorScheme, .dark)
 }
 #endif
