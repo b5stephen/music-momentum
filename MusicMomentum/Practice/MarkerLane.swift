@@ -13,8 +13,8 @@ import SwiftUI
 ///
 /// Clicks are told apart from ⌘- and ⌥-clicks here, since a SwiftUI `Button`
 /// doesn't say which modifiers were down. Hovering lifts an item and raises a
-/// bubble over the lane; right-clicking opens its menu; double-clicking, or
-/// the menu's Rename, types a new name over it.
+/// bubble over the lane; right-clicking opens its menu; double-clicking opens
+/// its sheet, and Return or the menu's Rename types a new name over it.
 ///
 /// Dragging on empty lane marks a clip: a dashed ghost with its times, then a
 /// name field under it. Dragging within a few points of a clip's edge trims it.
@@ -228,7 +228,7 @@ struct MarkerLane: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .modifier(LaneItemInput(id: marker.id, hovered: $hovered, renaming: renaming))
+        .modifier(LaneItemInput(id: marker.id, hovered: $hovered) { actions.editTimes(marker) })
         .contextMenu { menu(for: marker) }
         .offset(x: point.x - dot / 2 - padding)
         .accessibilityLabel("\(marker.name), marker")
@@ -303,7 +303,9 @@ struct MarkerLane: View {
             .contentShape(shape)
         }
         .buttonStyle(.plain)
-        .modifier(LaneItemInput(id: marker.id, hovered: $hovered, renaming: renaming))
+        .modifier(LaneItemInput(id: marker.id, hovered: $hovered) {
+            if marker.scratch != .growing { actions.editTimes(marker) }
+        })
         .contextMenu { menu(for: marker) }
         .offset(x: clip.x, y: top)
         .accessibilityLabel(marker.scratch == nil ? "\(marker.name), loop\(marker.isLooping ? ", looping" : "")" : "A–B loop, not saved")
@@ -482,7 +484,7 @@ struct MarkerLane: View {
     /// Above the lane, at the left of `minX...maxX` or the right of it,
     /// whichever side has room; a point's is centred over its dot instead.
     private func floatingBubble(
-        _ bubble: MarkerBubble, minX: CGFloat, maxX: CGFloat, width: CGFloat, centered: Bool = false
+        _ bubble: some View, minX: CGFloat, maxX: CGFloat, width: CGFloat, centered: Bool = false, clickable: Bool = false
     ) -> some View {
         let leading = (minX + maxX) / 2 < width * 0.6
         let anchor: Alignment = centered ? .bottom : leading ? .bottomLeading : .bottomTrailing
@@ -490,11 +492,11 @@ struct MarkerLane: View {
         return bubble
             .frame(width: 0, height: 0, alignment: anchor)
             .offset(x: x, y: -Self.bubbleLift)
-            .allowsHitTesting(false)
+            .allowsHitTesting(clickable)
     }
 
     /// Half the widest bubble, so a centred one stays inside the lane.
-    private static let bubbleReach: CGFloat = 140
+    private static let bubbleReach: CGFloat = 170
     private static let bubbleLift: CGFloat = 13
 
     // MARK: Text
@@ -520,9 +522,9 @@ struct MarkerLane: View {
         let (minX, maxX) = extent(of: marker.id, in: layout)
         let action = switch marker.scratch {
         case .growing: "A again sets B here"
-        case .looping: "drag an edge to trim \u{00B7} \u{2318}S to save"
+        case .looping: "drag an edge to trim \u{00B7} double-click to edit"
         case .ghost: isLoopOn ? "click to loop \u{00B7} \u{2318}S to save" : "click to jump \u{00B7} \u{2318}S to save"
-        case nil: marker.isClip && isLoopOn ? "click to loop" : "click to jump"
+        case nil: (marker.isClip && isLoopOn ? "click to loop" : "click to jump") + " \u{00B7} double-click to edit"
         }
         return floatingBubble(
             MarkerBubble(
@@ -537,11 +539,15 @@ struct MarkerLane: View {
     private func justMarkedBubble(for marker: PlaybackScrubber.Marker, in layout: MarkerLaneLayout, width: CGFloat) -> some View {
         let (minX, maxX) = extent(of: marker.id, in: layout)
         return floatingBubble(
-            MarkerBubble(
+            JustMarkedBubble(
                 name: marker.name.isEmpty ? "Untitled" : marker.name,
-                detail: "\(PreciseTime.format(marker.start)) \u{00B7} Return to name \u{00B7} \u{2318}Z to undo"
+                time: PreciseTime.format(marker.start),
+                onName: { renaming.wrappedValue = marker.id },
+                onEdit: { actions.editTimes(marker) },
+                onUndo: actions.undoMark,
+                onHover: actions.holdJustMarked
             ),
-            minX: minX, maxX: maxX, width: width, centered: true
+            minX: minX, maxX: maxX, width: width, centered: true, clickable: true
         )
         .transition(.opacity)
     }
@@ -685,11 +691,12 @@ private struct TrimZone: View {
     }
 }
 
-/// Hover and double-click, the same on a point and a clip.
+/// Hover and double-click, the same on a point and a clip. Double-click
+/// opens the item, as in Finder, where Return renames.
 private struct LaneItemInput: ViewModifier {
     let id: AnyHashable
     @Binding var hovered: AnyHashable?
-    @Binding var renaming: AnyHashable?
+    let onDoubleClick: () -> Void
 
     func body(content: Content) -> some View {
         content
@@ -700,7 +707,7 @@ private struct LaneItemInput: ViewModifier {
                     hovered = nil
                 }
             }
-            .simultaneousGesture(TapGesture(count: 2).onEnded { renaming = id })
+            .simultaneousGesture(TapGesture(count: 2).onEnded(onDoubleClick))
     }
 }
 

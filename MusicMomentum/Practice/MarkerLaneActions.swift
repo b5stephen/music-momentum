@@ -30,5 +30,9 @@ struct MarkerLaneActions {
     var startAB: (PlaybackScrubber.Marker) -> Void = { _ in }
     var saveAB: () -> Void = {}
     var discardAB: () -> Void = {}
+    /// The just-marked bubble's Undo.
+    var undoMark: () -> Void = {}
+    /// The pointer is over the just-marked bubble, so it shouldn't time out.
+    var holdJustMarked: (Bool) -> Void = { _ in }
 }
 #endif

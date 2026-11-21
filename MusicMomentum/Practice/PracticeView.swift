@@ -51,6 +51,8 @@ struct PracticeView: View {
     @State var macRenaming: AnyHashable?
     /// Whether the timeline is crowded enough to show its zoom controls.
     @State var isZoomOffered = false
+    /// The pointer is over the just-marked bubble, which waits for it.
+    @State var isJustMarkedHeld = false
     #endif
     /// Bumped by Set Speed… to open the knob's readout for typing.
     @State var speedEditRequest = 0
@@ -1016,6 +1018,17 @@ struct PracticeView: View {
         #endif
     }
 
+    /// Through the undo stack when the marker is on top of it, so Redo can
+    /// bring it back; otherwise it's simply deleted.
+    func undoJustMarked(_ marker: SongMarker) {
+        if let undoManager, undoManager.canUndo, ["Mark", "Save Loop"].contains(undoManager.undoActionName) {
+            undoManager.undo()
+        } else {
+            delete(marker)
+        }
+        justMarked = nil
+    }
+
     /// Opens Edit Marker or Edit Loop, noting whether it's the marker Mark
     /// just made, which Make a loop then replaces rather than keeps.
     func edit(_ marker: SongMarker) {
@@ -1389,14 +1402,7 @@ struct PracticeView: View {
                         edit(marker)
                         justMarked = nil
                     },
-                    onUndo: {
-                        if let undoManager, undoManager.canUndo, ["Mark", "Save Loop"].contains(undoManager.undoActionName) {
-                            undoManager.undo()
-                        } else {
-                            delete(marker)
-                        }
-                        justMarked = nil
-                    },
+                    onUndo: { undoJustMarked(marker) },
                     onTimeout: { justMarked = nil }
                 )
                 .id(marker.persistentModelID)

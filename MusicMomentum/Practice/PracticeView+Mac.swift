@@ -227,10 +227,15 @@ extension PracticeView {
             timelineViewport.fit()
             macRenaming = nil
         }
-        .task(id: justMarked) {
-            guard justMarked != nil else { return }
+        // Six seconds, counted again once the pointer leaves the bubble, as a
+        // notification waits while it's hovered.
+        .task(id: BubbleTimer(mark: justMarked, held: isJustMarkedHeld)) {
+            guard justMarked != nil, !isJustMarkedHeld else { return }
             try? await Task.sleep(for: .seconds(6))
             if !Task.isCancelled { justMarked = nil }
+        }
+        .onChange(of: justMarked == nil) { _, gone in
+            if gone { isJustMarkedHeld = false }
         }
         .onChange(of: controller.playbackTime) { old, new in
             guard let duration = controller.duration else { return }
@@ -356,7 +361,9 @@ extension PracticeView {
             },
             startAB: { controller.startAB(at: $0.start) },
             saveAB: saveABLoop,
-            discardAB: { controller.discardAB() }
+            discardAB: { controller.discardAB() },
+            undoMark: { if let id = justMarked?.id, let marker = marker(for: id) { undoJustMarked(marker) } },
+            holdJustMarked: { isJustMarkedHeld = $0 }
         )
     }
 
@@ -472,31 +479,65 @@ extension PracticeView {
         }
     }
 
+    /// A split button, as a Mac pull-down with a default action is: the
+    /// main part marks, the chevron offers Mark and Edit…, which was only
+    /// in the menu bar before and went unfound.
     private var macMarkButton: some View {
-        Button(action: mark) {
-            HStack(spacing: 6) {
-                MarkGlyph()
-                    .frame(width: 13, height: 13)
-                Text("Mark")
-            }
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(Color.primary)
-            .padding(.horizontal, 14)
-            .frame(height: 32)
-            .modifier(ButtonGlass())
-            .overlay {
-                if justMarked != nil {
-                    Capsule().fill(.primary.opacity(0.12))
-                    Capsule().strokeBorder(.primary.opacity(0.45), lineWidth: 1)
+        HStack(spacing: 0) {
+            Button(action: mark) {
+                HStack(spacing: 6) {
+                    MarkGlyph()
+                        .frame(width: 13, height: 13)
+                    Text("Mark")
                 }
+                .padding(.leading, 14)
+                .padding(.trailing, 10)
+                .frame(height: 32)
+                .contentShape(.rect)
             }
-            .contentShape(.capsule)
+            .buttonStyle(.plain)
+            .help("Mark this point (M) \u{00B7} \u{21E7}M to mark and edit")
+            .accessibilityLabel("Mark this point")
+
+            Rectangle()
+                .fill(.primary.opacity(0.2))
+                .frame(width: 1, height: 16)
+
+            Menu {
+                // No key equivalents here: the menu bar's Markers menu owns M and ⇧M.
+                Button("Mark", action: mark)
+                Button("Mark and Edit\u{2026}", action: markAndEdit)
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .padding(.leading, 7)
+                    .padding(.trailing, 10)
+                    .frame(height: 32)
+                    .contentShape(.rect)
+            }
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
+            .buttonStyle(.plain)
+            .fixedSize()
+            .help("More ways to mark")
+            .accessibilityLabel("Mark options")
         }
-        .buttonStyle(.plain)
+        .font(.system(size: 13, weight: .semibold))
+        .foregroundStyle(Color.primary)
+        .modifier(ButtonGlass())
+        .overlay {
+            if justMarked != nil {
+                Capsule().fill(.primary.opacity(0.12)).allowsHitTesting(false)
+                Capsule().strokeBorder(.primary.opacity(0.45), lineWidth: 1).allowsHitTesting(false)
+            }
+        }
         .disabled(controller.duration == nil)
-        .help("Mark this point (M)")
-        .accessibilityLabel("Mark this point")
     }
+}
+
+private struct BubbleTimer: Equatable {
+    var mark: PracticeView.JustMarked?
+    var held: Bool
 }
 
 // MARK: - Previews
