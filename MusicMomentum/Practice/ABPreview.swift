@@ -11,7 +11,9 @@ enum ABPreview {
 
     @MainActor
     func apply(to controller: PlaybackController) {
+        #if DEBUG
         controller.sampleDuration = 238
+        #endif
         switch self {
         case .started:
             controller.startAB(at: 76)
