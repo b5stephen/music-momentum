@@ -31,18 +31,23 @@ extension MarkerEditorView {
 
                 VStack(alignment: .leading, spacing: 10) {
                     nudgeRow
-                    infoLine
+                    if isLoop {
+                        infoLine
+                    } else {
+                        // Make a loop sits on the line naming the section it
+                        // would loop.
+                        HStack {
+                            infoLine
+                            Spacer()
+                            macMakeLoopButton
+                        }
+                    }
                 }
 
                 if isLoop {
                     macListening
                 } else {
-                    HStack(spacing: 6) {
-                        previewButton
-                        makeLoopButton
-                    }
-                    .buttonStyle(.bordered)
-                    .frame(maxWidth: 320)
+                    macMarkerListening
                 }
             }
             .padding(.horizontal, 20)
@@ -61,19 +66,62 @@ extension MarkerEditorView {
         HStack(spacing: 6) {
             macLoopButton
 
-            Divider()
-                .frame(height: 16)
-                .padding(.horizontal, 6)
+            macHairline
 
             macCue("Play from start", filled: true) { controller.playFrom(start) }
             macCue("Play into end", filled: false) {
                 if let end { controller.playFrom(max(start, end - Self.leadIn)) }
             }
 
-            Divider()
-                .frame(height: 16)
-                .padding(.horizontal, 6)
+            macHairline
 
+            macTransport
+        }
+        .buttonStyle(.bordered)
+    }
+
+    /// Edit Loop's row without Loop. Play from marker starts on the exact
+    /// time, to check where it lands; Play into marker is iOS's Preview,
+    /// leading in so you hear what runs into it.
+    private var macMarkerListening: some View {
+        HStack(spacing: 6) {
+            macCue("Play from marker", filled: true) { controller.playFrom(start) }
+                .help("Play from exactly the marker")
+            macCue("Play into marker", filled: false) { controller.playFrom(max(0, start - Self.leadIn)) }
+                .help("Play from a second before the marker")
+
+            macHairline
+
+            macTransport
+        }
+        .buttonStyle(.bordered)
+    }
+
+    @ViewBuilder
+    private var macMakeLoopButton: some View {
+        if onMakeLoop != nil {
+            Button {
+                makeLoop()
+            } label: {
+                Label { Text("Make a loop") } icon: { SpanGlyph() }
+                    .labelStyle(.titleAndIcon)
+                    .lineLimit(1)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(!canMakeLoop)
+            .help("Save this marker and open a new loop over its section")
+        }
+    }
+
+    private var macHairline: some View {
+        Divider()
+            .frame(height: 16)
+            .padding(.horizontal, 6)
+    }
+
+    private var macTransport: some View {
+        Group {
             Button {
                 controller.skip(by: -Self.skipInterval)
             } label: {
@@ -83,8 +131,13 @@ extension MarkerEditorView {
             Button {
                 controller.togglePlayPause()
             } label: {
-                Image(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
-                    .frame(width: 20)
+                // Sized by a skip glyph: play and pause are shorter, which
+                // left this button a few points lower than its neighbours.
+                ZStack {
+                    Image(systemName: "gobackward.5").hidden()
+                    Image(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
+                }
+                .frame(minWidth: 20)
             }
             .help(controller.isPlaying ? "Pause" : "Play")
             Button {
@@ -94,7 +147,6 @@ extension MarkerEditorView {
             }
             .help("Forward 5 seconds")
         }
-        .buttonStyle(.bordered)
     }
 
     /// Solid coral when on, as looping is wherever the app isn't on a cover.
