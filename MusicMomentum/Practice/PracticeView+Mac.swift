@@ -274,13 +274,15 @@ extension PracticeView {
 
     // MARK: Marker keys
 
-    /// What Return and ⌥Return act on: the point Mark just made, else the
-    /// last point at or before the playhead.
+    /// What Return and ⌥Return act on: the point Mark just made, else
+    /// whatever the playhead is in, a loop or a point's section.
     private var macKeyTarget: SongMarker? {
         if let justMarked, let marker = marker(for: justMarked.id) { return marker }
-        return (savedSong?.markers ?? [])
-            .filter { $0.endTime == nil && $0.startTime <= controller.playbackTime }
-            .max { $0.startTime < $1.startTime }
+        let markers = savedSong?.markers ?? []
+        return SectionSpan.innermost(
+            at: controller.playbackTime,
+            among: markers.map { (start: $0.startTime, end: $0.endTime) }
+        ).map { markers[$0] }
     }
 
     func withMacMarkerKeys(_ actions: PracticeActions) -> PracticeActions {

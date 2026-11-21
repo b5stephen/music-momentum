@@ -57,4 +57,15 @@ struct SectionSpanTests {
         #expect(SectionSpan.loopEnd(from: 199.8, among: [], duration: 200) == nil)
         #expect(SectionSpan.loopEnd(from: 199.5, among: [], duration: 200) == 200)
     }
+
+    @Test("Return acts on the loop the playhead is in, else its section's point")
+    func innermost() {
+        let items: [(start: Double, end: Double?)] = [(0, nil), (20, nil), (24, 36), (40, 44)]
+        #expect(SectionSpan.innermost(at: 30, among: items) == 2)
+        #expect(SectionSpan.innermost(at: 22, among: items) == 1)
+        #expect(SectionSpan.innermost(at: 38, among: items) == 1)
+        #expect(SectionSpan.innermost(at: 36, among: items) == 1)
+        #expect(SectionSpan.innermost(at: 5, among: items) == 0)
+        #expect(SectionSpan.innermost(at: 5, among: [(10, nil), (12, 20)]) == nil)
+    }
 }
