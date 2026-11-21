@@ -26,7 +26,7 @@ extension PlaybackController {
     func clip(_ direction: ClipStep.Direction, in clips: [SongMarker]) -> SongMarker? {
         let index = ClipStep.target(
             starts: clips.map(\.startTime),
-            loop: (loop?.segments ?? []).map { $0.start..<$0.end },
+            loop: loop?.ranges ?? [],
             playhead: playbackTime,
             direction: direction
         )

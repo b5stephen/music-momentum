@@ -652,6 +652,7 @@ struct PracticeView: View {
             isLooping: { controller.isLooping($0) },
             isLoopOn: controller.isLoopOn,
             onTap: { tapped($0) },
+            onStartAB: { controller.startAB(at: $0.startTime) },
             onPlayLoop: { controller.playOnLoop($0) },
             onJump: { controller.jump(to: $0) },
             onEdit: { markerSheet = .edit($0) },
@@ -708,18 +709,11 @@ struct PracticeView: View {
     }
 
     /// Five controls, not six: an odd number puts play/pause dead centre.
-    /// Marking moved under the pill row it adds to.
+    /// Marking moved under the pill row it adds to, and A·B took Restart's
+    /// place: the two loop makers flank the skips and play.
     private func transportControls(_ layout: PracticeLayout) -> some View {
         HStack(spacing: 0) {
-            // A size down from the skips, which read as one group with play;
-            // the same size, four circular arrows looked alike at a glance.
-            transportButton(
-                "gobackward",
-                size: layout.transportGlyph * 0.88,
-                label: controller.isLoopOn ? "Restart loop" : "Restart"
-            ) {
-                controller.restart()
-            }
+            abButton(layout)
 
             Spacer(minLength: 0)
 
@@ -830,6 +824,44 @@ struct PracticeView: View {
     private static let markGlassSide: CGFloat = 36
     private static let markCapsuleHeight: CGFloat = 40
 
+    /// Outlined until A is set, then filled like Loop when it's on: "B" while
+    /// it waits for the end, "A·B" once there's a loop to throw away.
+    private func abButton(_ layout: PracticeLayout) -> some View {
+        let isSet = controller.ab != nil
+        let isWaitingForB = if case .started = controller.ab { true } else { false }
+        return Button {
+            controller.pressAB()
+        } label: {
+            Text(isWaitingForB ? "B" : "A\u{00B7}B")
+                .font(.system(size: layout.isCompact ? 14 : 15, weight: .heavy))
+                .tracking(0.3)
+                .foregroundStyle(isSet ? AnyShapeStyle(onAccent) : AnyShapeStyle(.primary))
+                .padding(.horizontal, 8)
+                .frame(minWidth: layout.isCompact ? 44 : 46, minHeight: layout.isCompact ? 30 : 32)
+                .background {
+                    if isSet {
+                        Capsule().fill(.tint)
+                    } else {
+                        Capsule().strokeBorder(.primary.opacity(0.6), lineWidth: 1.5)
+                    }
+                }
+                .fixedSize()
+                .frame(width: 56, height: 44)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(controller.duration == nil)
+        .accessibilityLabel(abLabel)
+    }
+
+    var abLabel: String {
+        switch controller.ab {
+        case nil: "Start an A–B loop here"
+        case .started: "Set loop end here"
+        case .closed: "Discard the A–B loop"
+        }
+    }
+
     /// Plain like its neighbours until it's on, when it's the one control that
     /// fills: looping is the state that shouts.
     private func loopButton(_ layout: PracticeLayout) -> some View {
@@ -855,6 +887,15 @@ struct PracticeView: View {
     }
 
     private var loopCaption: String? {
+        if case .started(let a) = controller.ab {
+            return "A at \(PlaybackScrubber.timeLabel(a)) · tap B to close the loop"
+        }
+        if case .scratch(let range) = controller.loop {
+            return "Looping A–B · \(PlaybackScrubber.lengthLabel(range.upperBound - range.lowerBound)), not saved"
+        }
+        if controller.loop == nil, controller.ab != nil {
+            return "A–B loop paused · Loop resumes it"
+        }
         guard let loop = controller.loop else { return nil }
         let segments = loop.segments
         switch segments.count {
@@ -872,6 +913,7 @@ struct PracticeView: View {
     /// For VoiceOver: the caption is a separate element to the button.
     var loopDescription: String {
         guard let loop = controller.loop else { return "Off" }
+        if loop.isScratch { return "A–B loop, not saved" }
         let clips = loop.segments.count
         switch clips {
         case 0: return "Whole song"
@@ -897,7 +939,7 @@ struct PracticeView: View {
     }
 
     var scrubberMarkers: [PlaybackScrubber.Marker] {
-        (savedSong?.sortedMarkers ?? []).map {
+        let saved: [PlaybackScrubber.Marker] = (savedSong?.sortedMarkers ?? []).map {
             .init(
                 id: $0.persistentModelID,
                 name: $0.name,
@@ -906,7 +948,74 @@ struct PracticeView: View {
                 isLooping: controller.isLooping($0)
             )
         }
+        return saved + [abLaneItem].compactMap(\.self)
     }
+
+    static let abLaneID: AnyHashable = "A·B"
+
+    /// The A·B loop drawn with the saved ones; growing, it runs from A to
+    /// the playhead.
+    private var abLaneItem: PlaybackScrubber.Marker? {
+        switch controller.ab {
+        case nil:
+            return nil
+        case .started(let a):
+            return .init(id: Self.abLaneID, name: "A", start: a, end: max(controller.playbackTime, a + 0.01), scratch: .growing)
+        case .closed(let range):
+            let looping = controller.isLoopingAB
+            return .init(
+                id: Self.abLaneID, name: "A–B", start: range.lowerBound, end: range.upperBound,
+                isLooping: looping, scratch: looping ? .looping : .ghost
+            )
+        }
+    }
+
+    /// Turns the A·B loop into a saved one named "Loop N", looping in its
+    /// place, then offers to name it as Mark does.
+    func saveABLoop() {
+        guard case .closed(let range) = controller.ab else { return }
+        let looping = controller.isLoopingAB
+        guard let marker = addMarker(name: "", start: range.lowerBound, end: range.upperBound) else { return }
+        controller.adoptAB(as: marker)
+        registerSaveLoopUndo(for: marker.persistentModelID, range: range, looping: looping)
+        #if os(macOS)
+        macRenaming = marker.persistentModelID
+        #else
+        justMarked = JustMarked(id: marker.persistentModelID, date: .now)
+        AccessibilityNotification.Announcement("\(marker.name) saved").post()
+        #endif
+    }
+
+    /// Back to the A·B loop rather than just deleting, so nothing caught on
+    /// the beat is lost to a stray Undo.
+    private func registerSaveLoopUndo(for id: PersistentIdentifier, range: Range<TimeInterval>, looping: Bool) {
+        undoManager?.registerUndo(withTarget: modelContext) { _ in
+            MainActor.assumeIsolated {
+                guard let marker = marker(for: id) else { return }
+                if justMarked?.id == id { justMarked = nil }
+                delete(marker)
+                controller.restoreAB(range, looping: looping)
+            }
+        }
+        undoManager?.setActionName("Save Loop")
+    }
+
+    /// The speed, the A·B loop, or both: whatever the prompt offers.
+    func savePending() {
+        if !isSpeedSaved { controller.saveCurrentSong() }
+        if controller.ab?.range != nil { saveABLoop() }
+    }
+
+    var hasLoopToSave: Bool { controller.ab?.range != nil }
+
+    private var abStep: PracticeActions.ABStep {
+        switch controller.ab {
+        case nil: .setStart
+        case .started: .setEnd
+        case .closed: .discard
+        }
+    }
+    var showsSavePrompt: Bool { !isSpeedSaved || hasLoopToSave }
 
     /// Markers live on the saved entry, so marking an unsaved song saves it.
     @discardableResult
@@ -1064,13 +1173,13 @@ struct PracticeView: View {
 
     private var headerButtons: some View {
         HStack(spacing: Self.headerButtonGap) {
-            if !isSpeedSaved {
+            if showsSavePrompt {
                 saveButton
                     .transition(.opacity.combined(with: .scale(scale: 0.6, anchor: .trailing)))
             }
             changeSongButton
         }
-        .animation(.bouncy(duration: 0.4), value: isSpeedSaved)
+        .animation(.bouncy(duration: 0.4), value: showsSavePrompt)
         .dynamicTypeSize(...PracticeLayout.headerTypeLimit)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: {
             headerButtonsWidth = $0
@@ -1096,16 +1205,21 @@ struct PracticeView: View {
         savedSong?.percent == Int((controller.playbackRate * 100).rounded())
     }
 
-    /// Only there while there's a speed to save; the saved speed itself is the
-    /// dot on the knob's scale.
+    /// Only there while there's a speed or an A·B loop to save; the saved
+    /// speed itself is the dot on the knob's scale.
     private var saveButton: some View {
         let percent = Int((controller.playbackRate * 100).rounded())
+        let title = switch (hasLoopToSave, isSpeedSaved) {
+        case (true, false): "Save loop & \(percent)%"
+        case (true, true): "Save loop"
+        default: "Save \(percent)%"
+        }
         return Button {
-            controller.saveCurrentSong()
+            savePending()
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "bookmark")
-                Text("Save \(percent)%")
+                Text(title)
                     .monospacedDigit()
                     .fixedSize()
             }
@@ -1116,7 +1230,7 @@ struct PracticeView: View {
             .contentShape(.capsule)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(savedSong != nil ? "Update saved speed to \(percent)%" : "Save at \(percent)%")
+        .accessibilityLabel(hasLoopToSave ? title : savedSong != nil ? "Update saved speed to \(percent)%" : "Save at \(percent)%")
     }
 
     private var changeSongButton: some View {
@@ -1189,7 +1303,9 @@ struct PracticeView: View {
                 MarkToast(
                     name: marker.name,
                     time: PreciseTime.format(marker.startTime),
-                    suggestions: MarkerNameSuggestions.forMarker(at: marker.startTime, among: others),
+                    suggestions: marker.isClip
+                        ? MarkerNameSuggestions.forLoop(among: savedSong?.loopNames(excluding: marker) ?? [])
+                        : MarkerNameSuggestions.forMarker(at: marker.startTime, among: others),
                     isPlaying: controller.isPlaying,
                     onPick: { name in
                         update(marker, name: name, start: marker.startTime, end: marker.endTime)
@@ -1200,7 +1316,7 @@ struct PracticeView: View {
                         justMarked = nil
                     },
                     onUndo: {
-                        if let undoManager, undoManager.canUndo, undoManager.undoActionName == "Mark" {
+                        if let undoManager, undoManager.canUndo, ["Mark", "Save Loop"].contains(undoManager.undoActionName) {
                             undoManager.undo()
                         } else {
                             delete(marker)
@@ -1278,6 +1394,8 @@ struct PracticeView: View {
             canEditSpeed: true,
             clipNames: clips.prefix(9).map(\.name),
             isBlocked: markerSheet != nil || picking != nil,
+            abStep: abStep,
+            canSaveLoop: hasLoopToSave,
             playPause: { controller.togglePlayPause() },
             skip: { controller.skip(by: $0) },
             restart: { controller.restart() },
@@ -1289,6 +1407,9 @@ struct PracticeView: View {
             setSpeed: { controller.setSpeed(percent: $0) },
             editSpeed: { speedEditRequest += 1 },
             saveSpeed: { controller.saveCurrentSong() },
+            saveLoop: saveABLoop,
+            pressAB: { controller.pressAB() },
+            discardAB: { controller.discardAB() },
             loopClip: { number in
                 guard clips.indices.contains(number - 1) else { return }
                 controller.choose(clips[number - 1])
@@ -1740,7 +1861,8 @@ private func loadedPreview(
     artistName: String = "Jimi Hendrix",
     rate: Double = 0.6,
     loopOn: Bool = false,
-    toast: Bool = false
+    toast: Bool = false,
+    ab: ABPreview? = nil
 ) -> some View {
     let container = try! AppSchema.inMemoryContainer()
     let song = SavedSong.save(
@@ -1756,12 +1878,41 @@ private func loadedPreview(
     let controller = PlaybackController()
     controller.playbackRate = rate
     if loopOn { controller.toggleLoop() }
+    ab?.apply(to: controller)
     return PracticeView(
         controller: controller,
         previewTrack: .init(id: "1", title: title, artistName: artistName, palette: palette),
         previewJustMarked: fresh?.persistentModelID
     )
     .modelContainer(container)
+}
+
+#Preview("A·B, A set", traits: .fixedLayout(width: 402, height: 780)) {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.18, green: 0.42, blue: 0.45)), ab: .started)
+}
+
+#Preview("A·B, looping, not saved", traits: .fixedLayout(width: 402, height: 780)) {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.18, green: 0.42, blue: 0.45)), rate: 0.7, ab: .looping)
+}
+
+#Preview("A·B, loop off", traits: .fixedLayout(width: 402, height: 780)) {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.18, green: 0.42, blue: 0.45)), ab: .ghost)
+}
+
+#Preview("A·B, iPhone SE", traits: .fixedLayout(width: 375, height: 580)) {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.18, green: 0.42, blue: 0.45)), ab: .started)
+}
+
+#Preview("A·B, landscape phone", traits: .fixedLayout(width: 750, height: 350)) {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.18, green: 0.42, blue: 0.45)), ab: .looping)
+}
+
+#Preview("A·B, iPad wide", traits: .fixedLayout(width: 880, height: 640)) {
+    loadedPreview(palette: ArtworkPalette(cover: OKLCH(red: 0.18, green: 0.42, blue: 0.45)), ab: .looping)
+}
+
+#Preview("A·B, no cover colours", traits: .fixedLayout(width: 402, height: 780)) {
+    loadedPreview(palette: nil, ab: .looping)
 }
 
 #Preview("Nothing loaded") {

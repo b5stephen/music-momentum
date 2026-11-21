@@ -10,7 +10,7 @@ import SwiftUI
 /// `PracticeActions` and `WindowActions`, or the mini player's while it's
 /// open, so with no window (or a sheet up) they grey out.
 ///
-/// Single keys (Space, the arrows, Return, L, M, ⇧M, S, 1-9) are plain menu key equivalents, not
+/// Single keys (Space, the arrows, Return, Esc, A, L, M, ⇧M, S, 1-9) are plain menu key equivalents, not
 /// `.onKeyPress`, so they work wherever focus is and Space never presses a
 /// focused button. On the Mac the menu sees a key before a text field does,
 /// so `TextFieldFocus` hands them to a field being edited; UIKit gives a text
@@ -57,6 +57,15 @@ struct AppCommands: Commands {
                 .disabled(window?.canPickSong != true || isSheetOpen)
         }
 
+        CommandGroup(replacing: .saveItem) {
+            Button(practice?.saveTitle ?? "Save Speed") {
+                if practice?.canSaveSpeed == true { practice?.saveSpeed() }
+                if practice?.canSaveLoop == true { practice?.saveLoop() }
+            }
+            .keyboardShortcut("s")
+            .disabled(!canPractise || (practice?.canSaveSpeed != true && practice?.canSaveLoop != true))
+        }
+
         CommandMenu("Playback") {
             Button(practice?.isPlaying == true ? "Pause" : "Play") { practice?.playPause() }
                 .keyboardShortcut(.space, modifiers: [])
@@ -85,6 +94,16 @@ struct AppCommands: Commands {
             Button("Mark and Edit\u{2026}") { practice?.markAndEdit() }
                 .keyboardShortcut("m", modifiers: .shift)
                 .disabled(!canSeek || practice?.canMark != true)
+
+            Divider()
+
+            // One key walks A·B through its steps, as the button does.
+            Button(practice?.abStep?.title ?? "Set Loop Start") { practice?.pressAB() }
+                .keyboardShortcut("a", modifiers: [])
+                .disabled(!canSeek || practice?.abStep == nil)
+            Button("Discard A\u{2013}B Loop") { practice?.discardAB() }
+                .keyboardShortcut(.escape, modifiers: [])
+                .disabled(!canSeek || practice?.abStep == nil || practice?.abStep == .setStart)
             #if os(macOS)
             Divider()
             Button("Rename Marker\u{2026}") { practice?.renameMarker() }
@@ -135,12 +154,6 @@ struct AppCommands: Commands {
                 practice?.setSpeed($0)
             }
             .disabled(!canPractise)
-
-            Divider()
-
-            Button("Save Speed") { practice?.saveSpeed() }
-                .keyboardShortcut("s")
-                .disabled(!canPractise || practice?.canSaveSpeed != true)
         }
 
         #if os(macOS)

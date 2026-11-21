@@ -12,6 +12,8 @@ enum Loop: Equatable {
     case wholeSong
     /// In track order, played back to back.
     case clips([Segment])
+    /// An A·B loop not yet saved, so with no marker to point at.
+    case scratch(Range<TimeInterval>)
 
     struct Segment: Equatable {
         let markerID: PersistentIdentifier
@@ -22,6 +24,21 @@ enum Loop: Equatable {
     var segments: [Segment] {
         if case .clips(let segments) = self { return segments }
         return []
+    }
+
+    /// What the ticker keeps the playhead inside; empty for the whole song,
+    /// which the player's repeat mode loops instead.
+    var ranges: [Range<TimeInterval>] {
+        switch self {
+        case .wholeSong: []
+        case .clips(let segments): segments.map { $0.start..<$0.end }
+        case .scratch(let range): [range]
+        }
+    }
+
+    var isScratch: Bool {
+        if case .scratch = self { return true }
+        return false
     }
 }
 

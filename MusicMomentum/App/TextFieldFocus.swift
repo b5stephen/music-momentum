@@ -15,11 +15,13 @@ enum TextFieldFocus {
     /// Windows already opened, whose focus is now the user's to keep.
     private static var settled: Set<ObjectIdentifier> = []
 
-    private static let characters: Set<String> = [" ", "l", "m", "s", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+    private static let characters: Set<String> = [" ", "a", "l", "m", "s", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
     /// ←, →, ↓, ↑.
     private static let arrows: Set<UInt16> = [123, 124, 125, 126]
     /// Return and the keypad's Enter.
     private static let returns: Set<UInt16> = [36, 76]
+    /// Escape, which Discard A–B Loop also answers.
+    private static let escape: UInt16 = 53
 
     static func install() {
         guard monitors.isEmpty else { return }
@@ -28,7 +30,8 @@ enum TextFieldFocus {
         // without this ← in the sidebar search moved the playhead instead of
         // the caret. Return is the Markers menu's Rename, so a field gets it
         // too or it could never submit; but not in a sheet, whose Return is
-        // Open and whose menus are off. Escape stays out: no menu has it.
+        // Open and whose menus are off. Escape is Discard A–B Loop's, so a
+        // field gets that too, to cancel its edit.
         monitors.append(NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             // ⌥↑ and ⌥↓ change the speed by 1%, and in a field move the caret;
             // ⌥Return is Edit Marker Times.
@@ -78,6 +81,7 @@ enum TextFieldFocus {
     private static func isPlaybackKey(_ event: NSEvent) -> Bool {
         arrows.contains(event.keyCode)
             || returns.contains(event.keyCode)
+            || event.keyCode == escape
             || characters.contains(event.charactersIgnoringModifiers?.lowercased() ?? "")
     }
 }

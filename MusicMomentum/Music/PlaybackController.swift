@@ -57,9 +57,13 @@ final class PlaybackController {
     /// which would yank the bar back to where the user just dragged from.
     private var lastSeek: ContinuousClock.Instant?
 
-    /// `nil` when the loop button is off. Only the button turns looping on and
-    /// off; the pills reshape the scope while it runs.
+    /// `nil` when the loop button is off. The button turns looping on and
+    /// off and the pills reshape the scope while it runs; A·B is the one
+    /// other way in, since its second press is the point of it.
     private(set) var loop: Loop?
+    /// The A·B loop being caught or kept. Cleared when anything else loops,
+    /// so a ghost never lingers behind a loop the user chose since.
+    private(set) var ab: ABLoop?
     /// Which segment of a clip chain the playhead was last inside. `nil` after
     /// a jump or scrub: the ticker waits until it plays back into the chain.
     private var loopIndex: Int?
@@ -180,7 +184,7 @@ final class PlaybackController {
     /// Whole-song looping isn't here: that's the player's own repeat mode,
     /// which wraps seamlessly instead of up to a poll late.
     private func advanceChainIfNeeded() {
-        let ranges = draftLoop.map { [$0] } ?? (loop?.segments ?? []).map { $0.start..<$0.end }
+        let ranges = draftLoop.map { [$0] } ?? loop?.ranges ?? []
         guard !ranges.isEmpty else { return }
 
         switch Loop.step(ranges: ranges, time: playbackTime, current: loopIndex) {
@@ -230,7 +234,7 @@ final class PlaybackController {
     /// Back to the top of what's looping: a chain's first clip, not the one
     /// the playhead is in, so the whole run is played again.
     func restart() {
-        userSeek(to: draftLoop?.lowerBound ?? loop?.segments.first?.start ?? 0)
+        userSeek(to: draftLoop?.lowerBound ?? loop?.ranges.first?.lowerBound ?? 0)
     }
 
     /// Called when the user reaches for the library, never on launch, so the
@@ -266,6 +270,7 @@ final class PlaybackController {
         playbackTime = 0
         // The loop button survives a change of song, like repeat in any
         // player; its scope can't, since those clips belonged to the last track.
+        ab = nil
         setLoop(loop == nil ? nil : .wholeSong)
         hasPlayed = false
         pendingStart = nil
@@ -366,10 +371,85 @@ final class PlaybackController {
         loop?.segments.contains { $0.markerID == marker.persistentModelID } ?? false
     }
 
-    /// The only control that starts or stops looping. From off it loops the
-    /// whole song; from on it stops whatever the scope, so one tap ends any chain.
+    /// From off it loops the whole song, or the A·B loop kept from before;
+    /// from on it stops whatever the scope, so one tap ends any chain. With A
+    /// set it closes the loop instead, as a second A·B press would.
     func toggleLoop() {
-        setLoop(loop == nil ? .wholeSong : nil)
+        switch (loop, ab) {
+        case (_, .started(let a)):
+            closeAB(from: a, to: abPressTime)
+        case (nil, .closed(let range)):
+            setLoop(.scratch(range))
+            if !range.contains(playbackTime) { userSeek(to: range.lowerBound) }
+        case (nil, nil):
+            setLoop(.wholeSong)
+        default:
+            setLoop(nil)
+        }
+    }
+
+    // MARK: - A·B
+
+    var isLoopingAB: Bool { loop?.isScratch == true }
+
+    /// First press sets A, the second sets B and loops at once, the third
+    /// throws the loop away. Both ends land a reaction's width before the
+    /// playhead, as Mark does.
+    func pressAB() {
+        switch ab {
+        case nil: ab = .started(abPressTime)
+        case .started(let a): closeAB(from: a, to: abPressTime)
+        case .closed: discardAB()
+        }
+    }
+
+    /// A at a marker's start, from its menu; the playhead goes there so B is
+    /// a matter of listening on.
+    func startAB(at time: TimeInterval) {
+        ab = .started(time)
+        userSeek(to: time)
+    }
+
+    /// Stops the loop if it was the A·B one: there's nothing left to loop.
+    func discardAB() {
+        if isLoopingAB { setLoop(nil) }
+        ab = nil
+    }
+
+    /// An edge dragged in the Mac's lane. Like `reshapeLoop`, never seeks.
+    func reshapeAB(start: TimeInterval, end: TimeInterval) {
+        guard case .closed = ab, start < end else { return }
+        ab = .closed(start..<end)
+        guard isLoopingAB else { return }
+        loop = .scratch(start..<end)
+        loopIndex = (start..<end).contains(playbackTime) ? 0 : nil
+    }
+
+    /// Save Loop made `marker` from the A·B loop: it loops in its place, with
+    /// no seek, or stays a plain saved loop if looping was off.
+    func adoptAB(as marker: SongMarker) {
+        let wasLooping = isLoopingAB
+        ab = nil
+        guard wasLooping, let end = marker.endTime else { return }
+        setLoop(.clips([.init(markerID: marker.persistentModelID, start: marker.startTime, end: end)]))
+        loopIndex = 0
+    }
+
+    /// Undoing Save Loop: back to the A·B loop, looping if it was.
+    func restoreAB(_ range: Range<TimeInterval>, looping: Bool) {
+        ab = .closed(range)
+        if looping { setLoop(.scratch(range)) }
+    }
+
+    private var abPressTime: TimeInterval {
+        MarkTiming.time(playhead: playbackTime, rate: playbackRate, isPlaying: isPlaying, duration: duration ?? playbackTime)
+    }
+
+    private func closeAB(from a: TimeInterval, to b: TimeInterval) {
+        let range = ABLoop.close(from: a, to: b, duration: duration ?? max(a, b))
+        ab = .closed(range)
+        setLoop(.scratch(range))
+        userSeek(to: range.lowerBound)
     }
 
     /// Does nothing with the button off: a pill tap never starts a loop.
@@ -473,6 +553,7 @@ final class PlaybackController {
 
     /// The one way the loop changes, so the player's repeat mode can't drift.
     private func setLoop(_ new: Loop?) {
+        if let new, !new.isScratch { ab = nil }
         loop = new
         loopIndex = nil
         applyRepeatMode()

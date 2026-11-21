@@ -30,6 +30,31 @@ struct PracticeActions {
     var clipNames: [String] = []
     /// A marker sheet is up, and its fields are for typing.
     var isBlocked = false
+    /// Where A·B is: what its one key does next, and whether there's a loop
+    /// to discard or save. The mini player has no A·B, so leaves them off.
+    var abStep: ABStep?
+    var canSaveLoop = false
+
+    enum ABStep {
+        case setStart, setEnd, discard
+
+        var title: String {
+            switch self {
+            case .setStart: "Set Loop Start"
+            case .setEnd: "Set Loop End"
+            case .discard: "Discard A\u{2013}B Loop"
+            }
+        }
+    }
+
+    /// File › Save's title, for whatever is pending.
+    var saveTitle: String {
+        switch (canSaveLoop, canSaveSpeed) {
+        case (true, true): "Save Loop and Speed"
+        case (true, false): "Save Loop"
+        default: "Save Speed"
+        }
+    }
 
     var playPause: @MainActor () -> Void = {}
     var skip: @MainActor (TimeInterval) -> Void = { _ in }
@@ -44,6 +69,9 @@ struct PracticeActions {
     var setSpeed: @MainActor (_ percent: Int) -> Void = { _ in }
     var editSpeed: @MainActor () -> Void = {}
     var saveSpeed: @MainActor () -> Void = {}
+    var saveLoop: @MainActor () -> Void = {}
+    var pressAB: @MainActor () -> Void = {}
+    var discardAB: @MainActor () -> Void = {}
     var loopClip: @MainActor (_ number: Int) -> Void = { _ in }
     var zoomIn: @MainActor () -> Void = {}
     var zoomOut: @MainActor () -> Void = {}

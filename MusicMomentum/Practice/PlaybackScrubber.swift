@@ -47,8 +47,18 @@ struct PlaybackScrubber: View {
         let start: TimeInterval
         let end: TimeInterval?
         var isLooping: Bool = false
+        /// Set only on the A·B loop, which isn't a saved marker.
+        var scratch: Scratch?
 
         var isClip: Bool { end != nil }
+
+        enum Scratch {
+            /// A is set: from A to the playhead.
+            case growing
+            case looping
+            /// Closed but with the loop off, kept for Loop to bring back.
+            case ghost
+        }
     }
 
     /// What the bar draws while a finger is down, so the thumb never snaps
@@ -175,11 +185,25 @@ struct PlaybackScrubber: View {
             let width = proxy.size.width
             ZStack(alignment: .leading) {
                 Capsule().fill(.primary.opacity(0.18))
+                // What's looping, as a lighter band under the played fill, as
+                // the mini player shows it.
+                if let duration, duration > 0 {
+                    let visible = visibleRange(duration)
+                    ForEach(markers.filter(\.isLooping)) { marker in
+                        let lower = min(max(TimelineViewport.x(for: marker.start, width: width, in: visible), 0), width)
+                        let upper = min(max(TimelineViewport.x(for: marker.end ?? marker.start, width: width, in: visible), 0), width)
+                        Rectangle()
+                            .fill(.primary.opacity(0.28))
+                            .frame(width: max(0, upper - lower))
+                            .offset(x: lower)
+                    }
+                }
                 Capsule()
                     .fill(.primary)
                     .frame(width: fraction == 0 && displayedPosition > 0 ? 0 : max(5, width * fraction))
                     .opacity(duration == nil ? 0 : 1)
             }
+            .clipShape(.capsule)
             .frame(height: 5)
             .frame(maxHeight: .infinity)
             .contentShape(.rect)
@@ -308,8 +332,7 @@ struct PlaybackScrubber: View {
                     let x = width * min(max(marker.start / duration, 0), 1)
                     if let end = marker.end {
                         let span = width * min(max((end - marker.start) / duration, 0), 1)
-                        Capsule()
-                            .fill(marker.isLooping ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary.opacity(0.35)))
+                        clipBar(marker)
                             .frame(width: max(Self.laneHeight, span), height: Self.laneHeight)
                             .offset(x: min(x, width - max(Self.laneHeight, span)))
                     } else {
@@ -324,6 +347,31 @@ struct PlaybackScrubber: View {
             .allowsHitTesting(false)
         } else {
             Color.clear
+        }
+    }
+
+    /// The A·B loop wears the saved loops' shape with its state on top: a
+    /// faint bar led by A's edge while it grows, the looping fill ringed so
+    /// it reads as not saved, a dashed outline once looping stops.
+    @ViewBuilder
+    private func clipBar(_ marker: Marker) -> some View {
+        switch marker.scratch {
+        case .growing:
+            Capsule()
+                .fill(.primary.opacity(0.4))
+                .overlay(alignment: .leading) { Rectangle().fill(.primary).frame(width: 2) }
+                .clipShape(.capsule)
+        case .looping:
+            Capsule()
+                .fill(.tint)
+                .overlay { Capsule().strokeBorder(.primary.opacity(0.35), lineWidth: 2).padding(-2) }
+        case .ghost:
+            Capsule()
+                .strokeBorder(.primary, style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
+                .padding(-1)
+        case nil:
+            Capsule()
+                .fill(marker.isLooping ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary.opacity(0.35)))
         }
     }
 

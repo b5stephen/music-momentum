@@ -261,11 +261,11 @@ struct MiniPlayerView: View {
             let played = controller.duration == nil ? 0 : width * min(max(controller.playbackTime / duration, 0), 1)
             ZStack(alignment: .leading) {
                 Capsule().fill(.primary.opacity(0.16))
-                ForEach(Array((controller.loop?.segments ?? []).enumerated()), id: \.offset) { _, segment in
+                ForEach(Array((controller.loop?.ranges ?? []).enumerated()), id: \.offset) { _, range in
                     Rectangle()
                         .fill(.primary.opacity(0.28))
-                        .frame(width: max(2, width * (segment.end - segment.start) / duration))
-                        .offset(x: width * segment.start / duration)
+                        .frame(width: max(2, width * (range.upperBound - range.lowerBound) / duration))
+                        .offset(x: width * range.lowerBound / duration)
                 }
                 Capsule().fill(.primary).frame(width: played)
             }
@@ -280,6 +280,9 @@ struct MiniPlayerView: View {
     // MARK: - State
 
     private func loopCaption(_ clips: [SongMarker]) -> String {
+        if case .scratch(let range) = controller.loop {
+            return LoopCaption.text(isOn: true, clips: [.init(name: "A\u{2013}B", length: range.upperBound - range.lowerBound)])
+        }
         let looping: [LoopCaption.Clip] = (controller.loop?.segments ?? []).map { segment in
             .init(name: clips.first { $0.persistentModelID == segment.markerID }?.name, length: segment.end - segment.start)
         }

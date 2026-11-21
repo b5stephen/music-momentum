@@ -90,7 +90,7 @@ struct MarkerLane: View {
         guard let trim = shownTrim else { return markers }
         return markers.map {
             $0.id == trim.id
-                ? .init(id: $0.id, name: $0.name, start: trim.start, end: trim.end, isLooping: $0.isLooping)
+                ? .init(id: $0.id, name: $0.name, start: trim.start, end: trim.end, isLooping: $0.isLooping, scratch: $0.scratch)
                 : $0
         }
     }
@@ -124,7 +124,10 @@ struct MarkerLane: View {
                         if let marker = marker(clip.id) { clipView(clip, marker, top: layout.top(ofRow: clip.row)) }
                     }
                     ForEach(layout.clips) { clip in
-                        if let marker = marker(clip.id) { trimZones(clip, marker, top: layout.top(ofRow: clip.row), width: width) }
+                        // A growing A·B loop's end is the playhead, not an edge to drag.
+                        if let marker = marker(clip.id), marker.scratch != .growing {
+                            trimZones(clip, marker, top: layout.top(ofRow: clip.row), width: width)
+                        }
                     }
                     if let target = shownTrim.map({ HandleEdge(id: $0.id, edge: $0.edge) }) ?? handle,
                        let clip = layout.clips.first(where: { $0.id == target.id }) {
@@ -246,7 +249,15 @@ struct MarkerLane: View {
             activate(marker)
         } label: {
             ZStack(alignment: .leading) {
-                if marker.isLooping {
+                // The A·B loop is dashed, as a loop dragged out of the lane is
+                // before it's named: not saved yet.
+                if marker.scratch == .looping {
+                    shape.fill(.tint)
+                    shape.strokeBorder(onAccent, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                } else if marker.scratch != nil {
+                    shape.fill(.primary.opacity(isHovered ? 0.16 : 0.08))
+                    shape.strokeBorder(.primary.opacity(0.85), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                } else if marker.isLooping {
                     shape.fill(.tint)
                 } else {
                     shape.fill(.primary.opacity(isHovered ? 0.3 : 0.15))
@@ -269,6 +280,13 @@ struct MarkerLane: View {
                 y: isHovered ? 6 : 4
             )
             .overlay {
+                if marker.scratch == .looping {
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(.primary.opacity(0.25), lineWidth: 3)
+                        .padding(-3)
+                }
+            }
+            .overlay {
                 // A ring in the background colour keeps a stacked clip's edge
                 // readable against the one above it.
                 if clip.isStacked {
@@ -288,7 +306,7 @@ struct MarkerLane: View {
         .modifier(LaneItemInput(id: marker.id, hovered: $hovered, renaming: renaming))
         .contextMenu { menu(for: marker) }
         .offset(x: clip.x, y: top)
-        .accessibilityLabel("\(marker.name), loop\(marker.isLooping ? ", looping" : "")")
+        .accessibilityLabel(marker.scratch == nil ? "\(marker.name), loop\(marker.isLooping ? ", looping" : "")" : "A–B loop, not saved")
         .accessibilityValue(timeLabel(marker))
     }
 
@@ -500,7 +518,11 @@ struct MarkerLane: View {
     /// Names, times and what a click does, since a name may not fit.
     private func bubble(for marker: PlaybackScrubber.Marker, in layout: MarkerLaneLayout, width: CGFloat) -> some View {
         let (minX, maxX) = extent(of: marker.id, in: layout)
-        let action = marker.isClip && isLoopOn ? "click to loop" : "click to jump"
+        let action = switch marker.scratch {
+        case .growing: "A again sets B here"
+        case .looping, .ghost: "drag an edge to trim \u{00B7} \u{2318}S to save"
+        case nil: marker.isClip && isLoopOn ? "click to loop" : "click to jump"
+        }
         return floatingBubble(
             MarkerBubble(
                 name: marker.name.isEmpty ? "Untitled" : marker.name,
@@ -565,6 +587,7 @@ struct MarkerLane: View {
     /// ⌥-click always jumps; ⌘-click chains a clip; a plain click is
     /// Practice's call, since it depends on whether looping is on.
     private func activate(_ marker: PlaybackScrubber.Marker) {
+        guard marker.scratch == nil else { return }
         let flags = NSEvent.modifierFlags
         if flags.contains(.option) {
             actions.jump(marker)
@@ -577,6 +600,19 @@ struct MarkerLane: View {
 
     @ViewBuilder
     private func menu(for marker: PlaybackScrubber.Marker) -> some View {
+        if marker.scratch != nil {
+            Button("Save Loop") { actions.saveAB() }
+                .disabled(marker.scratch == .growing)
+            Button("Discard A\u{2013}B Loop") { actions.discardAB() }
+        } else {
+            savedMenu(for: marker)
+        }
+    }
+
+    @ViewBuilder
+    private func savedMenu(for marker: PlaybackScrubber.Marker) -> some View {
+        Button("Start A\u{00B7}B Here") { actions.startAB(marker) }
+        Divider()
         if marker.isClip {
             Button("Loop Just This") { actions.clip(marker, false) }
                 .disabled(!isLoopOn)

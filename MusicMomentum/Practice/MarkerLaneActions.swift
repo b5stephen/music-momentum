@@ -26,5 +26,9 @@ struct MarkerLaneActions {
     var trimming: (PlaybackScrubber.Marker, _ start: TimeInterval, _ end: TimeInterval) -> Void = { _, _, _ in }
     /// The drag ended: save these bounds.
     var trimmed: (PlaybackScrubber.Marker, _ start: TimeInterval, _ end: TimeInterval) -> Void = { _, _, _ in }
+    /// A·B's A at this marker's start.
+    var startAB: (PlaybackScrubber.Marker) -> Void = { _ in }
+    var saveAB: () -> Void = {}
+    var discardAB: () -> Void = {}
 }
 #endif

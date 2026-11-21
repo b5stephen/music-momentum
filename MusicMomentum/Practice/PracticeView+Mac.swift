@@ -58,11 +58,11 @@ extension PracticeView {
             // Held at the prompt's height, so it appearing never moves the title.
             ZStack(alignment: .leading) {
                 Color.clear
-                if !isSpeedSaved { macSaveButton }
+                if showsSavePrompt { macSaveButton }
             }
             .frame(height: Self.macControlHeight)
             .padding(.top, 14)
-            .animation(.snappy(duration: 0.2), value: isSpeedSaved)
+            .animation(.snappy(duration: 0.2), value: showsSavePrompt)
         }
     }
 
@@ -75,10 +75,15 @@ extension PracticeView {
 
     private var macSaveButton: some View {
         let percent = Int((controller.playbackRate * 100).rounded())
+        let title = switch (hasLoopToSave, isSpeedSaved) {
+        case (true, false): "Save Loop and \(percent)%"
+        case (true, true): "Save Loop"
+        default: "Save at \(percent)%"
+        }
         return Button {
-            controller.saveCurrentSong()
+            savePending()
         } label: {
-            Text("Save at \(percent)%")
+            Text(title)
                 .font(.system(size: 13, weight: .semibold))
                 .monospacedDigit()
                 .padding(.horizontal, 14)
@@ -88,8 +93,8 @@ extension PracticeView {
         }
         .buttonStyle(.plain)
         .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .leading)))
-        .help("Save this speed for the song (\u{2318}S)")
-        .accessibilityLabel(savedSong != nil ? "Update saved speed to \(percent)%" : "Save at \(percent)%")
+        .help(hasLoopToSave ? "Save the A–B loop and name it (\u{2318}S)" : "Save this speed for the song (\u{2318}S)")
+        .accessibilityLabel(hasLoopToSave ? title : savedSong != nil ? "Update saved speed to \(percent)%" : "Save at \(percent)%")
     }
 
     // MARK: - Transport
@@ -197,6 +202,7 @@ extension PracticeView {
                     )
                     .transition(.opacity)
                 }
+                macABButton
                 macMarkButton
             }
             .frame(minHeight: Self.macControlHeight)
@@ -239,8 +245,8 @@ extension PracticeView {
     /// From the first clip's start to the last one's end; `nil` for the whole
     /// song or no loop.
     private static func macSpan(of loop: Loop?) -> ClosedRange<TimeInterval>? {
-        let segments = loop?.segments ?? []
-        guard let first = segments.map(\.start).min(), let last = segments.map(\.end).max() else { return nil }
+        let ranges = loop?.ranges ?? []
+        guard let first = ranges.map(\.lowerBound).min(), let last = ranges.map(\.upperBound).max() else { return nil }
         return first...max(first, last)
     }
 
@@ -315,17 +321,28 @@ extension PracticeView {
             delete: { if let marker = marker(for: $0.id) { delete(marker) } },
             createClip: { name, start, end in addMarker(name: name, start: start, end: end) },
             trimming: { scrubberMarker, start, end in
+                if scrubberMarker.scratch != nil {
+                    controller.reshapeAB(start: start, end: end)
+                    return
+                }
                 guard let id = scrubberMarker.id as? PersistentIdentifier else { return }
                 controller.reshapeLoop(for: id, start: start, end: end)
             },
             trimmed: { scrubberMarker, start, end in
+                if scrubberMarker.scratch != nil {
+                    controller.reshapeAB(start: start, end: end)
+                    return
+                }
                 guard let marker = marker(for: scrubberMarker.id) else { return }
                 marker.set(name: marker.name, start: start, end: end)
                 try? modelContext.save()
                 // Not `controller.markerChanged`, which seeks into the loop
                 // when the playhead is outside it.
                 controller.reshapeLoop(for: marker.persistentModelID, start: marker.startTime, end: marker.endTime ?? end)
-            }
+            },
+            startAB: { controller.startAB(at: $0.start) },
+            saveAB: saveABLoop,
+            discardAB: { controller.discardAB() }
         )
     }
 
@@ -344,7 +361,18 @@ extension PracticeView {
 
     @ViewBuilder
     private var macLoopLabel: some View {
-        if let loop = controller.loop {
+        if let (name, detail) = macABText {
+            HStack(spacing: 10) {
+                Text(name)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                Text(detail)
+                    .font(.system(size: 12))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        } else if let loop = controller.loop {
             let (name, detail) = macLoopText(loop)
             HStack(spacing: 10) {
                 Text(name)
@@ -363,6 +391,48 @@ extension PracticeView {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.secondary.opacity(0.7))
         }
+    }
+
+    /// What the header says while A·B is under way, with the keys that
+    /// finish it, since the button beside it only says "B".
+    private var macABText: (name: String, detail: String)? {
+        switch (controller.ab, controller.loop) {
+        case (.started(let a), _):
+            return ("A at \(PlaybackScrubber.timeLabel(a))", "A again sets B here \u{00B7} Esc cancels")
+        case (.closed(let range), .scratch?):
+            return ("Looping A\u{2013}B", "\(macRange(range)), not saved")
+        case (.closed(let range), nil):
+            return ("Loop off", "A\u{2013}B \(macRange(range)), not saved \u{00B7} L loops it")
+        default:
+            return nil
+        }
+    }
+
+    private func macRange(_ range: Range<TimeInterval>) -> String {
+        "\(PlaybackScrubber.timeLabel(range.lowerBound)) \u{2013} \(PlaybackScrubber.timeLabel(range.upperBound)) \u{00B7} \(PlaybackScrubber.lengthLabel(range.upperBound - range.lowerBound))"
+    }
+
+    /// Beside Mark, since both are pressed on the beat and both draw into the
+    /// lane under them; the transport stays playback and Loop.
+    private var macABButton: some View {
+        let isSet = controller.ab != nil
+        let isWaitingForB = if case .started = controller.ab { true } else { false }
+        return Button { controller.pressAB() } label: {
+            Text(isWaitingForB ? "B" : "A\u{00B7}B")
+                .font(.system(size: 13, weight: .heavy))
+                .tracking(0.26)
+                .foregroundStyle(isSet ? AnyShapeStyle(onAccent) : AnyShapeStyle(Color.primary))
+                .padding(.horizontal, 14)
+                .frame(minWidth: 52)
+                .frame(height: 32)
+                .background { if isSet { Capsule().fill(.tint) } }
+                .modifier(ButtonGlass())
+                .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .disabled(controller.duration == nil)
+        .help(isWaitingForB ? "Set the loop's end here (A)" : isSet ? "Discard the A–B loop (A)" : "Start an A–B loop here (A)")
+        .accessibilityLabel(abLabel)
     }
 
     /// What's looping, and its range and length: a single clip's range, a
@@ -421,7 +491,8 @@ private func macPreview(
     markers: Bool = true,
     rate: Double = 0.6,
     loopOn: Bool = false,
-    title: String = "Slow Burn Avenue"
+    title: String = "Slow Burn Avenue",
+    ab: ABPreview? = nil
 ) -> some View {
     let container = try! AppSchema.inMemoryContainer()
     let context = container.mainContext
@@ -437,6 +508,7 @@ private func macPreview(
     let controller = PlaybackController()
     controller.playbackRate = rate
     if loopOn { controller.toggleLoop() }
+    ab?.apply(to: controller)
     return PracticeView(
         controller: controller,
         previewTrack: .init(
@@ -460,6 +532,18 @@ private func macPreview(
 
 #Preview("Mac wide, no palette", traits: .fixedLayout(width: 1000, height: 740)) {
     macPreview(palette: nil, rate: 0.72)
+}
+
+#Preview("Mac A·B, A set", traits: .fixedLayout(width: 1000, height: 740)) {
+    macPreview(ab: .started)
+}
+
+#Preview("Mac A·B, looping, not saved", traits: .fixedLayout(width: 1000, height: 740)) {
+    macPreview(rate: 0.7, ab: .looping)
+}
+
+#Preview("Mac A·B, loop off", traits: .fixedLayout(width: 1000, height: 740)) {
+    macPreview(ab: .ghost)
 }
 
 #Preview("Mac compact", traits: .fixedLayout(width: 720, height: 600)) {

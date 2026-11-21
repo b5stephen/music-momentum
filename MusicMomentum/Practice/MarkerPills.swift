@@ -24,6 +24,8 @@ struct MarkerPills: View {
     /// could join it say so.
     var isLoopOn = false
     var onTap: (SongMarker) -> Void
+    /// A·B's A at the marker's start; Practice only, which has A·B.
+    var onStartAB: ((SongMarker) -> Void)?
     var onPlayLoop: ((SongMarker) -> Void)?
     /// The saved list's jump loads the song and changes tab, so it says so.
     var jumpTitle: String = "Jump to Start"
@@ -158,6 +160,9 @@ struct MarkerPills: View {
 
     @ViewBuilder
     private func menuItems(_ marker: SongMarker) -> some View {
+        if let onStartAB {
+            Button { onStartAB(marker) } label: { Label("Start A\u{00B7}B Here", systemImage: "arrow.right.to.line") }
+        }
         if let onPlayLoop, marker.isClip {
             Button { onPlayLoop(marker) } label: { Label("Play on Loop", systemImage: "repeat") }
         }
