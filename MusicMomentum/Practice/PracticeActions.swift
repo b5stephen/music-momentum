@@ -33,16 +33,16 @@ struct PracticeActions {
     /// Where A·B is: what its one key does next, and whether there's a loop
     /// to discard or save. The mini player has no A·B, so leaves them off.
     var abStep: ABStep?
+    var canDiscardAB = false
     var canSaveLoop = false
 
     enum ABStep {
-        case setStart, setEnd, discard
+        case setStart, setEnd
 
         var title: String {
             switch self {
             case .setStart: "Set Loop Start"
             case .setEnd: "Set Loop End"
-            case .discard: "Discard A\u{2013}B Loop"
             }
         }
     }

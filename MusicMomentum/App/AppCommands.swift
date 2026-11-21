@@ -103,7 +103,7 @@ struct AppCommands: Commands {
                 .disabled(!canSeek || practice?.abStep == nil)
             Button("Discard A\u{2013}B Loop") { practice?.discardAB() }
                 .keyboardShortcut(.escape, modifiers: [])
-                .disabled(!canSeek || practice?.abStep == nil || practice?.abStep == .setStart)
+                .disabled(!canSeek || practice?.canDiscardAB != true)
             #if os(macOS)
             Divider()
             Button("Rename Marker\u{2026}") { practice?.renameMarker() }

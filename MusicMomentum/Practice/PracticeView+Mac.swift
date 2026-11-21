@@ -456,7 +456,7 @@ extension PracticeView {
         }
         .buttonStyle(.plain)
         .disabled(controller.duration == nil)
-        .help(isWaitingForB ? "Set the loop's end here (A)" : isSet ? "Discard the A–B loop (A)" : "Start an A–B loop here (A)")
+        .help(isWaitingForB ? "Set the loop's end here (A)" : isSet ? "Start a new A–B loop here (A) \u{00B7} Esc discards this one" : "Start an A–B loop here (A)")
         .accessibilityLabel(abLabel)
     }
 

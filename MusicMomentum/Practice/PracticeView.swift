@@ -876,11 +876,14 @@ struct PracticeView: View {
         .buttonStyle(.plain)
         .disabled(controller.duration == nil)
         .accessibilityLabel(abLabel)
-        // Nothing to offer until there's a loop: before then a press is all A·B does.
+        // Nothing to offer before A: a press is all A·B does then. Discard
+        // is only here, since another press starts a new loop instead.
         .contextMenu {
             if hasLoopToSave {
                 Button { editABTimes() } label: { Label("Edit Times\u{2026}", systemImage: "slider.horizontal.3") }
                 Button { saveABLoop() } label: { Label("Save Loop", systemImage: "bookmark") }
+            }
+            if controller.ab != nil {
                 Button(role: .destructive) { controller.discardAB() } label: { Label("Discard", systemImage: "trash") }
             }
         }
@@ -890,7 +893,7 @@ struct PracticeView: View {
         switch controller.ab {
         case nil: "Start an A–B loop here"
         case .started: "Set loop end here"
-        case .closed: "Discard the A–B loop"
+        case .closed: "Start a new A–B loop here"
         }
     }
 
@@ -1097,9 +1100,8 @@ struct PracticeView: View {
 
     private var abStep: PracticeActions.ABStep {
         switch controller.ab {
-        case nil: .setStart
         case .started: .setEnd
-        case .closed: .discard
+        case nil, .closed: .setStart
         }
     }
     var showsSavePrompt: Bool { !isSpeedSaved || hasLoopToSave }
@@ -1475,6 +1477,7 @@ struct PracticeView: View {
             clipNames: clips.prefix(9).map(\.name),
             isBlocked: markerSheet != nil || picking != nil,
             abStep: abStep,
+            canDiscardAB: controller.ab != nil,
             canSaveLoop: hasLoopToSave,
             playPause: { controller.togglePlayPause() },
             skip: { controller.skip(by: $0) },

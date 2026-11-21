@@ -393,14 +393,20 @@ final class PlaybackController {
 
     var isLoopingAB: Bool { loop?.isScratch == true }
 
-    /// First press sets A, the second sets B and loops at once, the third
-    /// throws the loop away. Both ends land a reaction's width before the
-    /// playhead, as Mark does.
+    /// First press sets A, the second sets B and loops at once. A third
+    /// starts again from a new A, replacing the unsaved loop: throwing it
+    /// away alone was too easy by accident, so that's Discard's job. Both
+    /// ends land a reaction's width before the playhead, as Mark does.
     func pressAB() {
         switch ab {
-        case nil: ab = .started(abPressTime)
-        case .started(let a): closeAB(from: a, to: abPressTime)
-        case .closed: discardAB()
+        case nil:
+            ab = .started(abPressTime)
+        case .started(let a):
+            closeAB(from: a, to: abPressTime)
+        case .closed:
+            let a = abPressTime
+            discardAB()
+            ab = .started(a)
         }
     }
 
