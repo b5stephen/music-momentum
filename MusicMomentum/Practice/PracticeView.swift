@@ -656,7 +656,10 @@ struct PracticeView: View {
                         .accessibilityHidden(loopCaption == nil)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    markButton(showsTitle: true)
+                    HStack(spacing: 4) {
+                        abButton(layout)
+                        markButton(showsTitle: true)
+                    }
                 }
                 .padding(.top, 8)
                 .padding(.horizontal, Self.sideMargin)
@@ -733,11 +736,24 @@ struct PracticeView: View {
     }
 
     /// Five controls, not six: an odd number puts play/pause dead centre.
-    /// Marking moved under the pill row it adds to, and A·B took Restart's
-    /// place: the two loop makers flank the skips and play.
+    /// Marking moved under the pill row it adds to. Compact, A·B takes
+    /// Restart's place, since Mark's row there is the clips' and has no room;
+    /// elsewhere it sits beside Mark and Restart keeps its slot.
     private func transportControls(_ layout: PracticeLayout) -> some View {
         HStack(spacing: 0) {
-            abButton(layout)
+            if layout.isCompact {
+                abButton(layout)
+            } else {
+                // A size down from the skips, which read as one group with
+                // play; the same size, four circular arrows looked alike.
+                transportButton(
+                    "gobackward",
+                    size: layout.transportGlyph * 0.88,
+                    label: controller.isLoopOn ? "Restart loop" : "Restart"
+                ) {
+                    controller.restart()
+                }
+            }
 
             Spacer(minLength: 0)
 
@@ -848,30 +864,49 @@ struct PracticeView: View {
     private static let markGlassSide: CGFloat = 36
     private static let markCapsuleHeight: CGFloat = 40
 
-    /// Outlined until A is set, then filled like Loop when it's on: "B" while
-    /// it waits for the end, "A·B" once there's a loop to throw away.
+    /// Filled like Loop once A is set: "B" while it waits for the end, "A·B"
+    /// once there's a loop. In the transport it's an outlined capsule, since
+    /// glass there would outweigh the bare glyphs; beside Mark it's Mark's
+    /// glass, so the two read as a pair.
     private func abButton(_ layout: PracticeLayout) -> some View {
         let isSet = controller.ab != nil
         let isWaitingForB = if case .started = controller.ab { true } else { false }
+        let title = Text(isWaitingForB ? "B" : "A\u{00B7}B")
+        let foreground = isSet ? AnyShapeStyle(onAccent) : AnyShapeStyle(.primary)
         return Button {
             controller.pressAB()
         } label: {
-            Text(isWaitingForB ? "B" : "A\u{00B7}B")
-                .font(.system(size: layout.isCompact ? 14 : 15, weight: .heavy))
-                .tracking(0.3)
-                .foregroundStyle(isSet ? AnyShapeStyle(onAccent) : AnyShapeStyle(.primary))
-                .padding(.horizontal, 8)
-                .frame(minWidth: layout.isCompact ? 44 : 46, minHeight: layout.isCompact ? 30 : 32)
-                .background {
-                    if isSet {
-                        Capsule().fill(.tint)
-                    } else {
-                        Capsule().strokeBorder(.primary.opacity(0.6), lineWidth: 1.5)
+            if layout.isCompact {
+                title
+                    .font(.system(size: 14, weight: .heavy))
+                    .tracking(0.3)
+                    .foregroundStyle(foreground)
+                    .padding(.horizontal, 8)
+                    .frame(minWidth: 44, minHeight: 30)
+                    .background {
+                        if isSet {
+                            Capsule().fill(.tint)
+                        } else {
+                            Capsule().strokeBorder(.primary.opacity(0.6), lineWidth: 1.5)
+                        }
                     }
-                }
-                .fixedSize()
-                .frame(width: 56, height: 44)
-                .contentShape(.rect)
+                    .fixedSize()
+                    .frame(width: 56, height: 44)
+                    .contentShape(.rect)
+            } else {
+                title
+                    .font(.subheadline.weight(.heavy))
+                    .tracking(0.3)
+                    .foregroundStyle(foreground)
+                    .padding(.horizontal, 14)
+                    .frame(minWidth: 56)
+                    .frame(height: Self.markCapsuleHeight)
+                    .background { if isSet { Capsule().fill(.tint) } }
+                    .modifier(ButtonGlass())
+                    .fixedSize()
+                    .frame(minHeight: 44)
+                    .contentShape(.rect)
+            }
         }
         .buttonStyle(.plain)
         .disabled(controller.duration == nil)
@@ -923,7 +958,7 @@ struct PracticeView: View {
 
     private var loopCaption: String? {
         if case .started(let a) = controller.ab {
-            return "A at \(PlaybackScrubber.timeLabel(a)) · tap B to close the loop"
+            return "A at \(PlaybackScrubber.timeLabel(a)) · tap B to close"
         }
         if case .scratch(let range) = controller.loop {
             return "Looping A–B · \(PlaybackScrubber.lengthLabel(range.upperBound - range.lowerBound)), not saved"
