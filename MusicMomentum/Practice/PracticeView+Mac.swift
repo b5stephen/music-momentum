@@ -309,7 +309,13 @@ extension PracticeView {
         MarkerLaneActions(
             clip: { macChoose($0.id, chaining: $1) },
             point: { macChoose($0.id, chaining: false) },
-            jump: { if let marker = marker(for: $0.id) { controller.jump(to: marker) } },
+            jump: { scrubberMarker in
+                if scrubberMarker.scratch != nil {
+                    controller.seek(to: scrubberMarker.start)
+                } else if let marker = marker(for: scrubberMarker.id) {
+                    controller.jump(to: marker)
+                }
+            },
             rename: { scrubberMarker, name in
                 guard let marker = marker(for: scrubberMarker.id) else { return }
                 if justMarked?.id == marker.persistentModelID { justMarked = nil }
@@ -347,6 +353,10 @@ extension PracticeView {
     }
 
     private func macChoose(_ id: AnyHashable, chaining: Bool) {
+        if id == Self.abLaneID, case .closed(let range) = controller.ab {
+            if controller.isLoopOn { controller.loopAB() } else { controller.seek(to: range.lowerBound) }
+            return
+        }
         guard let marker = marker(for: id) else { return }
         controller.choose(marker, chaining: chaining)
     }

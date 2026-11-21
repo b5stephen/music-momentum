@@ -61,8 +61,9 @@ final class PlaybackController {
     /// off and the pills reshape the scope while it runs; A·B is the one
     /// other way in, since its second press is the point of it.
     private(set) var loop: Loop?
-    /// The A·B loop being caught or kept. Cleared when anything else loops,
-    /// so a ghost never lingers behind a loop the user chose since.
+    /// The A·B loop being caught or kept. Choosing another loop leaves it be,
+    /// as a ghost to come back to: only discarding, saving or a new song
+    /// clears it.
     private(set) var ab: ABLoop?
     /// Which segment of a clip chain the playhead was last inside. `nil` after
     /// a jump or scrub: the ticker waits until it plays back into the chain.
@@ -416,6 +417,14 @@ final class PlaybackController {
         ab = nil
     }
 
+    /// Back to the A·B loop from another one, as a click on a saved loop's
+    /// bar narrows to it; like that, does nothing with the loop off.
+    func loopAB() {
+        guard loop != nil, case .closed(let range) = ab else { return }
+        setLoop(.scratch(range))
+        if !range.contains(playbackTime) { userSeek(to: range.lowerBound) }
+    }
+
     /// An edge dragged in the Mac's lane. Like `reshapeLoop`, never seeks.
     func reshapeAB(start: TimeInterval, end: TimeInterval) {
         guard case .closed = ab, start < end else { return }
@@ -553,7 +562,6 @@ final class PlaybackController {
 
     /// The one way the loop changes, so the player's repeat mode can't drift.
     private func setLoop(_ new: Loop?) {
-        if let new, !new.isScratch { ab = nil }
         loop = new
         loopIndex = nil
         applyRepeatMode()

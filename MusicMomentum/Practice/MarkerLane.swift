@@ -520,7 +520,8 @@ struct MarkerLane: View {
         let (minX, maxX) = extent(of: marker.id, in: layout)
         let action = switch marker.scratch {
         case .growing: "A again sets B here"
-        case .looping, .ghost: "drag an edge to trim \u{00B7} \u{2318}S to save"
+        case .looping: "drag an edge to trim \u{00B7} \u{2318}S to save"
+        case .ghost: isLoopOn ? "click to loop \u{00B7} \u{2318}S to save" : "click to jump \u{00B7} \u{2318}S to save"
         case nil: marker.isClip && isLoopOn ? "click to loop" : "click to jump"
         }
         return floatingBubble(
@@ -587,7 +588,7 @@ struct MarkerLane: View {
     /// ⌥-click always jumps; ⌘-click chains a clip; a plain click is
     /// Practice's call, since it depends on whether looping is on.
     private func activate(_ marker: PlaybackScrubber.Marker) {
-        guard marker.scratch == nil else { return }
+        guard marker.scratch != .growing else { return }
         let flags = NSEvent.modifierFlags
         if flags.contains(.option) {
             actions.jump(marker)
