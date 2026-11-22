@@ -13,8 +13,9 @@ import SwiftUI
 /// can't (names too long for their bar, clips stacked or too short to hit)
 /// and is the mini player's only way to pick a clip.
 ///
-/// A SwiftUI menu closes on every click, so ⌘-click adds or removes a clip
-/// and the menu closes anyway.
+/// A click adds a clip or takes it out, as in the lane, and ⌘-click loops
+/// just it. A SwiftUI menu closes on every click, so chaining several takes
+/// reopening it.
 struct LoopScopeMenu<Label: View>: View {
     let controller: PlaybackController
     /// The song's markers in start order.
@@ -42,7 +43,7 @@ struct LoopScopeMenu<Label: View>: View {
                             Self.title(clip, number: index < 9 ? index + 1 : nil),
                             isOn: Binding(
                                 get: { controller.isLooping(clip) },
-                                set: { _ in controller.choose(clip, chaining: NSEvent.modifierFlags.contains(.command)) }
+                                set: { _ in controller.choose(clip, chaining: !NSEvent.modifierFlags.contains(.command)) }
                             )
                         )
                     }
@@ -67,7 +68,7 @@ struct LoopScopeMenu<Label: View>: View {
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
-        .help("Choose what loops, or jump to a marker. \u{2318}-click a loop to add or remove it")
+        .help("Add or remove loops, or jump to a marker. \u{2318}-click a loop to loop just it")
         .accessibilityLabel("Loop scope")
     }
 

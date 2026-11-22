@@ -591,15 +591,15 @@ struct MarkerLane: View {
 
     // MARK: Input
 
-    /// ⌥-click always jumps; ⌘-click chains a clip; a plain click is
-    /// Practice's call, since it depends on whether looping is on.
+    /// ⌥-click always jumps; a plain click adds a clip to the chain or takes
+    /// it out, as a pill tap does on iOS, and ⌘-click loops just it.
     private func activate(_ marker: PlaybackScrubber.Marker) {
         guard marker.scratch != .growing else { return }
         let flags = NSEvent.modifierFlags
         if flags.contains(.option) {
             actions.jump(marker)
         } else if marker.isClip {
-            actions.clip(marker, flags.contains(.command))
+            actions.clip(marker, !flags.contains(.command))
         } else {
             actions.point(marker)
         }
