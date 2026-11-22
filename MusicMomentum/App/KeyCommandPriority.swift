@@ -11,6 +11,9 @@ import UIKit
 /// up. SwiftUI has no say in that, so once the menu is built its bare and
 /// ⌥ arrow and Space commands are marked to go first. A text field still gets
 /// its keys: UIKit offers typing to the field before any key command.
+///
+/// B's Set Loop End is hidden here too: it repeats A's item while A waits,
+/// and a hidden key command still answers its key.
 final class KeyCommandPriority: UIResponder, UIApplicationDelegate {
     private static let inputs: Set<String> = [
         UIKeyCommand.inputUpArrow, UIKeyCommand.inputDownArrow,
@@ -29,8 +32,9 @@ final class KeyCommandPriority: UIResponder, UIApplicationDelegate {
                 prioritise(menu.children)
             } else if let command = element as? UIKeyCommand,
                       command.modifierFlags.isDisjoint(with: [.command, .control]),
-                      let input = command.input, inputs.contains(input) {
-                command.wantsPriorityOverSystemBehavior = true
+                      let input = command.input {
+                if inputs.contains(input) { command.wantsPriorityOverSystemBehavior = true }
+                if input == "b", command.modifierFlags.isEmpty { command.attributes.insert(.hidden) }
             }
         }
     }

@@ -97,10 +97,21 @@ struct AppCommands: Commands {
 
             Divider()
 
-            // One key walks A·B through its steps, as the button does.
+            // One key walks A·B through its steps, as the button does. B also
+            // ends a loop, for anyone who reaches for B after A, but stays out
+            // of the menu, where it would list Set Loop End twice; with no A
+            // set it would be a second way to start one, under the wrong letter.
             Button(practice?.abStep?.title ?? "Set Loop Start") { practice?.pressAB() }
                 .keyboardShortcut("a", modifiers: [])
                 .disabled(!canSeek || practice?.abStep == nil)
+            #if os(iOS)
+            // `KeyCommandPriority` hides it.
+            Button(PracticeActions.ABStep.setEnd.title) { practice?.pressAB() }
+                .keyboardShortcut("b", modifiers: [])
+                .disabled(!canSeek || practice?.abStep != .setEnd)
+            #else
+            let _ = ABEndKey.action = canSeek && practice?.abStep == .setEnd ? practice?.pressAB : nil
+            #endif
             Button("Discard A\u{2013}B Loop") { practice?.discardAB() }
                 .keyboardShortcut(.escape, modifiers: [])
                 .disabled(!canSeek || practice?.canDiscardAB != true)

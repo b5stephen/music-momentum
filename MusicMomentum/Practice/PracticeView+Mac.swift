@@ -423,7 +423,7 @@ extension PracticeView {
     private var macABText: (name: String, detail: String)? {
         switch (controller.ab, controller.loop) {
         case (.started(let a), _):
-            return ("A at \(PlaybackScrubber.timeLabel(a))", "A again sets B here \u{00B7} Esc cancels")
+            return ("A at \(PlaybackScrubber.timeLabel(a))", "A or B sets B here \u{00B7} Esc cancels")
         case (.closed(let range), .scratch?):
             return ("Looping A\u{2013}B", "\(macRange(range)), not saved")
         case (.closed(let range), nil):
@@ -456,7 +456,7 @@ extension PracticeView {
         }
         .buttonStyle(.plain)
         .disabled(controller.duration == nil)
-        .help(isWaitingForB ? "Set the loop's end here (A)" : isSet ? "Start a new A–B loop here (A) \u{00B7} Esc discards this one" : "Start an A–B loop here (A)")
+        .help(isWaitingForB ? "Set the loop's end here (A or B)" : isSet ? "Start a new A–B loop here (A) \u{00B7} Esc discards this one" : "Start an A–B loop here (A)")
         .accessibilityLabel(abLabel)
     }
 
