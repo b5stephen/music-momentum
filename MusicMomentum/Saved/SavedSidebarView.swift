@@ -8,9 +8,10 @@ import MusicKit
 import SwiftData
 import SwiftUI
 
-/// Saved as the Mac window's source list: a search field, a header carrying
-/// Sort and Add, and a row per song. It sits translucent over the artwork
-/// mesh, so it draws no background of its own.
+/// Saved as the Mac window's source list: a header carrying Sort and Add,
+/// then the songs, with the search field as the list's first row, so it
+/// scrolls away with them. It sits translucent over the artwork mesh,
+/// so it draws no background of its own.
 struct SavedSidebarView: View {
     let controller: PlaybackController
     /// Stands in for `controller.selectedSong` in previews, since `Song` has
@@ -50,24 +51,26 @@ struct SavedSidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            searchField
-                .padding(.horizontal, 12)
-                .padding(.top, 2)
-                .padding(.bottom, 14)
-
             header
                 .padding(.leading, 20)
                 .padding(.trailing, 10)
+                .padding(.top, 6)
                 .padding(.bottom, 6)
 
-            if songs.isEmpty {
-                Text(recentlyChanged.isEmpty ? "No saved songs yet" : "No matches")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .padding(.top, 24)
+            if recentlyChanged.isEmpty {
+                emptyText("No saved songs yet")
             } else {
                 List {
+                    searchField
+                        .listRowInsets(EdgeInsets(top: 2, leading: 4, bottom: 6, trailing: 4))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+
+                    if songs.isEmpty {
+                        emptyText("No matches")
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                    }
                     ForEach(sections) { section in
                         Section {
                             ForEach(section.songs) { song in
@@ -106,20 +109,36 @@ struct SavedSidebarView: View {
         }
     }
 
+    private func emptyText(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.top, 24)
+    }
+
+    /// Concrete AppKit colours rather than `.secondary` and `.primary`: in a
+    /// list row those resolve against the row and came out a different grey
+    /// from the field's when it sat above the list.
     private var searchField: some View {
         HStack(spacing: 7) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
-            TextField("Search", text: $searchTerm)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .accessibilityLabel("Search saved songs")
+                .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+            TextField(
+                "Search",
+                text: $searchTerm,
+                prompt: Text("Search").foregroundStyle(Color(nsColor: .placeholderTextColor))
+            )
+            .textFieldStyle(.plain)
+            .font(.system(size: 13))
+            .foregroundStyle(Color(nsColor: .labelColor))
+            .accessibilityLabel("Search saved songs")
         }
         .padding(.horizontal, 10)
         .frame(height: 30)
-        .background(.primary.opacity(0.08), in: .capsule)
-        .overlay { Capsule().strokeBorder(.primary.opacity(0.07), lineWidth: 1) }
+        .background(Color(nsColor: .labelColor).opacity(0.08), in: .capsule)
+        .overlay { Capsule().strokeBorder(Color(nsColor: .labelColor).opacity(0.07), lineWidth: 1) }
     }
 
     private var header: some View {
