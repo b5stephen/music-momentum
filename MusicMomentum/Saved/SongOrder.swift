@@ -27,11 +27,14 @@ enum SongOrder: String, CaseIterable, Identifiable {
         case .practiced:
             recentlyChanged.sorted { ($0.practicedAt ?? .distantPast) > ($1.practicedAt ?? .distantPast) }
         case .title:
-            recentlyChanged.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+            recentlyChanged.sorted {
+                SongSection.sortingName($0.title).localizedStandardCompare(SongSection.sortingName($1.title)) == .orderedAscending
+            }
         case .artist:
             recentlyChanged.sorted {
-                switch $0.artistName.localizedStandardCompare($1.artistName) {
-                case .orderedSame: $0.title.localizedStandardCompare($1.title) == .orderedAscending
+                switch SongSection.sortingName($0.artistName).localizedStandardCompare(SongSection.sortingName($1.artistName)) {
+                case .orderedSame:
+                    SongSection.sortingName($0.title).localizedStandardCompare(SongSection.sortingName($1.title)) == .orderedAscending
                 case let result: result == .orderedAscending
                 }
             }
@@ -69,7 +72,7 @@ enum SongOrder: String, CaseIterable, Identifiable {
         // Letters rather than a section per artist: most artists have one
         // saved song, which put a header over nearly every row.
         case .title, .artist:
-            let letter = SongSection.indexLetter(for: self == .title ? song.title : song.artistName)
+            let letter = SongSection.indexLetter(for: SongSection.sortingName(self == .title ? song.title : song.artistName))
             return .init(id: "letter-\(letter)", title: letter, indexLabel: letter)
         }
     }

@@ -47,9 +47,22 @@ struct SongSection: Identifiable {
         return .init(id: "year-\(year)", title: String(year))
     }
 
+    /// The name Music sorts a title or artist by: a leading "The", "A" or
+    /// "An" is skipped, so The Beatles file under B. A name that's only the
+    /// article keeps it.
+    nonisolated static func sortingName(_ name: String) -> Substring {
+        for article in ["The ", "A ", "An "] {
+            guard name.count > article.count,
+                  name.prefix(article.count).caseInsensitiveCompare(article) == .orderedSame
+            else { continue }
+            return name.dropFirst(article.count).drop(while: \.isWhitespace)
+        }
+        return Substring(name)
+    }
+
     /// The title's first letter, folded so "É" files under "E"; anything
     /// that isn't a letter goes under "#", as Music's index does.
-    nonisolated static func indexLetter(for title: String) -> String {
+    nonisolated static func indexLetter<S: StringProtocol>(for title: S) -> String {
         guard let first = title.first, first.isLetter else { return "#" }
         return String(first)
             .folding(options: [.diacriticInsensitive, .caseInsensitive, .widthInsensitive], locale: nil)

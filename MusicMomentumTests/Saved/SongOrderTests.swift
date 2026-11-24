@@ -86,6 +86,17 @@ struct SongOrderTests {
         #expect(sections[1].songs.map(\.title) == ["blackbird", "Bohemian Rhapsody"])
     }
 
+    @Test("Title order sorts and files past a leading The, A or An")
+    func titleArticles() {
+        let songs = ["The Sound of Silence", "A Day in the Life", "Blackbird", "Theme from Shaft"].map { song($0) }
+
+        let sections = SongOrder.title.sections(songs, now: now, calendar: calendar)
+
+        #expect(sections.map(\.title) == ["B", "D", "S", "T"])
+        #expect(sections.flatMap(\.songs).map(\.title)
+            == ["Blackbird", "A Day in the Life", "The Sound of Silence", "Theme from Shaft"])
+    }
+
     @Test("Artist order files songs under the artist's first letter, with an index")
     func artistSections() {
         let songs = [
@@ -97,9 +108,30 @@ struct SongOrderTests {
 
         let sections = SongOrder.artist.sections(songs, now: now, calendar: calendar)
 
-        #expect(sections.map(\.title) == ["#", "J", "T"])
-        #expect(sections.map(\.indexLabel) == ["#", "J", "T"])
-        #expect(sections[1].songs.map(\.title) == ["Little Wing", "Both Sides Now"])
+        #expect(sections.map(\.title) == ["#", "B", "J"])
+        #expect(sections.map(\.indexLabel) == ["#", "B", "J"])
+        #expect(sections[2].songs.map(\.title) == ["Little Wing", "Both Sides Now"])
+    }
+
+    @Test("Artists sort past a leading The, A or An, as Music does")
+    func artistArticles() {
+        #expect(SongSection.sortingName("The Beatles") == "Beatles")
+        #expect(SongSection.sortingName("the velvet underground") == "velvet underground")
+        #expect(SongSection.sortingName("A Tribe Called Quest") == "Tribe Called Quest")
+        #expect(SongSection.sortingName("An Horse") == "Horse")
+        #expect(SongSection.sortingName("The The") == "The")
+        #expect(SongSection.sortingName("The") == "The")
+        #expect(SongSection.sortingName("Theo Calloway") == "Theo Calloway")
+        #expect(SongSection.sortingName("ABBA") == "ABBA")
+
+        let songs = [
+            song("Paper Lanterns", artist: "The Quiet Harbors"),
+            song("Copper Sky", artist: "Mara Lindqvist"),
+            song("Can I Kick It?", artist: "A Tribe Called Quest"),
+        ]
+        let sections = SongOrder.artist.sections(songs, now: now, calendar: calendar)
+        #expect(sections.map(\.title) == ["M", "Q", "T"])
+        #expect(sections.flatMap(\.songs).map(\.title) == ["Copper Sky", "Paper Lanterns", "Can I Kick It?"])
     }
 
     @Test("Practice order puts songs never played last, under their own heading")
