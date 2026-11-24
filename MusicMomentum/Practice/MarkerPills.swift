@@ -8,17 +8,11 @@ import SwiftUI
 
 /// A song's markers as a row of pills. Kind is carried by the glyph alone
 /// (dot for a point, span for a clip); the fill means only state.
-///
-/// Everything past the tap is optional, since the saved list has no loop.
 struct MarkerPills: View {
     let markers: [SongMarker]
     /// Content margins; the row still scrolls edge to edge.
     var inset: CGFloat = 32
-    var leadingInset: CGFloat?
     var trailingInset: CGFloat?
-    /// On a plain page a grey fill under every song outweighs the titles, so
-    /// Saved draws idle pills as a hairline instead of glass.
-    var outlinesIdle = false
     var isLooping: (SongMarker) -> Bool = { _ in false }
     /// With the loop on, a clip tap changes what's looping, so the clips that
     /// could join it say so.
@@ -27,8 +21,6 @@ struct MarkerPills: View {
     /// A·B's A at the marker's start; Practice only, which has A·B.
     var onStartAB: ((SongMarker) -> Void)?
     var onPlayLoop: ((SongMarker) -> Void)?
-    /// The saved list's jump loads the song and changes tab, so it says so.
-    var jumpTitle: String = "Jump to Start"
     var onJump: ((SongMarker) -> Void)?
     var onEdit: ((SongMarker) -> Void)?
     var onDelete: ((SongMarker) -> Void)?
@@ -61,7 +53,7 @@ struct MarkerPills: View {
             .padding(.vertical, 2)
         }
         .scrollIndicators(.hidden)
-        .contentMargins(.leading, leadingInset ?? inset, for: .scrollContent)
+        .contentMargins(.leading, inset, for: .scrollContent)
         .contentMargins(.trailing, trailingInset ?? inset, for: .scrollContent)
         .onScrollGeometryChange(for: Bool.self) { geometry in
             geometry.contentOffset.x > -geometry.contentInsets.leading + 1
@@ -92,7 +84,7 @@ struct MarkerPills: View {
                 view.accessibilityAction(named: "Play on loop") { playLoop(marker) }
             }
             .ifLet(onJump) { view, jump in
-                view.accessibilityAction(named: jumpTitle) { jump(marker) }
+                view.accessibilityAction(named: "Jump to Start") { jump(marker) }
             }
             .ifLet(onEdit) { view, edit in
                 view.accessibilityAction(named: "Edit") { edit(marker) }
@@ -147,9 +139,7 @@ struct MarkerPills: View {
         .padding(.vertical, 7)
         .background { background(state) }
         .overlay {
-            if outlinesIdle, state == .idle {
-                Capsule().strokeBorder(.quaternary, lineWidth: 1 / displayScale)
-            } else if state == .joinable {
+            if state == .joinable {
                 // Dashed rather than coloured: on a cover the tint is the same
                 // near-white as the looping fill, so only the shape tells them apart.
                 Capsule().strokeBorder(.tint.opacity(0.7), style: StrokeStyle(lineWidth: 1.2, dash: [3, 3]))
@@ -167,7 +157,7 @@ struct MarkerPills: View {
             Button { onPlayLoop(marker) } label: { Label("Play on Loop", systemImage: "repeat") }
         }
         if let onJump {
-            Button { onJump(marker) } label: { Label(jumpTitle, systemImage: "arrow.turn.down.right") }
+            Button { onJump(marker) } label: { Label("Jump to Start", systemImage: "arrow.turn.down.right") }
         }
         if let onEdit {
             Button { onEdit(marker) } label: { Label("Edit", systemImage: "pencil") }
@@ -203,8 +193,6 @@ struct MarkerPills: View {
     private func background(_ state: PillState) -> some View {
         if state == .looping {
             Capsule().fill(.tint)
-        } else if outlinesIdle {
-            Color.clear
         } else if inGlassPanel {
             Capsule()
                 .fill(.primary.opacity(0.1))
