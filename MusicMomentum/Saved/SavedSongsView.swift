@@ -22,12 +22,28 @@ struct SavedSongsView: View {
     @Query(sort: \SavedSong.lastPracticed, order: .reverse)
     private var recentlyChanged: [SavedSong]
     /// Per device rather than synced: it's how this screen is read, not data.
-    @AppStorage("savedSongOrder") private var order: SongOrder = .changed
+    @AppStorage("savedSongOrder") private var order: SongOrder = .title
 
-    private var songs: [SavedSong] { order.sorted(recentlyChanged) }
+    @Environment(\.scenePhase) private var scenePhase
+    /// The song count grouping was last decided on. It's settled only when
+    /// Saved appears, the sort changes, a song is added or the app comes
+    /// back, so deleting the twelfth song doesn't pull the headers out from
+    /// under the user mid-edit.
+    @State private var settledCount: Int?
+
+    private var isGrouped: Bool { SongSection.groups(songCount: settledCount ?? recentlyChanged.count) }
+    private var showsIndex: Bool { isGrouped && order != .practiced }
+    /// Ungrouped, one section with no header, so the rows keep their identity
+    /// and slide into sections rather than reloading.
+    private var sections: [SongSection] {
+        isGrouped
+            ? order.sections(recentlyChanged)
+            : [SongSection(id: "all", title: "", indexLabel: nil, songs: order.sorted(recentlyChanged))]
+    }
     /// Beside the card, the rows end as far from the window edge as the card
     /// sits from every edge, so the page reads as one set of margins.
-    private var trailingInset: CGFloat { isBesidePractice ? 28 : 16 }
+    /// Clears the side index too, which otherwise sits over the speeds.
+    private var trailingInset: CGFloat { (isBesidePractice ? 28 : 16) + (showsIndex ? 14 : 0) }
 
     @State private var showPicker = false
     @State private var editing: SavedSong?
@@ -54,9 +70,9 @@ struct SavedSongsView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if songs.isEmpty, isBesidePractice {
+                if recentlyChanged.isEmpty, isBesidePractice {
                     ContentUnavailableView("No saved songs yet", systemImage: "bookmark")
-                } else if songs.isEmpty {
+                } else if recentlyChanged.isEmpty {
                     AroundCrease {
                         ContentUnavailableView {
                             emptyLabel
@@ -75,30 +91,31 @@ struct SavedSongsView: View {
                         addSongButton
                     }
                 } else {
-                    List(songs) { song in
-                        SavedSongRow(
-                            song: song,
-                            isLoading: loadingID == song.songID,
-                            isCurrent: isLoaded(song),
-                            isPlaying: controller.isPlaying
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture { practice(song) }
-                        .contextMenu { menu(for: song) }
-                        .accessibilityAction { practice(song) }
-                        .accessibilityAction(named: "Change Speed") { editing = song }
-                        .accessibilityAction(named: "Add Marker") { openEditor(song) }
-                        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: trailingInset))
-                        .alignmentGuide(.listRowSeparatorLeading) { _ in SavedSongRow.titleInset - 16 }
-                        .listRowBackground(Color.clear)
-                        .listSectionSeparator(.hidden, edges: .top)
-                        .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) { delete(song) } label: {
-                                Label("Delete", systemImage: "trash")
+                    List {
+                        ForEach(sections) { section in
+                            if isGrouped {
+                                Section {
+                                    ForEach(section.songs, content: row)
+                                } header: {
+                                    Text(section.title)
+                                }
+                                #if os(iOS)
+                                .sectionIndexLabel(section.indexLabel)
+                                #endif
+                            } else {
+                                Section {
+                                    ForEach(section.songs, content: row)
+                                }
                             }
                         }
                     }
                     .listStyle(.plain)
+                    #if os(iOS)
+                    .listSectionSpacing(0)
+                    .listSectionIndexVisibility(showsIndex ? .visible : .hidden)
+                    #endif
+                    .animation(.snappy, value: order)
+                    .animation(.snappy, value: isGrouped)
                 }
             }
             // Beside the card, the stack's own opaque background (and the
@@ -116,7 +133,7 @@ struct SavedSongsView: View {
             .toolbar {
                 // Hidden rather than disabled: a greyed glyph beside Add read
                 // as a second, broken add button.
-                if !songs.isEmpty {
+                if !recentlyChanged.isEmpty {
                     ToolbarItem(placement: .primaryAction) {
                         Menu {
                             Picker("Sort By", selection: $order) {
@@ -207,7 +224,39 @@ struct SavedSongsView: View {
                 .presentationDetents([.medium])
             }
             .focusedSceneValue(\.isSavedSheetOpen, showPicker || marking != nil || editing != nil)
+            .onAppear(perform: settleGrouping)
+            .onChange(of: order) { settleGrouping() }
+            .onChange(of: showPicker) { if !showPicker { settleGrouping() } }
+            .onChange(of: scenePhase) { if scenePhase == .active { settleGrouping() } }
         }
+    }
+
+    private func row(_ song: SavedSong) -> some View {
+        SavedSongRow(
+            song: song,
+            isLoading: loadingID == song.songID,
+            isCurrent: isLoaded(song),
+            isPlaying: controller.isPlaying
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { practice(song) }
+        .contextMenu { menu(for: song) }
+        .accessibilityAction { practice(song) }
+        .accessibilityAction(named: "Change Speed") { editing = song }
+        .accessibilityAction(named: "Add Marker") { openEditor(song) }
+        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: trailingInset))
+        .alignmentGuide(.listRowSeparatorLeading) { _ in SavedSongRow.titleInset - 16 }
+        .listRowBackground(Color.clear)
+        .listSectionSeparator(.hidden, edges: .top)
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) { delete(song) } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+
+    private func settleGrouping() {
+        settledCount = recentlyChanged.count
     }
 
     /// Speed and markers live here rather than as chips on the row: a glass
@@ -349,7 +398,7 @@ private struct SavedSongRow: View {
     let isPlaying: Bool
 
     /// Artwork plus gap; the separator lines up with it.
-    static let titleInset: CGFloat = 76
+    nonisolated static let titleInset: CGFloat = 76
 
     var body: some View {
         HStack(spacing: 12) {

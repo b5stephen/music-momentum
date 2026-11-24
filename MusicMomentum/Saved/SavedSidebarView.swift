@@ -22,18 +22,30 @@ struct SavedSidebarView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \SavedSong.lastPracticed, order: .reverse)
     private var recentlyChanged: [SavedSong]
-    @AppStorage("savedSongOrder") private var order: SongOrder = .changed
+    @AppStorage("savedSongOrder") private var order: SongOrder = .title
     @State private var searchTerm = ""
     @State private var loadingID: String?
     @State private var lookupError: String?
 
+    @Environment(\.scenePhase) private var scenePhase
+    /// Settled at the moments SavedSongsView settles it, and as the search
+    /// changes, so a search that leaves a few songs lists them flat.
+    @State private var settledCount: Int?
+
     private var songs: [SavedSong] {
         let term = searchTerm.trimmingCharacters(in: .whitespacesAndNewlines)
-        let sorted = order.sorted(recentlyChanged)
-        guard !term.isEmpty else { return sorted }
-        return sorted.filter {
+        guard !term.isEmpty else { return recentlyChanged }
+        return recentlyChanged.filter {
             $0.title.localizedStandardContains(term) || $0.artistName.localizedStandardContains(term)
         }
+    }
+
+    private var isGrouped: Bool { SongSection.groups(songCount: settledCount ?? songs.count) }
+
+    private var sections: [SongSection] {
+        isGrouped
+            ? order.sections(songs)
+            : [SongSection(id: "all", title: "", indexLabel: nil, songs: order.sorted(songs))]
     }
 
     var body: some View {
@@ -55,24 +67,32 @@ struct SavedSidebarView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .padding(.top, 24)
             } else {
-                List(songs) { song in
-                    SavedSidebarRow(
-                        song: song,
-                        isLoading: loadingID == song.songID,
-                        isLoaded: isLoaded(song),
-                        isPlaying: controller.isPlaying
-                    ) { practice(song) }
-                    .contextMenu {
-                        Button("Delete", role: .destructive) { controller.delete(song, in: modelContext) }
+                List {
+                    ForEach(sections) { section in
+                        Section {
+                            ForEach(section.songs) { song in
+                                row(song)
+                            }
+                        } header: {
+                            if isGrouped {
+                                Text(section.title)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(.tertiary)
+                                    .padding(.leading, 12)
+                            }
+                        }
                     }
-                    .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
                 }
+                .animation(.snappy, value: order)
+                .animation(.snappy, value: isGrouped)
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
             }
         }
+        .onAppear(perform: settleGrouping)
+        .onChange(of: order) { settleGrouping() }
+        .onChange(of: searchTerm) { settleGrouping() }
+        .onChange(of: scenePhase) { if scenePhase == .active { settleGrouping() } }
         .alert(
             "Couldn't open that song",
             isPresented: .init(
@@ -142,6 +162,25 @@ struct SavedSidebarView: View {
             .help("Add a song to Saved without opening it (\u{21E7}\u{2318}N)")
             .accessibilityLabel("Add Song")
         }
+    }
+
+    private func settleGrouping() {
+        settledCount = songs.count
+    }
+
+    private func row(_ song: SavedSong) -> some View {
+        SavedSidebarRow(
+            song: song,
+            isLoading: loadingID == song.songID,
+            isLoaded: isLoaded(song),
+            isPlaying: controller.isPlaying
+        ) { practice(song) }
+        .contextMenu {
+            Button("Delete", role: .destructive) { controller.delete(song, in: modelContext) }
+        }
+        .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
     }
 
     private func isLoaded(_ song: SavedSong) -> Bool {
