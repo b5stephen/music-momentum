@@ -1,0 +1,24 @@
+{
+  "configurations" : [
+    {
+      "id" : "A835211A-2B87-4FE0-91BC-4020A88BA6D4",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:MusicMomentum.xcodeproj",
+        "identifier" : "DCD17BB8304BF15800BC02ED",
+        "name" : "MusicMomentumUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

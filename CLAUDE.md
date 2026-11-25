@@ -35,7 +35,7 @@ Simulators are slimmed with [simslim](https://github.com/MobAI-App/simslim) prof
 
 ## CI and releases
 
-Xcode Cloud builds and tests every pushed branch; on `main`, a passing run archives and ships to internal TestFlight. Workflows live in App Store Connect, not the repo; they build the shared `MusicMomentum` scheme, whose test action runs `MusicMomentumTests` only (the UI tests are the template, so they're skipped). Xcode Cloud stamps each archive's build number from its own counter, so `CURRENT_PROJECT_VERSION` is no longer bumped by hand. `ci_scripts/` must sit beside the `.xcodeproj` (an Xcode Cloud requirement); `ci_post_xcodebuild.sh` writes the TestFlight "What to Test" notes from recent commit subjects. A model change still needs the CloudKit schema deploy before it reaches TestFlight. Xcode Cloud's runners are not slimmed.
+Xcode Cloud builds and tests every pushed branch; on `main`, it runs the unit and UI tests, then archives iOS and macOS and ships to internal TestFlight. Workflows live in App Store Connect, not the repo; they build the shared `MusicMomentum` scheme and pick one of its test plans: `All` (the scheme default), `Unit` or `UI`. Tests run on iOS only. Xcode Cloud stamps each archive's build number from its own counter, so `CURRENT_PROJECT_VERSION` is no longer bumped by hand. `ci_scripts/` must sit beside the `.xcodeproj` (an Xcode Cloud requirement); `ci_post_xcodebuild.sh` writes the TestFlight "What to Test" notes from recent commit subjects. A model change still needs the CloudKit schema deploy before it reaches TestFlight. Xcode Cloud's runners are not slimmed.
 
 ## Conventions
 

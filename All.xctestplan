@@ -1,0 +1,32 @@
+{
+  "configurations" : [
+    {
+      "id" : "77B9F997-8519-49A5-B54D-1AE1DE1BD819",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:MusicMomentum.xcodeproj",
+        "identifier" : "DCD17BAE304BF15800BC02ED",
+        "name" : "MusicMomentumTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:MusicMomentum.xcodeproj",
+        "identifier" : "DCD17BB8304BF15800BC02ED",
+        "name" : "MusicMomentumUITests"
+      }
+    }
+  ],
+  "version" : 1
+}
