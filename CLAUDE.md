@@ -33,6 +33,10 @@ Simulators are slimmed with [simslim](https://github.com/MobAI-App/simslim) prof
 - **Remind the user to deploy the CloudKit schema** whenever a change adds or alters a model property or `AppSchema.models`: say so when committing it, and again before any TestFlight/App Store build that follows it. Production never creates record types or fields itself, and Development only learns a field once a record carrying a non-nil value for it has been exported, so a property left nil throughout testing is missing from both and Development-vs-Production shows no diff. Steps, from a debug build signed into iCloud (the simulator is fine): Saved tab → hammer menu → **Validate CloudKit Schema** (dry run, prints the schema to the Xcode console), then **Push CloudKit Schema (Dev)**, which uploads every entity and attribute from the model via `CloudKitSchemaInitializer`, then CloudKit Console → Schema → **Deploy Schema Changes**. Skipping it shows up on the client as a bare `CKErrorDomain error 2` (`partialFailure`).
 - The simulator gets no CloudKit pushes; remote changes only arrive on real devices.
 
+## CI and releases
+
+Xcode Cloud builds and tests every pushed branch; on `main`, a passing run archives and ships to internal TestFlight. Workflows live in App Store Connect, not the repo; they build the shared `MusicMomentum` scheme, whose test action runs `MusicMomentumTests` only (the UI tests are the template, so they're skipped). Xcode Cloud stamps each archive's build number from its own counter, so `CURRENT_PROJECT_VERSION` is no longer bumped by hand. `ci_scripts/` must sit beside the `.xcodeproj` (an Xcode Cloud requirement); `ci_post_xcodebuild.sh` writes the TestFlight "What to Test" notes from recent commit subjects. A model change still needs the CloudKit schema deploy before it reaches TestFlight. Xcode Cloud's runners are not slimmed.
+
 ## Conventions
 
 - One non-private type per file, named after it. `private` helper views stay with the screen that owns them; if a second file needs one, drop `private` and move it to its own file.
