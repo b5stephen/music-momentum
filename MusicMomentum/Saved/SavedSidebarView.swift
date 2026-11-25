@@ -210,13 +210,14 @@ struct SavedSidebarView: View {
     private func practice(_ song: SavedSong) {
         loadingID = song.songID
         Task {
-            defer { loadingID = nil }
+            // A newer pick's row owns the spinner by now.
+            defer { if loadingID == song.songID { loadingID = nil } }
             guard await controller.requestAuthorizationIfNeeded() else {
                 lookupError = "Allow Apple Music access in System Settings to practice this song."
                 return
             }
             do {
-                try await controller.select(saved: song)
+                _ = try await controller.select(saved: song)
             } catch {
                 lookupError = error is SongGoneError
                     ? error.localizedDescription

@@ -311,20 +311,18 @@ struct SavedSongsView: View {
     private func practice(_ song: SavedSong, jumpingTo marker: SongMarker? = nil) {
         loadingID = song.songID
         Task {
+            defer { clearLoading(song) }
             // May be the first thing the user does after a reinstall.
             guard await controller.requestAuthorizationIfNeeded() else {
-                loadingID = nil
                 lookupError = "Allow Apple Music access in Settings to practice this song."
                 return
             }
             do {
-                try await controller.select(saved: song)
+                guard try await controller.select(saved: song) else { return }
             } catch {
-                loadingID = nil
                 lookupError = message(for: error)
                 return
             }
-            loadingID = nil
             if let marker { controller.jump(to: marker) }
             onPractice()
         }
@@ -344,21 +342,24 @@ struct SavedSongsView: View {
         }
         loadingID = song.songID
         Task {
+            defer { clearLoading(song) }
             guard await controller.requestAuthorizationIfNeeded() else {
-                loadingID = nil
                 lookupError = "Allow Apple Music access in Settings to mark up this song."
                 return
             }
             do {
-                try await controller.select(saved: song)
+                guard try await controller.select(saved: song) else { return }
             } catch {
-                loadingID = nil
                 lookupError = message(for: error)
                 return
             }
-            loadingID = nil
             present(song)
         }
+    }
+
+    /// A newer pick's row owns the spinner by now.
+    private func clearLoading(_ song: SavedSong) {
+        if loadingID == song.songID { loadingID = nil }
     }
 
     private func message(for error: Error) -> String {

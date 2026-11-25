@@ -316,19 +316,22 @@ final class PlaybackController {
     /// Throws rather than setting `errorMessage`: a failed lookup leaves the
     /// player untouched, so the message belongs to the screen that asked,
     /// not to a song banner that would outlive it. A pick that a later one
-    /// overtook returns quietly, failed lookup or not.
-    func select(saved: SavedSong) async throws {
+    /// overtook returns false quietly, failed lookup or not, so the caller
+    /// skips what it meant to do with the song: jumping to a marker or opening
+    /// the editor for it would act on the newer song instead.
+    func select(saved: SavedSong) async throws -> Bool {
         let generation = beginLoad()
         let song: Song?
         do {
             song = try await SongLookup.song(libraryID: saved.songID, catalogID: saved.catalogID)
         } catch {
-            guard generation == loadGeneration else { return }
+            guard generation == loadGeneration else { return false }
             throw error
         }
-        guard generation == loadGeneration else { return }
+        guard generation == loadGeneration else { return false }
         guard let song else { throw SongGoneError() }
         await queue(song, generation: generation)
+        return generation == loadGeneration
     }
 
     func togglePlayPause() {
