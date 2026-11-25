@@ -133,13 +133,18 @@ final class PlaybackController {
         else { return }
         isRestoringLastSong = true
         defer { isRestoringLastSong = false }
+        let generation = beginLoad()
         do {
-            guard let song = try await SongLookup.song(libraryID: last.songID, catalogID: last.catalogID) else {
+            let song = try await SongLookup.song(libraryID: last.songID, catalogID: last.catalogID)
+            // A song the user picked meanwhile wins, and is what
+            // `LastLoadedSong` now holds, so it mustn't be forgotten either.
+            guard generation == loadGeneration else { return }
+            guard let song else {
                 LastLoadedSong.forget()
                 return
             }
-            await select(song: song)
-            if errorMessage != nil {
+            await queue(song, generation: generation)
+            if generation == loadGeneration, errorMessage != nil {
                 selectedSong = nil
                 errorMessage = nil
             }
@@ -263,6 +268,24 @@ final class PlaybackController {
     /// Queues the song at its saved speed without starting it — the user hits
     /// play once the guitar is in their hands.
     func select(song: Song) async {
+        await queue(song, generation: beginLoad())
+    }
+
+    /// Each pick of a song takes a number, and a load that a newer pick has
+    /// overtaken drops its outcome. Replacing the queue mid-prepare makes the
+    /// old `prepareToPlay()` throw MPMusicPlayerControllerErrorDomain 2
+    /// ("Queue was interrupted by another queue"), which used to land as a
+    /// "Couldn't load that track" banner over the song that had loaded fine.
+    /// Taken before any lookup, so a slow lookup for an earlier click can't
+    /// finish last and replace the later one.
+    private var loadGeneration = 0
+
+    private func beginLoad() -> Int {
+        loadGeneration += 1
+        return loadGeneration
+    }
+
+    private func queue(_ song: Song, generation: Int) async {
         selectedSong = song
         LastLoadedSong.remember(song)
         loadSavedSpeed(for: song)
@@ -281,22 +304,31 @@ final class PlaybackController {
             // recommendations (iOS 26.4+).
             player.queue.affectsListeningHistory = false
             try await playerBox.prepareToPlay()
+            guard generation == loadGeneration else { return }
             // A fresh queue doesn't carry the old one's repeat mode over.
             applyRepeatMode()
         } catch {
+            guard generation == loadGeneration else { return }
             errorMessage = "Couldn't load that track: \(error.localizedDescription)"
         }
     }
 
     /// Throws rather than setting `errorMessage`: a failed lookup leaves the
     /// player untouched, so the message belongs to the screen that asked,
-    /// not to a song banner that would outlive it.
+    /// not to a song banner that would outlive it. A pick that a later one
+    /// overtook returns quietly, failed lookup or not.
     func select(saved: SavedSong) async throws {
-        guard let song = try await SongLookup.song(
-            libraryID: saved.songID,
-            catalogID: saved.catalogID
-        ) else { throw SongGoneError() }
-        await select(song: song)
+        let generation = beginLoad()
+        let song: Song?
+        do {
+            song = try await SongLookup.song(libraryID: saved.songID, catalogID: saved.catalogID)
+        } catch {
+            guard generation == loadGeneration else { return }
+            throw error
+        }
+        guard generation == loadGeneration else { return }
+        guard let song else { throw SongGoneError() }
+        await queue(song, generation: generation)
     }
 
     func togglePlayPause() {
