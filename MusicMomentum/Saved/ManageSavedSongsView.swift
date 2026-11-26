@@ -20,6 +20,7 @@ struct ManageSavedSongsView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openWindow) private var openWindow
+    @Environment(MiniPlayerSwitch.self) private var miniPlayer
     @Query(sort: \SavedSong.lastPracticed, order: .reverse)
     private var allSongs: [SavedSong]
     @Query(sort: [SortDescriptor(\PracticeList.sortOrder), SortDescriptor(\PracticeList.createdAt)])
@@ -732,7 +733,13 @@ struct ManageSavedSongsView: View {
             }
             do {
                 guard try await controller.select(saved: song) else { return }
-                openWindow(id: "main")
+                // The window Practice is already in, not a new one: opening
+                // the WindowGroup's id made another Practice window each time.
+                // With the mini player up the main window is hidden on
+                // purpose, and the song shows there.
+                if !miniPlayer.isMiniOpen {
+                    miniPlayer.showMain(open: openWindow)
+                }
             } catch {
                 lookupError = error is SongGoneError
                     ? error.localizedDescription
@@ -860,11 +867,13 @@ private struct SpeedPopover: View {
     PracticeList.add([s1, s2], to: level2, in: context)
 
     return ManageSavedSongsView(controller: PlaybackController(), previewCurrentID: "2")
+        .environment(MiniPlayerSwitch())
         .modelContainer(container)
 }
 
 #Preview("Empty library", traits: .fixedLayout(width: 980, height: 640)) {
     ManageSavedSongsView(controller: PlaybackController())
+        .environment(MiniPlayerSwitch())
         .modelContainer(try! AppSchema.inMemoryContainer())
 }
 #endif

@@ -96,6 +96,7 @@ struct MusicMomentumApp: App {
 
         Window("Manage Saved Songs", id: ManageSavedSongsView.windowID) {
             ManageSavedSongsView(controller: model.controller, previewCurrentID: sampleTrack?.id)
+                .environment(miniPlayer)
                 .modelContainer(container)
         }
         .defaultSize(width: 980, height: 640)
