@@ -22,7 +22,22 @@ struct ListFilterBar: View {
 
     @State private var clipped: (leading: Bool, trailing: Bool) = (false, false)
 
+    /// Beside the card the strip is neither clipped nor faded: glass under
+    /// any clipping layer, the scroll view's own or the fade's mask, frosts
+    /// that whole layer, a grey rectangle behind the pills. Chips scrolled
+    /// past an end slide under the card or off the window instead.
+    /// `isBesidePractice` holds while the bar is up, so the branch never
+    /// resets the scroll position.
+    @ViewBuilder
     var body: some View {
+        if isBesidePractice {
+            strip.scrollClipDisabled()
+        } else {
+            strip.edgeFade(leading: clipped.leading, trailing: clipped.trailing, width: 28)
+        }
+    }
+
+    private var strip: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
                 chip(title: "All", isSelected: filter == .all) {
@@ -82,7 +97,6 @@ struct ListFilterBar: View {
         } action: { _, isClipped in
             clipped.trailing = isClipped
         }
-        .edgeFade(leading: clipped.leading, trailing: clipped.trailing, width: 28)
     }
 
     private func chip(title: String, count: Int? = nil, isSelected: Bool, action: @escaping () -> Void) -> some View {
@@ -108,18 +122,15 @@ struct ListFilterBar: View {
 }
 
 private extension View {
-    /// Beside the card an idle chip is a translucent fill, so the cover's
-    /// glow shows through it. Glass there drew a frosted band across the
-    /// whole strip, since the edge fade's mask makes it sample the strip's
-    /// full frame.
+    /// Beside the card the chips are glass, as Practice's pills are, so they
+    /// take on the cover's glow; a system fill there read as disabled.
     @ViewBuilder
     func chipSurface(isSelected: Bool, isBesidePractice: Bool) -> some View {
-        if isBesidePractice, !isSelected {
-            background {
-                Capsule()
-                    .fill(.primary.opacity(0.06))
-                    .overlay { Capsule().strokeBorder(.primary.opacity(0.1), lineWidth: 1) }
-            }
+        if isBesidePractice {
+            glassEffect(
+                isSelected ? Glass.regular.tint(Color.accentColor.opacity(0.3)).interactive() : Glass.regular.interactive(),
+                in: .capsule
+            )
         } else if isSelected {
             background {
                 Capsule()
