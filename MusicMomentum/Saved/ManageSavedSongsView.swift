@@ -338,7 +338,18 @@ struct ManageSavedSongsView: View {
                     ForEach(sortedRows) { item in
                         TableRow(item)
                             .draggable(dragPayload(for: item))
-                            .contextMenu { rowContextMenu(for: item.song) }
+                    }
+                }
+                // The table's own primary action, so a double-click anywhere
+                // on a row opens it; a tap gesture on the song cell only
+                // caught clicks on the title and artwork.
+                .contextMenu(forSelectionType: PersistentIdentifier.self) { ids in
+                    if ids.count == 1, let song = song(for: ids.first) {
+                        rowContextMenu(for: song)
+                    }
+                } primaryAction: { ids in
+                    if ids.count == 1, let song = song(for: ids.first) {
+                        openInPractice(song)
                     }
                 }
                 .onKeyPress(.return) {
@@ -436,7 +447,6 @@ struct ManageSavedSongsView: View {
         }
         .padding(.vertical, 2)
         .contentShape(.rect)
-        .onTapGesture(count: 2) { openInPractice(song) }
     }
 
     private func listsCell(_ song: SavedSong) -> some View {
@@ -612,16 +622,6 @@ struct ManageSavedSongsView: View {
         }
 
         ToolbarItem(placement: .primaryAction) {
-            Button {
-                if let song = selectedSongs.first { openInPractice(song) }
-            } label: {
-                Label("Open in Practice", systemImage: "play")
-            }
-            .disabled(selectedSongs.count != 1)
-            .help("Load the selected song into Practice")
-        }
-
-        ToolbarItem(placement: .primaryAction) {
             if let list = activeList {
                 Menu {
                     Button("Add from Saved\u{2026}") { addingSongsToList = list }
@@ -677,6 +677,11 @@ struct ManageSavedSongsView: View {
         case let (0, p): return p == 1 ? "1 marker" : "\(p) markers"
         case let (l, p): return "\(l)L \u{00B7} \(p)M"
         }
+    }
+
+    private func song(for id: PersistentIdentifier?) -> SavedSong? {
+        guard let id else { return nil }
+        return allSongs.first { $0.persistentModelID == id }
     }
 
     private func isLoaded(_ song: SavedSong) -> Bool {
