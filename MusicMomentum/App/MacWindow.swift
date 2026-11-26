@@ -28,6 +28,7 @@ struct MacWindow: View {
     @State private var showsLibrary = false
     @State private var libraryPage: LibraryPage = .recentlyPlayed
     @State private var librarySearch = ""
+    @FocusState private var isSearchFocused: Bool
     /// The sidebar's scope, read where it's stored so ⇧⌘N and the sidebar's
     /// + both add into the list on show, as Saved's + does on iOS.
     @AppStorage("savedListFilter") private var filterStorage = ""
@@ -110,6 +111,7 @@ struct MacWindow: View {
             // soon as results showed. Always there, so a song can be looked
             // for from Practice too; typing brings the library up.
             .searchable(text: $librarySearch, placement: .toolbar, prompt: SongPickerView.searchPrompt)
+            .searchFocused($isSearchFocused)
             .onChange(of: librarySearch) { _, term in
                 if !term.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { setShowsLibrary(true) }
             }
@@ -168,7 +170,8 @@ struct MacWindow: View {
                 canPickSong: controller.canUseMusic,
                 isSheetOpen: picking != nil,
                 changeSong: { setShowsLibrary(true) },
-                addSong: { pick(.add(addTarget)) }
+                addSong: { pick(.add(addTarget)) },
+                focusSearch: { isSearchFocused = true }
             )
         )
         // Outside the ground, which would hand the sheet the cover's dark

@@ -68,6 +68,14 @@ struct AppCommands: Commands {
             #endif
         }
 
+        #if os(macOS)
+        CommandGroup(after: .textEditing) {
+            Button("Search Saved, Library and Apple Music") { window?.focusSearch?() }
+                .keyboardShortcut("f")
+                .disabled(window?.focusSearch == nil || isSheetOpen)
+        }
+        #endif
+
         CommandGroup(replacing: .saveItem) {
             Button(practice?.saveTitle ?? "Save Speed") {
                 if practice?.canSaveSpeed == true { practice?.saveSpeed() }

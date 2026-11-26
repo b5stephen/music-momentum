@@ -14,6 +14,8 @@ struct WindowActions {
     var isSheetOpen = false
     var changeSong: @MainActor () -> Void = {}
     var addSong: @MainActor () -> Void = {}
+    /// The Mac toolbar's search; iOS has its own ways in.
+    var focusSearch: (@MainActor () -> Void)?
 }
 
 extension FocusedValues {
