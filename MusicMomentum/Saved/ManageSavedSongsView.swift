@@ -565,34 +565,50 @@ struct ManageSavedSongsView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
+            // A bare list of names gave no hint that picking one filters
+            // the table, so the menu says what it does, and the picks show
+            // as removable tags under the toolbar.
             Menu {
                 if lists.isEmpty {
                     Text("No lists yet")
                 } else {
-                    ForEach(lists) { list in
-                        Button {
-                            if extraFilterIDs.contains(list.listID) {
-                                extraFilterIDs.remove(list.listID)
-                            } else {
-                                extraFilterIDs.insert(list.listID)
-                            }
-                        } label: {
-                            if extraFilterIDs.contains(list.listID) {
-                                Label(list.name, systemImage: "checkmark")
-                            } else {
-                                Text(list.name)
+                    Section(activeList == nil ? "Show Only Songs In" : "Also Filter By") {
+                        ForEach(lists.filter { $0.listID != activeList?.listID }) { list in
+                            Toggle(list.name, isOn: Binding(
+                                get: { extraFilterIDs.contains(list.listID) },
+                                set: { isOn in
+                                    if isOn {
+                                        extraFilterIDs.insert(list.listID)
+                                    } else {
+                                        extraFilterIDs.remove(list.listID)
+                                    }
+                                }
+                            ))
+                        }
+                    }
+                    if extraFilterIDs.count > 1 || (activeList != nil && !extraFilterIDs.isEmpty) {
+                        Picker("Match", selection: $matchMode) {
+                            ForEach(ListFilter.MatchMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
                             }
                         }
+                        .pickerStyle(.inline)
                     }
                     if !extraFilterIDs.isEmpty {
                         Divider()
-                        Button("Clear Tag Filters") { extraFilterIDs.removeAll() }
+                        Button("Clear Filters") { extraFilterIDs.removeAll() }
                     }
                 }
             } label: {
-                Label("Filter by Lists", systemImage: extraFilterIDs.isEmpty ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                // Coral while a filter is on, per "coral means on".
+                Image(systemName: "line.3.horizontal.decrease")
+                    .foregroundStyle(extraFilterIDs.isEmpty ? Color.secondary : Color.accentColor)
             }
-            .help("Combine list filters")
+            .menuIndicator(.hidden)
+            .accessibilityLabel("Filter by List")
+            .help(extraFilterIDs.isEmpty
+                ? "Filter by list: show only songs in the lists you pick"
+                : "Filtered by \(extraFilterIDs.count) \(extraFilterIDs.count == 1 ? "list" : "lists")")
         }
 
         ToolbarItem(placement: .primaryAction) {
