@@ -50,7 +50,9 @@ struct AppCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
-            Button("Change Song\u{2026}") { window?.changeSong() }
+            // The library on the Mac and in the iPhone's tab, the picker
+            // beside Saved on a wide iPad: finding a song either way.
+            Button("Find a Song\u{2026}") { window?.changeSong() }
                 .keyboardShortcut("o")
                 .disabled(window?.canPickSong != true || isSheetOpen)
             Button("Add Song to Saved\u{2026}") { window?.addSong() }

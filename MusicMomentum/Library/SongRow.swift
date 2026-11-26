@@ -14,6 +14,7 @@ struct SongRow: View {
         HStack(spacing: 12) {
             if let artwork = song.artwork {
                 ArtworkImage(artwork, width: 48, height: 48)
+                    .background(.quaternary)
                     .clipShape(.rect(cornerRadius: 6))
             } else {
                 RoundedRectangle(cornerRadius: 6)

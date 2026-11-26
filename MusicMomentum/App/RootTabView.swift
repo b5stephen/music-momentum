@@ -25,7 +25,7 @@ struct RootTabView: View {
 
     #if os(iOS)
     private enum TabID {
-        case practice, saved
+        case practice, saved, library
     }
     #endif
 
@@ -64,12 +64,24 @@ struct RootTabView: View {
     private var tabs: some View {
         TabView(selection: $tab) {
             Tab("Practice", systemImage: "guitars", value: .practice) {
-                PracticeView(controller: controller, previewTrack: sampleTrack) { practicePalette = $0 }
-                    .environment(\.colorScheme, colorScheme)
+                PracticeView(
+                    controller: controller,
+                    previewTrack: sampleTrack,
+                    onPalette: { practicePalette = $0 },
+                    onBrowse: { tab = .library }
+                )
+                .environment(\.colorScheme, colorScheme)
             }
 
             Tab("Saved", systemImage: "bookmark", value: .saved) {
                 SavedSongsView(controller: controller, previewCurrentID: sampleTrack?.id) { tab = .practice }
+                    .environment(\.colorScheme, colorScheme)
+            }
+
+            // The search role puts it apart at the end of the bar, as Music's
+            // own search is; its field is the tab's search.
+            Tab("Library", systemImage: "magnifyingglass", value: .library, role: .search) {
+                LibraryTabView(controller: controller) { tab = .practice }
                     .environment(\.colorScheme, colorScheme)
             }
         }

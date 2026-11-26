@@ -365,12 +365,9 @@ struct SavedSongsView: View {
             }
             #endif
             .sheet(isPresented: $showPicker) {
-                let targetList = activeSingleList
-                SongPickerView { song in
-                    let saved = SavedSong.add(song: song, in: modelContext)
-                    if let targetList {
-                        PracticeList.add([saved], to: targetList, in: modelContext)
-                    }
+                let target = SaveTarget(list: activeSingleList)
+                SongPickerView(title: SongPickerView.addTitle(for: target), confirmTitle: "Add", target: target) { song in
+                    target.add(song, in: modelContext)
                 }
             }
             .sheet(isPresented: $showingListManager) {

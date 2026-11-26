@@ -93,7 +93,7 @@ struct ManageSavedSongsView: View {
     @State private var listPopoverSong: SavedSong?
     @State private var lookupError: String?
     @State private var loadingID: String?
-    /// Matched by eye to the Library rows' default insets.
+    /// Matched by eye to the Saved rows' default insets.
     private static let listRowPadding = EdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10)
 
     private var activeList: PracticeList? {
@@ -201,12 +201,9 @@ struct ManageSavedSongsView: View {
     }
 
     private var songPickerSheet: some View {
-        let targetList = activeList
-        return SongPickerView(title: "Add Song to Saved", confirmTitle: "Add") { song in
-            let saved = SavedSong.add(song: song, in: modelContext)
-            if let targetList {
-                PracticeList.add([saved], to: targetList, in: modelContext)
-            }
+        let target = SaveTarget(list: activeList)
+        return SongPickerView(title: SongPickerView.addTitle(for: target), confirmTitle: "Add", target: target) { song in
+            target.add(song, in: modelContext)
         }
     }
 
@@ -221,7 +218,9 @@ struct ManageSavedSongsView: View {
 
     private var sidebar: some View {
         List(selection: $sidebarItem) {
-            Section("Library") {
+            // Not "Library": that's the user's Apple Music library, in the
+            // main window's sidebar.
+            Section("Saved") {
                 sidebarRow("All Songs", icon: "bookmark", count: allSongs.count)
                     .tag(SidebarItem.all)
                 sidebarRow("Not in a List", icon: "tray", count: unfiledCount)

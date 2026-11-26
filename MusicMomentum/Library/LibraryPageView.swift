@@ -1,5 +1,5 @@
 //
-//  LibraryBrowseView.swift
+//  LibraryPageView.swift
 //  MusicMomentum
 //
 //  `MusicLibrarySearchRequest` needs a term; `MusicLibraryRequest` returns the
@@ -7,110 +7,71 @@
 //
 
 import MusicKit
-import SwiftData
 import SwiftUI
 
-struct LibraryBrowseView: View {
+/// The shelves of the user's library a picker, the Library tab and the Mac
+/// window's sidebar all open.
+enum LibraryPage: String, CaseIterable, Identifiable, Hashable {
+    case recentlyPlayed, artists, albums, songs, playlists
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .recentlyPlayed: "Recently Played"
+        case .artists: "Artists"
+        case .albums: "Albums"
+        case .songs: "Songs"
+        case .playlists: "Playlists"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .recentlyPlayed: "clock.arrow.circlepath"
+        case .artists: "music.microphone"
+        case .albums: "square.stack"
+        case .songs: "music.note"
+        case .playlists: "music.note.list"
+        }
+    }
+}
+
+/// One shelf, with its own drill-down: an artist's albums, an album's or a
+/// playlist's tracks.
+struct LibraryPageView: View {
+    let page: LibraryPage
     let onSelect: (Song) -> Void
 
-    /// Songs never played still fill the shelf, most recently changed first.
-    @Query(sort: [
-        SortDescriptor(\SavedSong.practicedAt, order: .reverse),
-        SortDescriptor(\SavedSong.lastPracticed, order: .reverse),
-    ])
-    private var saved: [SavedSong]
-
-    @State private var openingID: String?
-    @State private var missingID: String?
-    @Environment(\.pickedSong) private var picked
-
-    private static let recentLimit = 3
-
     var body: some View {
-        List {
-            Section("Browse") {
-                NavigationLink {
-                    artistsList
-                } label: {
-                    ShelfRow(title: "Artists", systemImage: "music.microphone")
-                }
-                NavigationLink {
-                    albumsList
-                } label: {
-                    ShelfRow(title: "Albums", systemImage: "square.stack")
-                }
-                NavigationLink {
-                    playlistsList
-                } label: {
-                    ShelfRow(title: "Playlists", systemImage: "music.note.list")
-                }
-                NavigationLink {
-                    songsList
-                } label: {
-                    ShelfRow(title: "Songs", systemImage: "music.note")
-                }
-            }
-
-            if !recent.isEmpty {
-                Section("Practising lately") {
-                    ForEach(recent) { song in
-                        recentRow(song)
-                    }
-                }
-            }
+        switch page {
+        case .recentlyPlayed: recentlyPlayedList
+        case .artists: artistsList
+        case .albums: albumsList
+        case .songs: songsList
+        case .playlists: playlistsList
         }
     }
 
-    private var recent: [SavedSong] {
-        Array(saved.prefix(Self.recentLimit))
-    }
-
-    @ViewBuilder
-    private func recentRow(_ song: SavedSong) -> some View {
-        let row = RecentRow(
-            song: song,
-            isLoading: openingID == song.songID,
-            isMissing: missingID == song.songID
-        )
-        #if os(macOS)
-        row
-            .padding(.vertical, 2)
-            .padding(.horizontal, 6)
-            .background(.primary.opacity(picked?.savedID == song.songID ? 0.14 : 0), in: .rect(cornerRadius: 6))
-            .contentShape(.rect)
-            .onTapGesture(count: 2) { practise(song, confirming: true) }
-            .simultaneousGesture(TapGesture().onEnded { practise(song, confirming: false) })
-            .accessibilityAddTraits(.isButton)
-        #else
-        Button {
-            practise(song, confirming: true)
-        } label: {
-            row
-        }
-        .buttonStyle(.plain)
-        #endif
-    }
-
-    /// `confirming` is false on a Mac's single click, which only picks the
-    /// song for the sheet's Open or Add button.
-    private func practise(_ song: SavedSong, confirming: Bool) {
-        openingID = song.songID
-        missingID = nil
-        Task {
-            let found = try? await SongLookup.song(
-                libraryID: song.songID,
-                catalogID: song.catalogID
-            )
-            openingID = nil
-            guard let found else {
-                missingID = song.songID
-                return
-            }
-            if confirming {
-                onSelect(found)
-            } else {
-                picked?.song = found
-                picked?.savedID = song.songID
+    /// Practice in this app leaves no listening history
+    /// (`affectsListeningHistory`), so this is what was played in Music.
+    private var recentlyPlayedList: some View {
+        PagedLibraryList(
+            title: "Recently Played",
+            shelf: "recently played songs",
+            emptyTitle: "Nothing played lately",
+            emptyMessage: "Songs you play in Music on this Apple ID show up here.",
+            // Its collection claims a next batch, but asking for it is a
+            // fatal error inside MusicKit ("non decodable music item type"),
+            // so it's one request of the most it allows.
+            pages: false
+        ) {
+            var request = MusicRecentlyPlayedRequest<Song>()
+            request.limit = 30
+            return try await request.response().items
+        } row: { song in
+            SongPickerRow(song: song, onSelect: onSelect) {
+                SongRow(song: song, showsAlbum: true)
             }
         }
     }
@@ -249,81 +210,6 @@ struct LibraryBrowseView: View {
     }
 }
 
-// MARK: - Shelf sizes
-
-private struct ShelfRow: View {
-    let title: String
-    let systemImage: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 7)
-                .fill(.quaternary)
-                .frame(width: 30, height: 30)
-                .overlay {
-                    Image(systemName: systemImage)
-                        .font(.system(size: 14, weight: .medium))
-                }
-            Text(title)
-            Spacer(minLength: 8)
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
-private struct RecentRow: View {
-    let song: SavedSong
-    let isLoading: Bool
-    let isMissing: Bool
-
-    var body: some View {
-        HStack(spacing: 12) {
-            artwork
-            VStack(alignment: .leading, spacing: 2) {
-                Text(song.title)
-                    .font(.body)
-                    .lineLimit(1)
-                // Yellow on the icon only: red text reads as the coral tint.
-                HStack(spacing: 4) {
-                    if isMissing {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.yellow)
-                    }
-                    Text(isMissing ? "Not in your library any more" : song.artistName)
-                        .foregroundStyle(.secondary)
-                }
-                .font(.caption)
-                .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            Text("\(song.percent)%")
-                .font(.subheadline.weight(.semibold))
-                .monospacedDigit()
-                .foregroundStyle(Color.accentText)
-        }
-        .contentShape(Rectangle())
-    }
-
-    @ViewBuilder
-    private var artwork: some View {
-        if isLoading {
-            placeholder { ProgressView() }
-        } else if let artwork = song.artwork {
-            ArtworkImage(artwork, width: 38, height: 38)
-                .clipShape(.rect(cornerRadius: 6))
-        } else {
-            placeholder { Image(systemName: "music.note").foregroundStyle(.secondary) }
-        }
-    }
-
-    private func placeholder<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        RoundedRectangle(cornerRadius: 6)
-            .fill(.quaternary)
-            .frame(width: 38, height: 38)
-            .overlay(content())
-    }
-}
-
 // MARK: - Paging
 
 /// Loads a `MusicItemCollection` a batch at a time, and owns the loading,
@@ -334,6 +220,7 @@ private struct PagedLibraryList<Item: MusicItem & Identifiable, Row: View>: View
     let shelf: String
     let emptyTitle: String
     let emptyMessage: String
+    var pages = true
     let load: () async throws -> MusicItemCollection<Item>
     @ViewBuilder let row: (Item) -> Row
 
@@ -343,6 +230,30 @@ private struct PagedLibraryList<Item: MusicItem & Identifiable, Row: View>: View
     @State private var isLoadingMore = false
 
     var body: some View {
+        #if os(macOS)
+        // The Mac's toolbar title is small and a sheet shows none, so the
+        // page names itself, as Music's pages do.
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.title2.weight(.bold))
+                .lineLimit(1)
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
+                .padding(.bottom, 6)
+            content
+        }
+        .navigationTitle(title)
+        .task { await loadFirstBatch() }
+        #else
+        content
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .task { await loadFirstBatch() }
+        #endif
+    }
+
+    @ViewBuilder
+    private var content: some View {
         Group {
             if let errorMessage {
                 ContentUnavailableView {
@@ -366,8 +277,14 @@ private struct PagedLibraryList<Item: MusicItem & Identifiable, Row: View>: View
                     )
                 } else {
                     List {
-                        ForEach(items) { row($0) }
-                        if items.hasNextBatch {
+                        ForEach(items) { item in
+                            row(item)
+                                #if os(macOS)
+                                // Hover is the row's edge, as in the sidebar.
+                                .listRowSeparator(.hidden)
+                                #endif
+                        }
+                        if pages, items.hasNextBatch {
                             // Rows are built lazily, so this only fetches once
                             // the user scrolls to it.
                             VStack(spacing: 12) {
@@ -379,6 +296,8 @@ private struct PagedLibraryList<Item: MusicItem & Identifiable, Row: View>: View
                         }
                     }
                     .listStyle(.plain)
+                    // Over the Mac window's cover mesh as well as in a sheet.
+                    .scrollContentBackground(.hidden)
                 }
             } else {
                 List(0..<5, id: \.self) { index in
@@ -387,15 +306,12 @@ private struct PagedLibraryList<Item: MusicItem & Identifiable, Row: View>: View
                         .listRowSeparator(.hidden)
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
                 .allowsHitTesting(false)
                 .accessibilityLabel("Loading \(shelf)")
             }
         }
-        .navigationTitle(title)
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
-        .task { await loadFirstBatch() }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func loadFirstBatch() async {
@@ -408,7 +324,7 @@ private struct PagedLibraryList<Item: MusicItem & Identifiable, Row: View>: View
     }
 
     private func loadMore() async {
-        guard let current = items, current.hasNextBatch, !isLoadingMore else { return }
+        guard pages, let current = items, current.hasNextBatch, !isLoadingMore else { return }
         isLoadingMore = true
         defer { isLoadingMore = false }
         do {
@@ -527,6 +443,8 @@ private struct LibraryArtwork: View {
     var body: some View {
         if let artwork {
             ArtworkImage(artwork, width: 48, height: 48)
+                // What shows until the cover arrives.
+                .background(.quaternary)
                 .clipShape(.rect(cornerRadius: 6))
         } else {
             RoundedRectangle(cornerRadius: 6)
@@ -545,22 +463,6 @@ private extension Track {
 }
 
 // MARK: - Previews
-
-#Preview("Browse root") {
-    let container = try! AppSchema.inMemoryContainer()
-    SavedSong.save(
-        songID: "1", title: "Little Wing", artistName: "Jimi Hendrix",
-        artworkData: nil, speed: 0.6, in: ModelContext(container)
-    )
-    return NavigationStack {
-        LibraryBrowseView { _ in }
-            .navigationTitle("Choose Song")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-    }
-    .modelContainer(container)
-}
 
 private func albumsPreview(
     load: @escaping () async throws -> MusicItemCollection<Album>

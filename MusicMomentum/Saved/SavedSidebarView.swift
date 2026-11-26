@@ -21,6 +21,8 @@ struct SavedSidebarView: View {
     var previewCurrentID: String?
     /// Opens the picker that adds a song without loading it.
     let onAdd: () -> Void
+    /// Brings Practice back over the window's library when a song is opened.
+    var onPractise: () -> Void = {}
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openWindow) private var openWindow
@@ -388,7 +390,7 @@ struct SavedSidebarView: View {
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
             .disabled(!controller.canUseMusic)
-            .help("Add a song to Saved without opening it (\u{21E7}\u{2318}N)")
+            .help(activeSingleList.map { "Add a song to \u{201C}\($0.name)\u{201D} without opening it (\u{21E7}\u{2318}N)" } ?? "Add a song to Saved without opening it (\u{21E7}\u{2318}N)")
             .accessibilityLabel("Add Song")
         }
     }
@@ -508,6 +510,7 @@ struct SavedSidebarView: View {
     }
 
     private func practice(_ song: SavedSong, jumpingTo marker: SongMarker? = nil) {
+        onPractise()
         loadingID = song.songID
         Task {
             // A newer pick's row owns the spinner by now.

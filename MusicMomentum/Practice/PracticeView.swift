@@ -27,6 +27,9 @@ struct PracticeView: View {
     /// Hands the cover's palette up to the tab bar and the floating card's
     /// glow, which sit outside the screen.
     var onPalette: (ArtworkPalette?) -> Void = { _ in }
+    /// Where Change Song goes when there's a Library tab to switch to; the
+    /// picker sheet otherwise (beside Saved on a wide iPad).
+    var onBrowse: (() -> Void)?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.modelContext) var modelContext
     @Environment(\.undoManager) private var undoManager
@@ -246,7 +249,7 @@ struct PracticeView: View {
                         Task { await controller.select(song: song) }
                     }
                 case .add:
-                    SongPickerView(title: "Add Song to Saved", confirmTitle: "Add") { song in
+                    SongPickerView(title: SongPickerView.addTitle(for: .saved), confirmTitle: "Add") { song in
                         SavedSong.add(song: song, in: modelContext)
                     }
                 }
@@ -333,7 +336,7 @@ struct PracticeView: View {
             WindowActions(
                 canPickSong: controller.canUseMusic,
                 isSheetOpen: picking != nil || markerSheet != nil,
-                changeSong: { pick(.change) },
+                changeSong: { if let onBrowse { onBrowse() } else { pick(.change) } },
                 addSong: { pick(.add) }
             )
         )
@@ -1359,9 +1362,9 @@ struct PracticeView: View {
 
     private var changeSongButton: some View {
         Button {
-            pick(.change)
+            if let onBrowse { onBrowse() } else { pick(.change) }
         } label: {
-            Image(systemName: "arrow.left.arrow.right")
+            Image(systemName: onBrowse == nil ? "arrow.left.arrow.right" : "books.vertical")
                 .font(.subheadline.weight(.semibold))
                 .frame(width: Self.headerButtonSide, height: Self.headerButtonSide)
                 .modifier(ButtonGlass())
@@ -1369,7 +1372,7 @@ struct PracticeView: View {
         }
         .buttonStyle(.plain)
         .disabled(!controller.canUseMusic)
-        .accessibilityLabel("Change song")
+        .accessibilityLabel(onBrowse == nil ? "Change song" : "Library")
     }
 
     /// Reads the `@Query` results rather than fetching, so the save button restyles

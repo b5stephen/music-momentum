@@ -25,6 +25,14 @@ struct MacWindow: View {
     @State private var isWide = true
     @State private var sidebarOver: Bool
     @State private var picking: Picking?
+    @State private var showsLibrary = false
+    @State private var libraryPage: LibraryPage = .recentlyPlayed
+    /// The sidebar's scope, read where it's stored so ⇧⌘N and the sidebar's
+    /// + both add into the list on show, as Saved's + does on iOS.
+    @AppStorage("savedListFilter") private var filterStorage = ""
+    @AppStorage(SavedLayout.storageKey) private var savedLayout: SavedLayout = .songs
+    @Query(sort: [SortDescriptor(\PracticeList.sortOrder), SortDescriptor(\PracticeList.createdAt)])
+    private var lists: [PracticeList]
     /// A preview has no window to put the background in.
     private let paintsWindow: Bool
 
@@ -33,9 +41,18 @@ struct MacWindow: View {
     nonisolated static var minWindowSize: CGSize { CGSize(width: 720, height: 600) }
     static let sidebarWidth: CGFloat = 272
 
-    private enum Picking: Identifiable {
-        case change, add
+    private enum Picking: Identifiable, Hashable {
+        case change
+        case add(SaveTarget)
         var id: Self { self }
+    }
+
+    /// Lists view has no single scope: its folders do the filtering.
+    private var addTarget: SaveTarget {
+        guard savedLayout != .lists || lists.isEmpty,
+              let id = ListFilter(rawStorage: filterStorage)?.singleListID
+        else { return .saved }
+        return SaveTarget(list: lists.first { $0.listID == id })
     }
 
     init(
@@ -43,6 +60,7 @@ struct MacWindow: View {
         sampleTrack: PracticeView.Track? = nil,
         palette: Binding<ArtworkPalette?>,
         sidebarOver: Bool = false,
+        showsLibrary: Bool = false,
         paintsWindow: Bool = true
     ) {
         self.paintsWindow = paintsWindow
@@ -50,6 +68,7 @@ struct MacWindow: View {
         self.sampleTrack = sampleTrack
         _palette = palette
         _sidebarOver = State(initialValue: sidebarOver)
+        _showsLibrary = State(initialValue: showsLibrary)
     }
 
     var body: some View {
@@ -61,14 +80,29 @@ struct MacWindow: View {
                     .background { if palette != nil { Color.black.opacity(0.22) } }
                     .navigationSplitViewColumnWidth(Self.sidebarWidth)
             } detail: {
-                PracticeView(
-                    controller: controller,
-                    previewTrack: sampleTrack,
-                    savedIsBeside: true,
-                    paintsGround: false
-                ) { palette = $0 }
+                ZStack {
+                    // Kept alive under the library, so its state and the
+                    // cover's colours survive a browse.
+                    PracticeView(
+                        controller: controller,
+                        previewTrack: sampleTrack,
+                        savedIsBeside: true,
+                        paintsGround: false
+                    ) { palette = $0 }
+                    .opacity(showsLibrary ? 0 : 1)
+                    .allowsHitTesting(!showsLibrary)
+                    .accessibilityHidden(showsLibrary)
+
+                    if showsLibrary {
+                        MacLibraryView(page: libraryPage, target: .saved) { song in
+                            practise(song)
+                        }
+                        .transition(.opacity)
+                    }
+                }
                 .toolbar { toolbar }
-                .toolbar(removing: .title)
+                // Practice's song title is its title; a library page names itself.
+                .toolbar(removing: showsLibrary ? nil : .title)
             }
 
             if sidebarOver {
@@ -124,8 +158,8 @@ struct MacWindow: View {
             WindowActions(
                 canPickSong: controller.canUseMusic,
                 isSheetOpen: picking != nil,
-                changeSong: { pick(.change) },
-                addSong: { pick(.add) }
+                changeSong: { setShowsLibrary(true) },
+                addSong: { pick(.add(addTarget)) }
             )
         )
         // Outside the ground, which would hand the sheet the cover's dark
@@ -136,17 +170,29 @@ struct MacWindow: View {
                 SongPickerView { song in
                     Task { await controller.select(song: song) }
                 }
-            case .add:
-                SongPickerView(title: "Add Song to Saved", confirmTitle: "Add") { song in
-                    SavedSong.add(song: song, in: modelContext)
+            case .add(let target):
+                SongPickerView(title: SongPickerView.addTitle(for: target), confirmTitle: "Add", target: target) { song in
+                    target.add(song, in: modelContext)
                 }
             }
         }
     }
 
     private var sidebar: some View {
-        SavedSidebarView(controller: controller, previewCurrentID: sampleTrack?.id) {
-            pick(.add)
+        VStack(spacing: 0) {
+            LibrarySidebarSection(
+                controller: controller,
+                previewTitle: sampleTrack?.title,
+                showsLibrary: Binding(get: { showsLibrary }, set: { setShowsLibrary($0) }),
+                page: $libraryPage
+            )
+            .padding(.top, 6)
+            .padding(.bottom, 10)
+            SavedSidebarView(controller: controller, previewCurrentID: sampleTrack?.id) {
+                pick(.add(addTarget))
+            } onPractise: {
+                setShowsLibrary(false)
+            }
         }
     }
 
@@ -154,13 +200,18 @@ struct MacWindow: View {
     private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
             Button {
-                pick(.change)
+                setShowsLibrary(!showsLibrary)
             } label: {
-                Label("Change Song", systemImage: "music.note")
-                    .labelStyle(.titleAndIcon)
+                if showsLibrary {
+                    Label("Practice", systemImage: "guitars")
+                        .labelStyle(.titleAndIcon)
+                } else {
+                    Label("Library", systemImage: "books.vertical")
+                        .labelStyle(.titleAndIcon)
+                }
             }
-            .disabled(!controller.canUseMusic)
-            .help("Change song without saving it (\u{2318}O)")
+            .disabled(!controller.canUseMusic && !showsLibrary)
+            .help(showsLibrary ? "Back to Practice" : "Browse your library and Apple Music for a song to practise (\u{2318}O)")
         }
         ToolbarItem(placement: .primaryAction) {
             Button {
@@ -172,6 +223,25 @@ struct MacWindow: View {
             .disabled(sampleTrack == nil && controller.selectedSong == nil)
             .help("Mini player (\u{2325}\u{2318}M)")
         }
+    }
+
+    /// Choosing never starts playback: the song loads and Practice comes back.
+    private func practise(_ song: Song) {
+        Task { await controller.select(song: song) }
+        setShowsLibrary(false)
+    }
+
+    private func setShowsLibrary(_ shows: Bool) {
+        guard shows != showsLibrary else { return }
+        if shows {
+            Task {
+                guard await controller.requestAuthorizationIfNeeded() else { return }
+                withAnimation(.easeInOut(duration: 0.2)) { showsLibrary = true }
+            }
+        } else {
+            withAnimation(.easeInOut(duration: 0.2)) { showsLibrary = false }
+        }
+        if sidebarOver { setSidebarOver(false) }
     }
 
     private func setSidebarOver(_ over: Bool) {
@@ -197,7 +267,8 @@ private let previewTrack = PracticeView.Track(
 @MainActor
 private func previewWindow(
     track: PracticeView.Track?,
-    sidebarOver: Bool = false
+    sidebarOver: Bool = false,
+    showsLibrary: Bool = false
 ) -> some View {
     let container = try! AppSchema.inMemoryContainer()
     let context = container.mainContext
@@ -208,7 +279,7 @@ private func previewWindow(
     SavedSong.save(songID: "5", title: "Copper Wire", artistName: "Ada & the Static", artworkData: nil, speed: 0.65, in: context)
     let controller = PlaybackController()
     controller.playbackRate = 0.6
-    return PreviewWindow(controller: controller, track: track, sidebarOver: sidebarOver)
+    return PreviewWindow(controller: controller, track: track, sidebarOver: sidebarOver, showsLibrary: showsLibrary)
         .environment(MiniPlayerSwitch())
         .modelContainer(container)
 }
@@ -217,25 +288,31 @@ private struct PreviewWindow: View {
     let controller: PlaybackController
     let track: PracticeView.Track?
     let sidebarOver: Bool
+    let showsLibrary: Bool
     @State private var palette: ArtworkPalette?
 
-    init(controller: PlaybackController, track: PracticeView.Track?, sidebarOver: Bool) {
+    init(controller: PlaybackController, track: PracticeView.Track?, sidebarOver: Bool, showsLibrary: Bool) {
         self.controller = controller
         self.track = track
         self.sidebarOver = sidebarOver
+        self.showsLibrary = showsLibrary
         _palette = State(initialValue: track?.palette)
     }
 
     var body: some View {
         MacWindow(
             controller: controller, sampleTrack: track, palette: $palette,
-            sidebarOver: sidebarOver, paintsWindow: false
+            sidebarOver: sidebarOver, showsLibrary: showsLibrary, paintsWindow: false
         )
     }
 }
 
 #Preview("Wide window", traits: .fixedLayout(width: 1280, height: 820)) {
     previewWindow(track: previewTrack)
+}
+
+#Preview("Library", traits: .fixedLayout(width: 1280, height: 820)) {
+    previewWindow(track: previewTrack, showsLibrary: true)
 }
 
 #Preview("Compact window", traits: .fixedLayout(width: 900, height: 700)) {
