@@ -572,7 +572,7 @@ struct ManageSavedSongsView: View {
                 if lists.isEmpty {
                     Text("No lists yet")
                 } else {
-                    Section(activeList == nil ? "Show Only Songs In" : "Also Filter By") {
+                    Section(activeList == nil ? "Show songs in" : "Also filter by") {
                         ForEach(lists.filter { $0.listID != activeList?.listID }) { list in
                             Toggle(list.name, isOn: Binding(
                                 get: { extraFilterIDs.contains(list.listID) },
