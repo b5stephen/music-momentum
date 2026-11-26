@@ -45,3 +45,25 @@ struct SavedListMenu: View {
         }
     }
 }
+
+#Preview("In one of two lists") {
+    let container = try! AppSchema.inMemoryContainer()
+    let context = container.mainContext
+    let song = SavedSong.save(songID: "1", title: "Blackbird", artistName: "The Beatles", artworkData: nil, speed: 0.75, in: context)
+    let acoustic = PracticeList.create(name: "Acoustic", in: context)
+    let blues = PracticeList.create(name: "Blues", in: context)
+    PracticeList.add([song], to: acoustic, in: context)
+
+    return SavedListMenu(song: song, lists: [acoustic, blues]) {}
+        .padding()
+        .modelContainer(container)
+}
+
+#Preview("No lists") {
+    let container = try! AppSchema.inMemoryContainer()
+    let song = SavedSong.save(songID: "1", title: "Blackbird", artistName: "The Beatles", artworkData: nil, speed: 0.75, in: container.mainContext)
+
+    return SavedListMenu(song: song, lists: []) {}
+        .padding()
+        .modelContainer(container)
+}

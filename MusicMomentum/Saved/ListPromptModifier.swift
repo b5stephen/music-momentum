@@ -8,20 +8,6 @@
 import SwiftData
 import SwiftUI
 
-enum ListPrompt: Identifiable {
-    case create(addingSongs: [SavedSong] = [])
-    case rename(PracticeList)
-    case delete(PracticeList)
-
-    var id: String {
-        switch self {
-        case .create: "create"
-        case let .rename(list): "rename-\(list.listID)"
-        case let .delete(list): "delete-\(list.listID)"
-        }
-    }
-}
-
 /// Presents native New List, Rename List, and Delete List alerts against a
 /// shared `ListPrompt?` binding so every screen enforces the same rules.
 struct ListPromptModifier: ViewModifier {

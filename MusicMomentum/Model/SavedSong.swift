@@ -210,12 +210,15 @@ extension SavedSong {
                 if keeper.catalogID == nil { keeper.catalogID = duplicate.catalogID }
                 if keeper.artworkData == nil { keeper.artworkData = duplicate.artworkData }
                 for marker in duplicate.markers ?? [] { marker.song = keeper }
+                // An entry whose list hasn't synced yet moves too: deleting it
+                // would sync the deletion and lose the membership everywhere.
+                // `PracticeList.deduplicateEntries` collapses it once the list lands.
                 var keeperListIDs = Set((keeper.listEntries ?? []).compactMap { $0.list?.persistentModelID })
                 for entry in duplicate.listEntries ?? [] {
-                    if let list = entry.list, keeperListIDs.insert(list.persistentModelID).inserted {
-                        entry.song = keeper
-                    } else {
+                    if let list = entry.list, !keeperListIDs.insert(list.persistentModelID).inserted {
                         context.delete(entry)
+                    } else {
+                        entry.song = keeper
                     }
                 }
                 context.delete(duplicate)

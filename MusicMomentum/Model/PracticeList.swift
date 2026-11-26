@@ -8,12 +8,9 @@
 import Foundation
 import SwiftData
 
-/// A user-created list that organizes saved songs as folders, setlists, or
-/// filter tags.
-///
 /// Membership lives on `PracticeListEntry` rather than an implicit many-to-many
-/// array so custom per-list song order (`position`) is supported without a
-/// future CloudKit schema migration.
+/// array so per-list song order (`position`) can come later without a CloudKit
+/// schema change, which Production only allows additively.
 @Model
 final class PracticeList {
     var listID: String = UUID().uuidString
@@ -183,7 +180,6 @@ extension PracticeList {
     /// Collapses duplicate membership entries created if two devices added the
     /// same song to the same list while offline.
     static func deduplicateEntries(in context: ModelContext) {
-        mergeDuplicateLists(in: context)
         guard let entries = try? context.fetch(FetchDescriptor<PracticeListEntry>()) else { return }
 
         struct Key: Hashable {
@@ -200,26 +196,6 @@ extension PracticeList {
         for group in groups {
             let ordered = group.sorted { ($0.position, $0.addedAt) < ($1.position, $1.addedAt) }
             for duplicate in ordered.dropFirst() {
-                context.delete(duplicate)
-            }
-        }
-        try? context.save()
-    }
-
-    private static func mergeDuplicateLists(in context: ModelContext) {
-        let lists = all(in: context)
-        let groups = Dictionary(grouping: lists, by: \.listID).values.filter { $0.count > 1 }
-        guard !groups.isEmpty else { return }
-
-        for group in groups {
-            let ordered = group.sorted {
-                ($0.updatedAt, $0.createdAt, $0.name) > ($1.updatedAt, $1.createdAt, $1.name)
-            }
-            let keeper = ordered[0]
-            for duplicate in ordered.dropFirst() {
-                for entry in duplicate.entries ?? [] {
-                    entry.list = keeper
-                }
                 context.delete(duplicate)
             }
         }

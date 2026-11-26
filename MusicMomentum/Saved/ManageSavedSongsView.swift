@@ -42,6 +42,8 @@ struct ManageSavedSongsView: View {
         let practicedAt: Date
     }
 
+    /// Held in state rather than built in a binding's getter: a fresh `id` on
+    /// every redraw made the sheet re-present and drop its unsaved ticks.
     private struct SongSelectionBatch: Identifiable {
         let id = UUID()
         let songs: [SavedSong]
@@ -84,7 +86,7 @@ struct ManageSavedSongsView: View {
     @State private var sortOrder = [TableSort(field: .title)]
     @State private var listPrompt: ListPrompt?
     @State private var showingSongPicker = false
-    @State private var assigningListsFor: [SavedSong]?
+    @State private var assigning: SongSelectionBatch?
     @State private var addingSongsToList: PracticeList?
     @State private var speedEditingSong: SavedSong?
     @State private var listPopoverSong: SavedSong?
@@ -164,7 +166,7 @@ struct ManageSavedSongsView: View {
                 AddSongsToListSheet(list: list)
                     .frame(minWidth: 420, minHeight: 460)
             }
-            .sheet(item: assigningBatchBinding) { batch in
+            .sheet(item: $assigning) { batch in
                 AssignListsSheet(songs: batch.songs)
                     .frame(minWidth: 360, minHeight: 380)
             }
@@ -202,13 +204,6 @@ struct ManageSavedSongsView: View {
                 PracticeList.add([saved], to: targetList, in: modelContext)
             }
         }
-    }
-
-    private var assigningBatchBinding: Binding<SongSelectionBatch?> {
-        Binding(
-            get: { assigningListsFor.map { SongSelectionBatch(songs: $0) } },
-            set: { if $0 == nil { assigningListsFor = nil } }
-        )
     }
 
     private var lookupAlertBinding: Binding<Bool> {
@@ -525,7 +520,7 @@ struct ManageSavedSongsView: View {
             Spacer()
 
             Button("Add to Lists\u{2026}") {
-                assigningListsFor = selectedSongs
+                assigning = SongSelectionBatch(songs: selectedSongs)
             }
 
             if let list = activeList {
@@ -787,7 +782,7 @@ private struct SpeedPopover: View {
                     get: { Double(percent) },
                     set: { percent = Int($0.rounded()) }
                 ),
-                in: 50...100,
+                in: PlaybackController.speedRange.lowerBound * 100...PlaybackController.speedRange.upperBound * 100,
                 step: 1
             )
             .frame(width: 170)

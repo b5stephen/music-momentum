@@ -16,12 +16,6 @@ struct WindowActions {
     var addSong: @MainActor () -> Void = {}
 }
 
-struct NewListAction: Equatable {
-    let perform: @MainActor () -> Void
-
-    static func == (lhs: Self, rhs: Self) -> Bool { true }
-}
-
 extension FocusedValues {
     @Entry var windowActions: WindowActions?
     /// One of Saved's sheets is up on iOS, where Practice can't see it.

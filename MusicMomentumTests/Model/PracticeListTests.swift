@@ -147,6 +147,23 @@ struct PracticeListTests {
         #expect(try context.fetch(FetchDescriptor<PracticeListEntry>()).count == 2)
     }
 
+    @Test("Merging duplicate saved songs keeps an entry whose list hasn't synced yet")
+    func mergeDuplicatesKeepsUnlinkedEntries() throws {
+        let older = SavedSong(songID: "i.1", speed: 0.6, title: "Older", lastPracticed: .now.addingTimeInterval(-60))
+        let newer = SavedSong(songID: "i.1", speed: 0.8, title: "Newer", lastPracticed: .now)
+        context.insert(older)
+        context.insert(newer)
+        let pending = PracticeListEntry(position: 1, song: older)
+        context.insert(pending)
+        try context.save()
+
+        SavedSong.mergeDuplicates(in: context)
+
+        let entries = try context.fetch(FetchDescriptor<PracticeListEntry>())
+        #expect(entries.count == 1)
+        #expect(entries.first?.song?.persistentModelID == newer.persistentModelID)
+    }
+
     @Test("deduplicateEntries removes duplicate entries synced for the same song and list")
     func deduplicateEntries() throws {
         let list = PracticeList.create(name: "Warmup", in: context)

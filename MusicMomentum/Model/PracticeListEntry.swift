@@ -8,8 +8,8 @@
 import Foundation
 import SwiftData
 
-/// Links a `SavedSong` to a `PracticeList`, holding a fractional `position`
-/// so custom per-list song ordering works without changing the CloudKit schema.
+/// `position` is a `Double` so a song can be moved between two others by
+/// writing one record, rather than renumbering the list across devices.
 @Model
 final class PracticeListEntry {
     var position: Double = 0

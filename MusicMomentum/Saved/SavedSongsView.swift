@@ -46,6 +46,12 @@ struct SavedSongsView: View {
         recentlyChanged.filter(\.isUnfiled).count
     }
 
+    /// Against what's shown, not a count: a selection can outlive a search
+    /// that hides some of it.
+    private var allFilteredSelected: Bool {
+        !filteredSongs.isEmpty && filteredSongs.allSatisfy { selectedIDs.contains($0.persistentModelID) }
+    }
+
     private var activeSingleList: PracticeList? {
         guard let id = filter.singleListID else { return nil }
         return lists.first { $0.listID == id }
@@ -75,12 +81,14 @@ struct SavedSongsView: View {
     @State private var listPrompt: ListPrompt?
     @State private var showingListManager = false
     @State private var addingSongsToList: PracticeList?
-    @State private var assigningListsFor: [SavedSong]?
+    @State private var assigning: SongSelectionBatch?
     #if DEBUG
     /// Hidden while the samples are loaded, since they're for screenshots.
     @State private var showsDebugMenu = !SampleSong.isRequested
     #endif
 
+    /// Held in state rather than built in a binding's getter: a fresh `id` on
+    /// every redraw made the sheet re-present and drop its unsaved ticks.
     private struct SongSelectionBatch: Identifiable {
         let id = UUID()
         let songs: [SavedSong]
@@ -200,8 +208,8 @@ struct SavedSongsView: View {
                         Button("Done") { endSelection() }
                     }
                     ToolbarItem(placement: .primaryAction) {
-                        Button(selectedIDs.count == filteredSongs.count ? "Deselect All" : "Select All") {
-                            if selectedIDs.count == filteredSongs.count {
+                        Button(allFilteredSelected ? "Deselect All" : "Select All") {
+                            if allFilteredSelected {
                                 selectedIDs.removeAll()
                             } else {
                                 selectedIDs = Set(filteredSongs.map(\.persistentModelID))
@@ -319,10 +327,7 @@ struct SavedSongsView: View {
             .sheet(item: $addingSongsToList) { list in
                 AddSongsToListSheet(list: list)
             }
-            .sheet(item: Binding(
-                get: { assigningListsFor.map { SongSelectionBatch(songs: $0) } },
-                set: { if $0 == nil { assigningListsFor = nil } }
-            )) { batch in
+            .sheet(item: $assigning) { batch in
                 AssignListsSheet(songs: batch.songs)
             }
             .listPrompts($listPrompt) { newList, hadInitialSongs in
@@ -378,7 +383,7 @@ struct SavedSongsView: View {
                 \.isSavedSheetOpen,
                 showPicker || marking != nil || editing != nil
                     || showingListManager || addingSongsToList != nil
-                    || assigningListsFor != nil || listPrompt != nil
+                    || assigning != nil || listPrompt != nil
             )
             .focusedSceneValue(\.newListAction, NewListAction { listPrompt = .create() })
             .onAppear {
@@ -448,7 +453,7 @@ struct SavedSongsView: View {
         let selected = filteredSongs.filter { selectedIDs.contains($0.persistentModelID) }
         return HStack(spacing: 12) {
             Button {
-                assigningListsFor = selected
+                assigning = SongSelectionBatch(songs: selected)
             } label: {
                 Label("Lists\u{2026}", systemImage: "folder.badge.plus")
             }
