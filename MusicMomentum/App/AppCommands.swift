@@ -22,6 +22,7 @@ struct AppCommands: Commands {
     @FocusedValue(\.practiceActions) private var focusedPractice
     @FocusedValue(\.windowActions) private var window
     @FocusedValue(\.isSavedSheetOpen) private var isSavedSheetOpen
+    @FocusedValue(\.newListAction) private var newListAction
     #if os(macOS)
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
@@ -55,6 +56,14 @@ struct AppCommands: Commands {
             Button("Add Song to Saved\u{2026}") { window?.addSong() }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
                 .disabled(window?.canPickSong != true || isSheetOpen)
+            Button("New List\u{2026}") { newListAction?.perform() }
+                .keyboardShortcut("n", modifiers: [.command, .option])
+                .disabled(newListAction == nil || isSheetOpen)
+            #if os(macOS)
+            Divider()
+            Button("Manage Saved Songs\u{2026}") { openWindow(id: ManageSavedSongsView.windowID) }
+                .keyboardShortcut("l", modifiers: [.command, .shift])
+            #endif
         }
 
         CommandGroup(replacing: .saveItem) {

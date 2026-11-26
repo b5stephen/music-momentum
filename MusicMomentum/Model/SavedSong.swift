@@ -39,6 +39,8 @@ final class SavedSong {
     /// Optional because CloudKit requires every relationship to be.
     @Relationship(deleteRule: .cascade, inverse: \SongMarker.song)
     var markers: [SongMarker]? = []
+    @Relationship(deleteRule: .cascade, inverse: \PracticeListEntry.song)
+    var listEntries: [PracticeListEntry]? = []
 
     init(
         songID: String,
@@ -159,11 +161,13 @@ extension SavedSong {
 
     /// Re-adding a song keeps its tuned speed rather than resetting to 100%.
     /// It doesn't load the song: that's Change Song's job.
-    static func add(song: Song, in context: ModelContext) {
+    @discardableResult
+    static func add(song: Song, in context: ModelContext) -> SavedSong {
         if let existing = find(song: song, in: context) {
             touch(existing, in: context)
+            return existing
         } else {
-            save(song: song, speed: 1.0, in: context)
+            return save(song: song, speed: 1.0, in: context)
         }
     }
 
@@ -206,6 +210,14 @@ extension SavedSong {
                 if keeper.catalogID == nil { keeper.catalogID = duplicate.catalogID }
                 if keeper.artworkData == nil { keeper.artworkData = duplicate.artworkData }
                 for marker in duplicate.markers ?? [] { marker.song = keeper }
+                var keeperListIDs = Set((keeper.listEntries ?? []).compactMap { $0.list?.persistentModelID })
+                for entry in duplicate.listEntries ?? [] {
+                    if let list = entry.list, keeperListIDs.insert(list.persistentModelID).inserted {
+                        entry.song = keeper
+                    } else {
+                        context.delete(entry)
+                    }
+                }
                 context.delete(duplicate)
             }
         }
@@ -234,5 +246,21 @@ extension SavedSong {
 
     func loopNames(excluding marker: SongMarker?) -> [String] {
         sortedClips.filter { $0 !== marker }.map(\.name)
+    }
+
+    var lists: [PracticeList] {
+        var seen = Set<PersistentIdentifier>()
+        let raw = (listEntries ?? []).compactMap(\.list).sorted {
+            ($0.sortOrder, $0.createdAt, $0.name) < ($1.sortOrder, $1.createdAt, $1.name)
+        }
+        return raw.filter { seen.insert($0.persistentModelID).inserted }
+    }
+
+    var isUnfiled: Bool {
+        lists.isEmpty
+    }
+
+    func isInList(_ list: PracticeList) -> Bool {
+        lists.contains { $0.persistentModelID == list.persistentModelID }
     }
 }

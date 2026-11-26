@@ -30,9 +30,11 @@ final class AppModel {
         // sync, so tidying on each import is enough.
         tasks.append(Task {
             SavedSong.mergeDuplicates(in: context)
+            PracticeList.deduplicateEntries(in: context)
             await ArtworkRepair.run(in: context)
             for await _ in NotificationCenter.default.notifications(named: .NSPersistentStoreRemoteChange) {
                 SavedSong.mergeDuplicates(in: context)
+                PracticeList.deduplicateEntries(in: context)
                 await ArtworkRepair.run(in: context)
             }
         })

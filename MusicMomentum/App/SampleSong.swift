@@ -105,14 +105,24 @@ enum SampleSong {
         let container = try AppSchema.inMemoryContainer()
         let context = container.mainContext
         // Saved oldest first, so the list comes out in `samples` order.
+        var savedByID: [String: SavedSong] = [:]
         for sample in samples.reversed() {
             let song = SavedSong.save(
                 songID: sample.id, title: sample.title, artistName: sample.artistName,
                 artworkData: nil, speed: sample.speed, in: context
             )
+            savedByID[sample.id] = song
             for marker in sample.markers {
                 SongMarker.add(to: song, name: marker.name, startTime: marker.start, endTime: marker.end, in: context)
             }
+        }
+        let acoustic = PracticeList.create(name: "Acoustic", in: context)
+        let weekendSet = PracticeList.create(name: "Weekend Set", in: context)
+        let fingerstyle = PracticeList.create(name: "Fingerstyle", in: context)
+        if let s1 = savedByID["1"], let s2 = savedByID["2"], let s3 = savedByID["3"], let s5 = savedByID["5"] {
+            PracticeList.add([s1, s2, s5], to: acoustic, in: context)
+            PracticeList.add([s1, s3], to: weekendSet, in: context)
+            PracticeList.add([s2, s5], to: fingerstyle, in: context)
         }
         return container
     }

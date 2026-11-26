@@ -21,24 +21,44 @@ struct SavedSongsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \SavedSong.lastPracticed, order: .reverse)
     private var recentlyChanged: [SavedSong]
+    @Query(sort: [SortDescriptor(\PracticeList.sortOrder), SortDescriptor(\PracticeList.createdAt)])
+    private var lists: [PracticeList]
     /// Per device rather than synced: it's how this screen is read, not data.
     @AppStorage("savedSongOrder") private var order: SongOrder = .title
+    @AppStorage("savedListFilter") private var filterStorage = ""
+    @AppStorage("savedMultiFilter") private var multiSelect = false
 
     @Environment(\.scenePhase) private var scenePhase
     /// The song count grouping was last decided on. It's settled only when
-    /// Saved appears, the sort changes, a song is added or the app comes
-    /// back, so deleting the twelfth song doesn't pull the headers out from
-    /// under the user mid-edit.
+    /// Saved appears, the sort or filter changes, a song is added or the app
+    /// comes back, so deleting the twelfth song doesn't pull the headers out
+    /// from under the user mid-edit.
     @State private var settledCount: Int?
+    @State private var filter: ListFilter = .all
+    @State private var hasLoadedFilter = false
+    @State private var searchTerm = ""
 
-    private var isGrouped: Bool { SongSection.groups(songCount: settledCount ?? recentlyChanged.count) }
+    private var filteredSongs: [SavedSong] {
+        filter.apply(to: recentlyChanged, searchTerm: searchTerm)
+    }
+
+    private var unfiledCount: Int {
+        recentlyChanged.filter(\.isUnfiled).count
+    }
+
+    private var activeSingleList: PracticeList? {
+        guard let id = filter.singleListID else { return nil }
+        return lists.first { $0.listID == id }
+    }
+
+    private var isGrouped: Bool { SongSection.groups(songCount: settledCount ?? filteredSongs.count) }
     private var showsIndex: Bool { isGrouped && order != .practiced }
     /// Ungrouped, one section with no header, so the rows keep their identity
     /// and slide into sections rather than reloading.
     private var sections: [SongSection] {
         isGrouped
-            ? order.sections(recentlyChanged)
-            : [SongSection(id: "all", title: "", indexLabel: nil, songs: order.sorted(recentlyChanged))]
+            ? order.sections(filteredSongs)
+            : [SongSection(id: "all", title: "", indexLabel: nil, songs: order.sorted(filteredSongs))]
     }
     /// Beside the card, the rows end as far from the window edge as the card
     /// sits from every edge, so the page reads as one set of margins.
@@ -50,10 +70,21 @@ struct SavedSongsView: View {
     @State private var loadingID: String?
     @State private var lookupError: String?
     @State private var marking: Marking?
+    @State private var isSelecting = false
+    @State private var selectedIDs = Set<PersistentIdentifier>()
+    @State private var listPrompt: ListPrompt?
+    @State private var showingListManager = false
+    @State private var addingSongsToList: PracticeList?
+    @State private var assigningListsFor: [SavedSong]?
     #if DEBUG
     /// Hidden while the samples are loaded, since they're for screenshots.
     @State private var showsDebugMenu = !SampleSong.isRequested
     #endif
+
+    private struct SongSelectionBatch: Identifiable {
+        let id = UUID()
+        let songs: [SavedSong]
+    }
 
     private struct Marking: Identifiable {
         let song: SavedSong
@@ -91,31 +122,63 @@ struct SavedSongsView: View {
                         addSongButton
                     }
                 } else {
-                    List {
-                        ForEach(sections) { section in
-                            if isGrouped {
-                                Section {
-                                    ForEach(section.songs, content: row)
-                                } header: {
-                                    Text(section.title)
-                                }
-                                #if os(iOS)
-                                .sectionIndexLabel(section.indexLabel)
-                                #endif
-                            } else {
-                                Section {
-                                    ForEach(section.songs, content: row)
+                    VStack(spacing: 0) {
+                        if !lists.isEmpty {
+                            ListFilterBar(
+                                filter: $filter,
+                                multiSelect: $multiSelect,
+                                lists: lists,
+                                totalCount: recentlyChanged.count,
+                                unfiledCount: unfiledCount,
+                                isBesidePractice: isBesidePractice,
+                                onNewList: { listPrompt = .create() },
+                                onManageLists: { showingListManager = true },
+                                onRenameList: { listPrompt = .rename($0) },
+                                onAddSongsToList: { addingSongsToList = $0 },
+                                onDeleteList: { listPrompt = .delete($0) }
+                            )
+                            .padding(.leading, 16)
+                            .padding(.trailing, isBesidePractice ? 28 : 16)
+                            .padding(.top, 4)
+                            .padding(.bottom, 8)
+                        }
+
+                        if filteredSongs.isEmpty {
+                            filteredEmptyState
+                        } else {
+                            List {
+                                ForEach(sections) { section in
+                                    if isGrouped {
+                                        Section {
+                                            ForEach(section.songs, content: row)
+                                        } header: {
+                                            Text(section.title)
+                                        }
+                                        #if os(iOS)
+                                        .sectionIndexLabel(section.indexLabel)
+                                        #endif
+                                    } else {
+                                        Section {
+                                            ForEach(section.songs, content: row)
+                                        }
+                                    }
                                 }
                             }
+                            .listStyle(.plain)
+                            #if os(iOS)
+                            .listSectionSpacing(0)
+                            .listSectionIndexVisibility(showsIndex ? .visible : .hidden)
+                            #endif
+                            .animation(.snappy, value: order)
+                            .animation(.snappy, value: isGrouped)
+                            .animation(.snappy, value: filter)
                         }
                     }
-                    .listStyle(.plain)
-                    #if os(iOS)
-                    .listSectionSpacing(0)
-                    .listSectionIndexVisibility(showsIndex ? .visible : .hidden)
-                    #endif
-                    .animation(.snappy, value: order)
-                    .animation(.snappy, value: isGrouped)
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        if isSelecting {
+                            selectionBar
+                        }
+                    }
                 }
             }
             // Beside the card, the stack's own opaque background (and the
@@ -126,50 +189,115 @@ struct SavedSongsView: View {
                 for: .navigation
             )
             #endif
-            .navigationTitle(isBesidePractice ? "" : "Saved")
+            .navigationTitle(navigationTitle)
             #if os(iOS)
             .navigationBarTitleDisplayMode(isBesidePractice ? .inline : .automatic)
             #endif
+            .conditionalSearchable(!recentlyChanged.isEmpty, text: $searchTerm)
             .toolbar {
-                // Hidden rather than disabled: a greyed glyph beside Add read
-                // as a second, broken add button.
-                if !recentlyChanged.isEmpty {
+                if isSelecting {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done") { endSelection() }
+                    }
                     ToolbarItem(placement: .primaryAction) {
-                        Menu {
-                            Picker("Sort By", selection: $order) {
-                                ForEach(SongOrder.allCases) { order in
-                                    Text(order.title).tag(order)
-                                }
+                        Button(selectedIDs.count == filteredSongs.count ? "Deselect All" : "Select All") {
+                            if selectedIDs.count == filteredSongs.count {
+                                selectedIDs.removeAll()
+                            } else {
+                                selectedIDs = Set(filteredSongs.map(\.persistentModelID))
                             }
-                            .pickerStyle(.inline)
-                        } label: {
-                            // An `Image`, not a `Label`: the toolbar drops a
-                            // label's foreground style and draws it black.
-                            Image(systemName: "arrow.up.arrow.down")
-                                .foregroundStyle(Color.accentColor)
                         }
-                        .accessibilityLabel("Sort")
                     }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        chooseSong()
-                    } label: {
-                        // Recoloured by hand, so it has to grey itself when disabled.
-                        Image(systemName: "plus")
-                            .foregroundStyle(controller.canUseMusic ? Color.accentColor : Color.tertiaryLabel)
+                } else {
+                    // Hidden rather than disabled: a greyed glyph beside Add read
+                    // as a second, broken add button.
+                    if !recentlyChanged.isEmpty {
+                        ToolbarItem(placement: .primaryAction) {
+                            Menu {
+                                Picker("Sort By", selection: $order) {
+                                    ForEach(SongOrder.allCases) { order in
+                                        Text(order.title).tag(order)
+                                    }
+                                }
+                                .pickerStyle(.inline)
+                            } label: {
+                                // An `Image`, not a `Label`: the toolbar drops a
+                                // label's foreground style and draws it black.
+                                Image(systemName: "arrow.up.arrow.down")
+                                    .foregroundStyle(Color.accentColor)
+                            }
+                            .accessibilityLabel("Sort")
+                        }
                     }
-                    .accessibilityLabel("Add Song")
-                    .disabled(!controller.canUseMusic)
-                }
-                #if DEBUG
-                if showsDebugMenu {
-                    ToolbarSpacer(.fixed, placement: .primaryAction)
                     ToolbarItem(placement: .primaryAction) {
-                        CloudKitSchemaMenu()
+                        if let list = activeSingleList {
+                            Menu {
+                                Button {
+                                    addingSongsToList = list
+                                } label: {
+                                    Label("Add from Saved\u{2026}", systemImage: "bookmark")
+                                }
+                                Button {
+                                    chooseSong()
+                                } label: {
+                                    Label("Add from Apple Music\u{2026}", systemImage: "music.note.list")
+                                }
+                                .disabled(!controller.canUseMusic)
+                            } label: {
+                                Image(systemName: "plus")
+                                    .foregroundStyle(Color.accentColor)
+                            }
+                            .accessibilityLabel("Add Songs")
+                        } else {
+                            Button {
+                                chooseSong()
+                            } label: {
+                                // Recoloured by hand, so it has to grey itself when disabled.
+                                Image(systemName: "plus")
+                                    .foregroundStyle(controller.canUseMusic ? Color.accentColor : Color.tertiaryLabel)
+                            }
+                            .accessibilityLabel("Add Song")
+                            .disabled(!controller.canUseMusic)
+                        }
                     }
+                    if !recentlyChanged.isEmpty || !lists.isEmpty {
+                        ToolbarItem(placement: .primaryAction) {
+                            Menu {
+                                if !filteredSongs.isEmpty {
+                                    Button {
+                                        isSelecting = true
+                                    } label: {
+                                        Label("Select Songs", systemImage: "checkmark.circle")
+                                    }
+                                }
+                                Button {
+                                    listPrompt = .create()
+                                } label: {
+                                    Label("New List\u{2026}", systemImage: "folder.badge.plus")
+                                }
+                                if !lists.isEmpty {
+                                    Button {
+                                        showingListManager = true
+                                    } label: {
+                                        Label("Manage Lists\u{2026}", systemImage: "list.bullet")
+                                    }
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis.circle")
+                                    .foregroundStyle(Color.accentColor)
+                            }
+                            .accessibilityLabel("More")
+                        }
+                    }
+                    #if DEBUG
+                    if showsDebugMenu {
+                        ToolbarSpacer(.fixed, placement: .primaryAction)
+                        ToolbarItem(placement: .primaryAction) {
+                            CloudKitSchemaMenu()
+                        }
+                    }
+                    #endif
                 }
-                #endif
             }
             #if DEBUG
             .onShake {
@@ -177,7 +305,30 @@ struct SavedSongsView: View {
             }
             #endif
             .sheet(isPresented: $showPicker) {
-                SongPickerView { song in SavedSong.add(song: song, in: modelContext) }
+                let targetList = activeSingleList
+                SongPickerView { song in
+                    let saved = SavedSong.add(song: song, in: modelContext)
+                    if let targetList {
+                        PracticeList.add([saved], to: targetList, in: modelContext)
+                    }
+                }
+            }
+            .sheet(isPresented: $showingListManager) {
+                ListManagerSheet(filter: $filter)
+            }
+            .sheet(item: $addingSongsToList) { list in
+                AddSongsToListSheet(list: list)
+            }
+            .sheet(item: Binding(
+                get: { assigningListsFor.map { SongSelectionBatch(songs: $0) } },
+                set: { if $0 == nil { assigningListsFor = nil } }
+            )) { batch in
+                AssignListsSheet(songs: batch.songs)
+            }
+            .listPrompts($listPrompt) { newList, hadInitialSongs in
+                if !hadInitialSongs {
+                    filter = .lists(ids: [newList.listID], match: filter.matchMode)
+                }
             }
             .alert(
                 "Couldn't open that song",
@@ -223,24 +374,145 @@ struct SavedSongsView: View {
                 }
                 .presentationDetents([.medium])
             }
-            .focusedSceneValue(\.isSavedSheetOpen, showPicker || marking != nil || editing != nil)
-            .onAppear(perform: settleGrouping)
+            .focusedSceneValue(
+                \.isSavedSheetOpen,
+                showPicker || marking != nil || editing != nil
+                    || showingListManager || addingSongsToList != nil
+                    || assigningListsFor != nil || listPrompt != nil
+            )
+            .focusedSceneValue(\.newListAction, NewListAction { listPrompt = .create() })
+            .onAppear {
+                if !hasLoadedFilter {
+                    hasLoadedFilter = true
+                    if let restored = ListFilter(rawStorage: filterStorage) {
+                        filter = restored.reconciled(with: lists)
+                    }
+                }
+                settleGrouping()
+            }
             .onChange(of: order) { settleGrouping() }
+            .onChange(of: filter) { _, next in
+                filterStorage = next.rawStorage
+                selectedIDs.removeAll()
+                settleGrouping()
+            }
+            .onChange(of: searchTerm) { settleGrouping() }
+            .onChange(of: lists) { _, updated in
+                let reconciled = filter.reconciled(with: updated)
+                if reconciled != filter { filter = reconciled }
+                settleGrouping()
+            }
             .onChange(of: showPicker) { if !showPicker { settleGrouping() } }
             .onChange(of: scenePhase) { if scenePhase == .active { settleGrouping() } }
         }
     }
 
+    private var navigationTitle: String {
+        if isBesidePractice { return "" }
+        if let list = activeSingleList { return list.name }
+        if filter == .unfiled { return "Unfiled" }
+        return "Saved"
+    }
+
+    @ViewBuilder
+    private var filteredEmptyState: some View {
+        let term = searchTerm.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !term.isEmpty {
+            ContentUnavailableView.search(text: term)
+        } else if let list = activeSingleList {
+            ContentUnavailableView {
+                Label("No songs in \(list.name)", systemImage: "folder")
+            } description: {
+                Text("Add songs from Saved or Apple Music to practice here.")
+            } actions: {
+                Button {
+                    addingSongsToList = list
+                } label: {
+                    Label("Add Songs", systemImage: "plus")
+                }
+                .buttonStyle(CallToActionButtonStyle())
+            }
+        } else {
+            ContentUnavailableView {
+                Label("No matching songs", systemImage: "line.3.horizontal.decrease.circle")
+            } description: {
+                Text("No saved songs match the active filters.")
+            } actions: {
+                Button("Show All Songs") { filter = .all }
+                    .buttonStyle(CallToActionButtonStyle())
+            }
+        }
+    }
+
+    private var selectionBar: some View {
+        let selected = filteredSongs.filter { selectedIDs.contains($0.persistentModelID) }
+        return HStack(spacing: 12) {
+            Button {
+                assigningListsFor = selected
+            } label: {
+                Label("Lists\u{2026}", systemImage: "folder.badge.plus")
+            }
+            .disabled(selected.isEmpty)
+
+            Spacer()
+
+            if let list = activeSingleList {
+                Button {
+                    PracticeList.remove(selected, from: list, in: modelContext)
+                    endSelection()
+                } label: {
+                    Label("Remove", systemImage: "minus.circle")
+                }
+                .disabled(selected.isEmpty)
+            }
+
+            Button(role: .destructive) {
+                for song in selected { delete(song) }
+                endSelection()
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            .disabled(selected.isEmpty)
+        }
+        .font(.subheadline.weight(.medium))
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(.bar)
+        .overlay(alignment: .top) { Divider() }
+    }
+
+    private func endSelection() {
+        isSelecting = false
+        selectedIDs.removeAll()
+    }
+
     private func row(_ song: SavedSong) -> some View {
-        SavedSongRow(
-            song: song,
-            isLoading: loadingID == song.songID,
-            isCurrent: isLoaded(song),
-            isPlaying: controller.isPlaying
-        )
+        let isSelected = selectedIDs.contains(song.persistentModelID)
+        return HStack(spacing: 12) {
+            if isSelecting {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isSelected ? Color.accentText : Color.secondary)
+            }
+            SavedSongRow(
+                song: song,
+                isLoading: loadingID == song.songID,
+                isCurrent: isLoaded(song),
+                isPlaying: controller.isPlaying
+            )
+        }
         .contentShape(Rectangle())
-        .onTapGesture { practice(song) }
-        .contextMenu { menu(for: song) }
+        .onTapGesture {
+            if isSelecting {
+                if isSelected {
+                    selectedIDs.remove(song.persistentModelID)
+                } else {
+                    selectedIDs.insert(song.persistentModelID)
+                }
+            } else {
+                practice(song)
+            }
+        }
+        .contextMenu { if !isSelecting { menu(for: song) } }
         .accessibilityAction { practice(song) }
         .accessibilityAction(named: "Change Speed") { editing = song }
         .accessibilityAction(named: "Add Marker") { openEditor(song) }
@@ -249,14 +521,25 @@ struct SavedSongsView: View {
         .listRowBackground(Color.clear)
         .listSectionSeparator(.hidden, edges: .top)
         .swipeActions(edge: .trailing) {
-            Button(role: .destructive) { delete(song) } label: {
-                Label("Delete", systemImage: "trash")
+            if !isSelecting {
+                if let list = activeSingleList {
+                    Button {
+                        PracticeList.remove([song], from: list, in: modelContext)
+                    } label: {
+                        Label("Remove", systemImage: "minus.circle")
+                    }
+                    .tint(.orange)
+                } else {
+                    Button(role: .destructive) { delete(song) } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
             }
         }
     }
 
     private func settleGrouping() {
-        settledCount = recentlyChanged.count
+        settledCount = filteredSongs.count
     }
 
     /// Speed and markers live here rather than as chips on the row: a glass
@@ -276,6 +559,16 @@ struct SavedSongsView: View {
         }
         Button { editing = song } label: { Label("Change Speed\u{2026}", systemImage: "dial.medium") }
         Button { openEditor(song) } label: { Label("Add Marker\u{2026}", systemImage: "plus.circle") }
+        SavedListMenu(song: song, lists: lists) {
+            listPrompt = .create(addingSongs: [song])
+        }
+        if let list = activeSingleList {
+            Button {
+                PracticeList.remove([song], from: list, in: modelContext)
+            } label: {
+                Label("Remove from \u{201C}\(list.name)\u{201D}", systemImage: "minus.circle")
+            }
+        }
         Divider()
         Button(role: .destructive) { delete(song) } label: { Label("Delete", systemImage: "trash") }
     }
@@ -386,6 +679,17 @@ struct SavedSongsView: View {
 
     private func delete(_ song: SavedSong) {
         controller.delete(song, in: modelContext)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func conditionalSearchable(_ active: Bool, text: Binding<String>) -> some View {
+        if active {
+            searchable(text: text, prompt: "Search saved songs")
+        } else {
+            self
+        }
     }
 }
 
@@ -515,7 +819,7 @@ private struct SpeedEditorSheet: View {
 private func previewContainer() -> ModelContainer {
     let container = try! AppSchema.inMemoryContainer()
     let context = container.mainContext
-    SavedSong.save(
+    let blackbird = SavedSong.save(
         songID: "1", title: "Blackbird", artistName: "The Beatles",
         artworkData: nil, speed: 0.75, in: context
     )
@@ -529,6 +833,10 @@ private func previewContainer() -> ModelContainer {
         songID: "3", title: "Nothing Else Matters", artistName: "Metallica",
         artworkData: nil, speed: 1.0, in: context
     )
+    let acoustic = PracticeList.create(name: "Acoustic", in: context)
+    let blues = PracticeList.create(name: "Blues", in: context)
+    PracticeList.add([blackbird], to: acoustic, in: context)
+    PracticeList.add([littleWing], to: blues, in: context)
     return container
 }
 

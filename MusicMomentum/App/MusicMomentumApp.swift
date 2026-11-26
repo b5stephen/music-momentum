@@ -93,6 +93,13 @@ struct MusicMomentumApp: App {
                 .accessibilityLabel("Music Momentum")
         }
         .menuBarExtraStyle(.window)
+
+        Window("Manage Saved Songs", id: ManageSavedSongsView.windowID) {
+            ManageSavedSongsView(controller: model.controller, previewCurrentID: sampleTrack?.id)
+                .modelContainer(container)
+        }
+        .defaultSize(width: 980, height: 640)
+        .defaultLaunchBehavior(.suppressed)
         #endif
     }
 }

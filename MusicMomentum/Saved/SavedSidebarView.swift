@@ -2,16 +2,18 @@
 //  SavedSidebarView.swift
 //  MusicMomentum
 //
+//  Created by Stephen Denekamp on 26/11/2026.
+//
 
 #if os(macOS)
 import MusicKit
 import SwiftData
 import SwiftUI
 
-/// Saved as the Mac window's source list: a header carrying Sort and Add,
-/// then the songs, with the search field as the list's first row, so it
-/// scrolls away with them. It sits translucent over the artwork mesh,
-/// so it draws no background of its own.
+/// Saved as the Mac window's source list: a header carrying the list scope,
+/// Manage, Sort and Add, then the songs, with the search field as the list's
+/// first row so it scrolls away with them. It sits translucent over the
+/// artwork mesh, so it draws no background of its own.
 struct SavedSidebarView: View {
     let controller: PlaybackController
     /// Stands in for `controller.selectedSong` in previews, since `Song` has
@@ -21,24 +23,39 @@ struct SavedSidebarView: View {
     let onAdd: () -> Void
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.openWindow) private var openWindow
     @Query(sort: \SavedSong.lastPracticed, order: .reverse)
     private var recentlyChanged: [SavedSong]
+    @Query(sort: [SortDescriptor(\PracticeList.sortOrder), SortDescriptor(\PracticeList.createdAt)])
+    private var lists: [PracticeList]
     @AppStorage("savedSongOrder") private var order: SongOrder = .title
+    @AppStorage("savedListFilter") private var filterStorage = ""
+    @AppStorage("savedMultiFilter") private var multiSelect = false
+
+    @State private var filter: ListFilter = .all
+    @State private var hasLoadedFilter = false
     @State private var searchTerm = ""
     @State private var loadingID: String?
     @State private var lookupError: String?
+    @State private var listPrompt: ListPrompt?
+    @State private var addingSongsToList: PracticeList?
 
     @Environment(\.scenePhase) private var scenePhase
     /// Settled at the moments SavedSongsView settles it, and as the search
-    /// changes, so a search that leaves a few songs lists them flat.
+    /// or filter changes, so a narrow result lists flat.
     @State private var settledCount: Int?
 
     private var songs: [SavedSong] {
-        let term = searchTerm.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !term.isEmpty else { return recentlyChanged }
-        return recentlyChanged.filter {
-            $0.title.localizedStandardContains(term) || $0.artistName.localizedStandardContains(term)
-        }
+        filter.apply(to: recentlyChanged, searchTerm: searchTerm)
+    }
+
+    private var unfiledCount: Int {
+        recentlyChanged.filter(\.isUnfiled).count
+    }
+
+    private var activeSingleList: PracticeList? {
+        guard let id = filter.singleListID else { return nil }
+        return lists.first { $0.listID == id }
     }
 
     private var isGrouped: Bool { SongSection.groups(songCount: settledCount ?? songs.count) }
@@ -66,8 +83,15 @@ struct SavedSidebarView: View {
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
 
+                    if filter.isActive {
+                        activeFilterRow
+                            .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 6, trailing: 8))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                    }
+
                     if songs.isEmpty {
-                        emptyText("No matches")
+                        filteredEmptyView
                             .listRowSeparator(.hidden)
                             .listRowBackground(Color.clear)
                     }
@@ -88,14 +112,42 @@ struct SavedSidebarView: View {
                 }
                 .animation(.snappy, value: order)
                 .animation(.snappy, value: isGrouped)
+                .animation(.snappy, value: filter)
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
             }
         }
-        .onAppear(perform: settleGrouping)
+        .onAppear {
+            if !hasLoadedFilter {
+                hasLoadedFilter = true
+                if let restored = ListFilter(rawStorage: filterStorage) {
+                    filter = restored.reconciled(with: lists)
+                }
+            }
+            settleGrouping()
+        }
         .onChange(of: order) { settleGrouping() }
+        .onChange(of: filter) { _, next in
+            filterStorage = next.rawStorage
+            settleGrouping()
+        }
         .onChange(of: searchTerm) { settleGrouping() }
+        .onChange(of: lists) { _, updated in
+            let reconciled = filter.reconciled(with: updated)
+            if reconciled != filter { filter = reconciled }
+            settleGrouping()
+        }
         .onChange(of: scenePhase) { if scenePhase == .active { settleGrouping() } }
+        .focusedSceneValue(\.newListAction, NewListAction { listPrompt = .create() })
+        .listPrompts($listPrompt) { newList, hadInitialSongs in
+            if !hadInitialSongs {
+                filter = .lists(ids: [newList.listID], match: filter.matchMode)
+            }
+        }
+        .sheet(item: $addingSongsToList) { list in
+            AddSongsToListSheet(list: list)
+                .frame(minWidth: 400, minHeight: 440)
+        }
         .alert(
             "Couldn't open that song",
             isPresented: .init(
@@ -115,6 +167,29 @@ struct SavedSidebarView: View {
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.top, 24)
+    }
+
+    @ViewBuilder
+    private var filteredEmptyView: some View {
+        let term = searchTerm.trimmingCharacters(in: .whitespacesAndNewlines)
+        VStack(spacing: 8) {
+            Text(!term.isEmpty ? "No matches" : activeSingleList.map { "No songs in \($0.name)" } ?? "No matching songs")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            if term.isEmpty {
+                if let list = activeSingleList {
+                    Button("Add Songs\u{2026}") { addingSongsToList = list }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                } else if filter.isActive {
+                    Button("Show All Songs") { filter = .all }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.top, 20)
     }
 
     /// Concrete AppKit colours rather than `.secondary` and `.primary`: in a
@@ -141,12 +216,159 @@ struct SavedSidebarView: View {
         .overlay { Capsule().strokeBorder(Color(nsColor: .labelColor).opacity(0.07), lineWidth: 1) }
     }
 
+    private var activeFilterRow: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 6) {
+                if filter == .unfiled {
+                    filterChip("Unfiled") { filter = .all }
+                } else {
+                    let selected = lists.filter { filter.contains(listID: $0.listID) }
+                    ForEach(selected) { list in
+                        filterChip(list.name) {
+                            filter = filter.toggling(listID: list.listID, multiSelect: true)
+                        }
+                    }
+                    if selected.count > 1 {
+                        Button(filter.matchMode == .all ? "All" : "Any") {
+                            filter = filter.withMatchMode(filter.matchMode == .all ? .any : .all)
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(.primary.opacity(0.07), in: .capsule)
+                        .help("Switch between matching all or any selected list")
+                    }
+                }
+            }
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private func filterChip(_ title: String, onRemove: @escaping () -> Void) -> some View {
+        Button(action: onRemove) {
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+                    .lineLimit(1)
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .opacity(0.75)
+            }
+            .foregroundStyle(Color.accentText)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.accentColor.opacity(0.16), in: .capsule)
+            .overlay { Capsule().strokeBorder(Color.accentColor.opacity(0.32), lineWidth: 1) }
+        }
+        .buttonStyle(.plain)
+        .help("Remove filter: \(title)")
+    }
+
+    private var scopeTitle: String {
+        if let list = activeSingleList { return list.name }
+        if filter == .unfiled { return "Unfiled" }
+        let count = filter.selectedListIDs.count
+        if count > 1 { return "\(count) Lists" }
+        return lists.isEmpty ? "Saved" : "All Songs"
+    }
+
     private var header: some View {
         HStack(spacing: 2) {
-            Text("Saved")
-                .font(.system(size: 11, weight: .semibold))
+            Menu {
+                Button {
+                    filter = .all
+                } label: {
+                    scopeItemLabel("All Songs (\(recentlyChanged.count))", selected: filter == .all)
+                }
+
+                if unfiledCount > 0 || filter == .unfiled {
+                    Button {
+                        filter = .unfiled
+                    } label: {
+                        scopeItemLabel("Unfiled (\(unfiledCount))", selected: filter == .unfiled)
+                    }
+                }
+
+                if !lists.isEmpty {
+                    Divider()
+                    ForEach(lists) { list in
+                        Button {
+                            filter = filter.toggling(listID: list.listID, multiSelect: multiSelect)
+                        } label: {
+                            scopeItemLabel("\(list.name) (\(list.songCount))", selected: filter.contains(listID: list.listID))
+                        }
+                    }
+
+                    Divider()
+                    Toggle("Combine Filters", isOn: $multiSelect)
+
+                    if filter.selectedListIDs.count > 1 {
+                        Picker("Match Mode", selection: Binding(
+                            get: { filter.matchMode },
+                            set: { filter = filter.withMatchMode($0) }
+                        )) {
+                            ForEach(ListFilter.MatchMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                    }
+                }
+
+                Divider()
+                Button { listPrompt = .create() } label: {
+                    Label("New List\u{2026}", systemImage: "folder.badge.plus")
+                }
+                if let list = activeSingleList {
+                    Button { addingSongsToList = list } label: {
+                        Label("Add Songs to \u{201C}\(list.name)\u{201D}\u{2026}", systemImage: "plus.circle")
+                    }
+                    Button { listPrompt = .rename(list) } label: {
+                        Label("Rename \u{201C}\(list.name)\u{201D}\u{2026}", systemImage: "pencil")
+                    }
+                    Button(role: .destructive) { listPrompt = .delete(list) } label: {
+                        Label("Delete \u{201C}\(list.name)\u{201D}", systemImage: "trash")
+                    }
+                }
+                Divider()
+                Button {
+                    openWindow(id: ManageSavedSongsView.windowID)
+                } label: {
+                    Label("Manage Saved Songs\u{2026}", systemImage: "rectangle.3.group")
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(scopeTitle)
+                        .font(.system(size: 11, weight: .semibold))
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                        .opacity(0.75)
+                }
                 .foregroundStyle(.secondary)
+                .contentShape(.rect)
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Filter by list")
+
             Spacer(minLength: 0)
+
+            Button {
+                openWindow(id: ManageSavedSongsView.windowID)
+            } label: {
+                Image(systemName: "rectangle.3.group")
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 26, height: 26)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Manage Saved Songs (\u{21E7}\u{2318}L)")
+            .accessibilityLabel("Manage Saved Songs")
 
             Menu {
                 Picker("Sort By", selection: $order) {
@@ -183,6 +405,15 @@ struct SavedSidebarView: View {
         }
     }
 
+    @ViewBuilder
+    private func scopeItemLabel(_ title: String, selected: Bool) -> some View {
+        if selected {
+            Label(title, systemImage: "checkmark")
+        } else {
+            Text(title)
+        }
+    }
+
     private func settleGrouping() {
         settledCount = songs.count
     }
@@ -194,12 +425,37 @@ struct SavedSidebarView: View {
             isLoaded: isLoaded(song),
             isPlaying: controller.isPlaying
         ) { practice(song) }
-        .contextMenu {
-            Button("Delete", role: .destructive) { controller.delete(song, in: modelContext) }
-        }
+        .contextMenu { contextMenu(for: song) }
         .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
+    }
+
+    @ViewBuilder
+    private func contextMenu(for song: SavedSong) -> some View {
+        Button { practice(song) } label: { Label("Practice", systemImage: "play") }
+        let markers = song.sortedMarkers
+        if !markers.isEmpty {
+            Menu {
+                ForEach(markers) { marker in
+                    Button(marker.name) { practice(song, jumpingTo: marker) }
+                }
+            } label: {
+                Label("Practice From", systemImage: "arrow.turn.down.right")
+            }
+        }
+        SavedListMenu(song: song, lists: lists) {
+            listPrompt = .create(addingSongs: [song])
+        }
+        if let list = activeSingleList {
+            Button {
+                PracticeList.remove([song], from: list, in: modelContext)
+            } label: {
+                Label("Remove from \u{201C}\(list.name)\u{201D}", systemImage: "minus.circle")
+            }
+        }
+        Divider()
+        Button("Delete", role: .destructive) { controller.delete(song, in: modelContext) }
     }
 
     private func isLoaded(_ song: SavedSong) -> Bool {
@@ -207,7 +463,7 @@ struct SavedSidebarView: View {
         return previewCurrentID == song.songID
     }
 
-    private func practice(_ song: SavedSong) {
+    private func practice(_ song: SavedSong, jumpingTo marker: SongMarker? = nil) {
         loadingID = song.songID
         Task {
             // A newer pick's row owns the spinner by now.
@@ -217,12 +473,14 @@ struct SavedSidebarView: View {
                 return
             }
             do {
-                _ = try await controller.select(saved: song)
+                guard try await controller.select(saved: song) else { return }
             } catch {
                 lookupError = error is SongGoneError
                     ? error.localizedDescription
                     : "Couldn't find that song: \(error.localizedDescription)"
+                return
             }
+            if let marker { controller.jump(to: marker) }
         }
     }
 }
@@ -296,10 +554,12 @@ private struct SavedSidebarRow: View {
 private func previewContainer() -> ModelContainer {
     let container = try! AppSchema.inMemoryContainer()
     let context = container.mainContext
-    SavedSong.save(songID: "1", title: "Harbour Lights", artistName: "Mara Ellis", artworkData: nil, speed: 0.75, in: context)
-    SavedSong.save(songID: "2", title: "Slow Burn Avenue", artistName: "The Kettle Lines", artworkData: nil, speed: 0.6, in: context)
+    let s1 = SavedSong.save(songID: "1", title: "Harbour Lights", artistName: "Mara Ellis", artworkData: nil, speed: 0.75, in: context)
+    let s2 = SavedSong.save(songID: "2", title: "Slow Burn Avenue", artistName: "The Kettle Lines", artworkData: nil, speed: 0.6, in: context)
     SavedSong.save(songID: "3", title: "Paper Moons", artistName: "June Okafor", artworkData: nil, speed: 0.8, in: context)
     SavedSong.save(songID: "4", title: "Night Ferry", artistName: "Low Tide Club", artworkData: nil, speed: 0.7, in: context)
+    let list = PracticeList.create(name: "Level 1", in: context)
+    PracticeList.add([s1, s2], to: list, in: context)
     return container
 }
 #endif
