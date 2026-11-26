@@ -27,6 +27,7 @@ struct MacWindow: View {
     @State private var picking: Picking?
     @State private var showsLibrary = false
     @State private var libraryPage: LibraryPage = .recentlyPlayed
+    @State private var librarySearch = ""
     /// The sidebar's scope, read where it's stored so ⇧⌘N and the sidebar's
     /// + both add into the list on show, as Saved's + does on iOS.
     @AppStorage("savedListFilter") private var filterStorage = ""
@@ -94,7 +95,7 @@ struct MacWindow: View {
                     .accessibilityHidden(showsLibrary)
 
                     if showsLibrary {
-                        MacLibraryView(page: libraryPage, target: .saved) { song in
+                        MacLibraryView(page: libraryPage, target: .saved, searchTerm: $librarySearch) { song in
                             practise(song)
                         }
                         .transition(.opacity)
@@ -103,6 +104,14 @@ struct MacWindow: View {
                 .toolbar { toolbar }
                 // Practice's song title is its title; a library page names itself.
                 .toolbar(removing: showsLibrary ? nil : .title)
+            }
+            // On the split view itself: on the detail, the library's own
+            // NavigationStack took the toolbar over and the field vanished as
+            // soon as results showed. Always there, so a song can be looked
+            // for from Practice too; typing brings the library up.
+            .searchable(text: $librarySearch, placement: .toolbar, prompt: SongPickerView.searchPrompt)
+            .onChange(of: librarySearch) { _, term in
+                if !term.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { setShowsLibrary(true) }
             }
 
             if sidebarOver {
@@ -240,6 +249,7 @@ struct MacWindow: View {
             }
         } else {
             withAnimation(.easeInOut(duration: 0.2)) { showsLibrary = false }
+            librarySearch = ""
         }
         if sidebarOver { setSidebarOver(false) }
     }
