@@ -8,17 +8,14 @@
 import SwiftData
 import SwiftUI
 
-/// Horizontal filter strip for Saved on iPhone and iPad, matching Practice's
-/// quiet pill language while keeping coral reserved for the active filter.
+/// Saved's scope on iPhone and iPad: one list at a time. Combining lists is
+/// left to the Mac, where there's room to show what a combination means.
 struct ListFilterBar: View {
     @Binding var filter: ListFilter
-    @Binding var multiSelect: Bool
     let lists: [PracticeList]
-    let totalCount: Int
     let unfiledCount: Int
     var isBesidePractice = false
     let onNewList: () -> Void
-    let onManageLists: () -> Void
     let onRenameList: (PracticeList) -> Void
     let onAddSongsToList: (PracticeList) -> Void
     let onDeleteList: (PracticeList) -> Void
@@ -26,141 +23,66 @@ struct ListFilterBar: View {
     @State private var clipped: (leading: Bool, trailing: Bool) = (false, false)
 
     var body: some View {
-        HStack(spacing: 8) {
-            listsMenu
-
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    chip(title: "All", isSelected: filter == .all) {
-                        filter = .all
-                    }
-
-                    if unfiledCount > 0 || filter == .unfiled {
-                        chip(title: "Unfiled", count: unfiledCount, isSelected: filter == .unfiled) {
-                            filter = filter == .unfiled ? .all : .unfiled
-                        }
-                    }
-
-                    ForEach(lists) { list in
-                        chip(
-                            title: list.name,
-                            count: list.songCount,
-                            isSelected: filter.contains(listID: list.listID)
-                        ) {
-                            filter = filter.toggling(listID: list.listID, multiSelect: multiSelect)
-                        }
-                        .contextMenu {
-                            Button { onAddSongsToList(list) } label: {
-                                Label("Add Songs\u{2026}", systemImage: "plus.circle")
-                            }
-                            Button { onRenameList(list) } label: {
-                                Label("Rename\u{2026}", systemImage: "pencil")
-                            }
-                            Divider()
-                            Button(role: .destructive) { onDeleteList(list) } label: {
-                                Label("Delete List", systemImage: "trash")
-                            }
-                        }
-                    }
-
-                    Button(action: onNewList) {
-                        Image(systemName: "plus")
-                            .font(.footnote.weight(.semibold))
-                            .padding(.horizontal, 11)
-                            .padding(.vertical, 7)
-                            .background { idleBackground }
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("New List")
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                chip(title: "All", isSelected: filter == .all) {
+                    filter = .all
                 }
-                .padding(.vertical, 2)
-            }
-            .scrollIndicators(.hidden)
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentOffset.x > -geometry.contentInsets.leading + 1
-            } action: { _, isClipped in
-                clipped.leading = isClipped
-            }
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentOffset.x + geometry.containerSize.width
-                    < geometry.contentSize.width + geometry.contentInsets.trailing - 1
-            } action: { _, isClipped in
-                clipped.trailing = isClipped
-            }
-            .edgeFade(leading: clipped.leading, trailing: clipped.trailing, width: 28)
-        }
-    }
 
-    private var listsMenu: some View {
-        Menu {
-            Button {
-                filter = .all
-            } label: {
-                menuItemLabel("All Songs (\(totalCount))", selected: filter == .all)
-            }
-
-            if unfiledCount > 0 || filter == .unfiled {
-                Button {
-                    filter = .unfiled
-                } label: {
-                    menuItemLabel("Unfiled (\(unfiledCount))", selected: filter == .unfiled)
+                if unfiledCount > 0 || filter == .unfiled {
+                    chip(title: "Unfiled", count: unfiledCount, isSelected: filter == .unfiled) {
+                        filter = filter == .unfiled ? .all : .unfiled
+                    }
                 }
-            }
 
-            if !lists.isEmpty {
-                Divider()
                 ForEach(lists) { list in
-                    Button {
-                        filter = filter.toggling(listID: list.listID, multiSelect: multiSelect)
-                    } label: {
-                        menuItemLabel("\(list.name) (\(list.songCount))", selected: filter.contains(listID: list.listID))
+                    chip(
+                        title: list.name,
+                        count: list.songCount,
+                        isSelected: filter.contains(listID: list.listID)
+                    ) {
+                        filter = filter.toggling(listID: list.listID, multiSelect: false)
+                    }
+                    .contextMenu {
+                        Button { onAddSongsToList(list) } label: {
+                            Label("Add Songs\u{2026}", systemImage: "plus.circle")
+                        }
+                        Button { onRenameList(list) } label: {
+                            Label("Rename\u{2026}", systemImage: "pencil")
+                        }
+                        Divider()
+                        Button(role: .destructive) { onDeleteList(list) } label: {
+                            Label("Delete List", systemImage: "trash")
+                        }
                     }
                 }
-            }
 
-            Divider()
-
-            Toggle("Combine Filters", isOn: $multiSelect)
-
-            if filter.selectedListIDs.count > 1 {
-                Picker("Match Mode", selection: Binding(
-                    get: { filter.matchMode },
-                    set: { filter = filter.withMatchMode($0) }
-                )) {
-                    ForEach(ListFilter.MatchMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
-                    }
+                Button(action: onNewList) {
+                    Image(systemName: "plus")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 7)
+                        .chipSurface(isSelected: false, isBesidePractice: isBesidePractice)
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("New List")
             }
-
-            Divider()
-
-            Button { onNewList() } label: {
-                Label("New List\u{2026}", systemImage: "plus")
-            }
-            Button { onManageLists() } label: {
-                Label("Manage Lists\u{2026}", systemImage: "list.bullet")
-            }
-        } label: {
-            Image(systemName: multiSelect && filter.selectedListIDs.count > 1
-                ? "line.3.horizontal.decrease.circle.fill"
-                : "line.3.horizontal.decrease.circle")
-                .font(.body)
-                .foregroundStyle(filter.isActive ? Color.accentText : .secondary)
-                .frame(width: 32, height: 32)
-                .background { idleBackground }
+            .padding(.vertical, 2)
         }
-        .accessibilityLabel("Filter lists")
-    }
-
-    @ViewBuilder
-    private func menuItemLabel(_ title: String, selected: Bool) -> some View {
-        if selected {
-            Label(title, systemImage: "checkmark")
-        } else {
-            Text(title)
+        .scrollIndicators(.hidden)
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            geometry.contentOffset.x > -geometry.contentInsets.leading + 1
+        } action: { _, isClipped in
+            clipped.leading = isClipped
         }
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            geometry.contentOffset.x + geometry.containerSize.width
+                < geometry.contentSize.width + geometry.contentInsets.trailing - 1
+        } action: { _, isClipped in
+            clipped.trailing = isClipped
+        }
+        .edgeFade(leading: clipped.leading, trailing: clipped.trailing, width: 28)
     }
 
     private func chip(title: String, count: Int? = nil, isSelected: Bool, action: @escaping () -> Void) -> some View {
@@ -175,33 +97,34 @@ struct ListFilterBar: View {
                         .opacity(0.65)
                 }
             }
+            .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentText) : AnyShapeStyle(.primary))
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
-            .background {
-                if isSelected {
-                    Capsule()
-                        .fill(Color.accentColor.opacity(0.16))
-                        .overlay {
-                            Capsule().strokeBorder(Color.accentColor.opacity(0.32), lineWidth: 1)
-                        }
-                } else {
-                    idleBackground
-                }
-            }
-            .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentText) : AnyShapeStyle(.primary))
+            .chipSurface(isSelected: isSelected, isBesidePractice: isBesidePractice)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
+}
 
+private extension View {
+    /// Beside the card the chips are glass, as Practice's pills are, so they
+    /// take on the cover's glow; a system fill there read as disabled.
     @ViewBuilder
-    private var idleBackground: some View {
+    func chipSurface(isSelected: Bool, isBesidePractice: Bool) -> some View {
         if isBesidePractice {
-            Capsule()
-                .fill(.primary.opacity(0.08))
-                .overlay { Capsule().strokeBorder(.primary.opacity(0.12), lineWidth: 1) }
+            glassEffect(
+                isSelected ? Glass.regular.tint(Color.accentColor.opacity(0.3)).interactive() : Glass.regular.interactive(),
+                in: .capsule
+            )
+        } else if isSelected {
+            background {
+                Capsule()
+                    .fill(Color.accentColor.opacity(0.16))
+                    .overlay { Capsule().strokeBorder(Color.accentColor.opacity(0.32), lineWidth: 1) }
+            }
         } else {
-            Capsule().fill(Color.tertiarySystemFill)
+            background(Color.tertiarySystemFill, in: .capsule)
         }
     }
 }
@@ -214,20 +137,15 @@ struct ListFilterBar: View {
     let s1 = SavedSong.save(songID: "1", title: "Blackbird", artistName: "The Beatles", artworkData: nil, speed: 0.75, in: context)
     PracticeList.add([s1], to: l1, in: context)
 
-    return VStack(spacing: 20) {
-        ListFilterBar(
-            filter: .constant(.lists(ids: [l1.listID], match: .all)),
-            multiSelect: .constant(false),
-            lists: [l1, l2],
-            totalCount: 3,
-            unfiledCount: 2,
-            onNewList: {},
-            onManageLists: {},
-            onRenameList: { _ in },
-            onAddSongsToList: { _ in },
-            onDeleteList: { _ in }
-        )
-    }
+    return ListFilterBar(
+        filter: .constant(.lists(ids: [l1.listID], match: .all)),
+        lists: [l1, l2],
+        unfiledCount: 2,
+        onNewList: {},
+        onRenameList: { _ in },
+        onAddSongsToList: { _ in },
+        onDeleteList: { _ in }
+    )
     .padding()
     .modelContainer(container)
 }

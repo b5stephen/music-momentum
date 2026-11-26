@@ -26,7 +26,6 @@ struct SavedSongsView: View {
     /// Per device rather than synced: it's how this screen is read, not data.
     @AppStorage("savedSongOrder") private var order: SongOrder = .title
     @AppStorage("savedListFilter") private var filterStorage = ""
-    @AppStorage("savedMultiFilter") private var multiSelect = false
 
     @Environment(\.scenePhase) private var scenePhase
     /// The song count grouping was last decided on. It's settled only when
@@ -50,6 +49,15 @@ struct SavedSongsView: View {
     /// that hides some of it.
     private var allFilteredSelected: Bool {
         !filteredSongs.isEmpty && filteredSongs.allSatisfy { selectedIDs.contains($0.persistentModelID) }
+    }
+
+    /// Taps only select while selecting; otherwise a tap practises the song
+    /// and the List mustn't keep a highlight for it.
+    private var selection: Binding<Set<PersistentIdentifier>> {
+        Binding(
+            get: { isSelecting ? selectedIDs : [] },
+            set: { if isSelecting { selectedIDs = $0 } }
+        )
     }
 
     private var activeSingleList: PracticeList? {
@@ -130,63 +138,58 @@ struct SavedSongsView: View {
                         addSongButton
                     }
                 } else {
-                    VStack(spacing: 0) {
+                    // The List stays the root even when the filter empties it,
+                    // with the chips in a bar on it: wrapped in a stack, it
+                    // lost the large title.
+                    List(selection: selection) {
+                        ForEach(sections) { section in
+                            if isGrouped {
+                                Section {
+                                    ForEach(section.songs, content: row)
+                                } header: {
+                                    Text(section.title)
+                                }
+                                #if os(iOS)
+                                .sectionIndexLabel(section.indexLabel)
+                                #endif
+                            } else {
+                                Section {
+                                    ForEach(section.songs, content: row)
+                                }
+                            }
+                        }
+                    }
+                    .listStyle(.plain)
+                    #if os(iOS)
+                    .listSectionSpacing(0)
+                    .listSectionIndexVisibility(showsIndex ? .visible : .hidden)
+                    .environment(\.editMode, .constant(isSelecting ? .active : .inactive))
+                    #endif
+                    .safeAreaBar(edge: .top) {
                         if !lists.isEmpty {
                             ListFilterBar(
                                 filter: $filter,
-                                multiSelect: $multiSelect,
                                 lists: lists,
-                                totalCount: recentlyChanged.count,
                                 unfiledCount: unfiledCount,
                                 isBesidePractice: isBesidePractice,
                                 onNewList: { listPrompt = .create() },
-                                onManageLists: { showingListManager = true },
                                 onRenameList: { listPrompt = .rename($0) },
                                 onAddSongsToList: { addingSongsToList = $0 },
                                 onDeleteList: { listPrompt = .delete($0) }
                             )
                             .padding(.leading, 16)
                             .padding(.trailing, isBesidePractice ? 28 : 16)
-                            .padding(.top, 4)
-                            .padding(.bottom, 8)
+                            .padding(.vertical, 6)
                         }
-
+                    }
+                    .overlay {
                         if filteredSongs.isEmpty {
                             filteredEmptyState
-                        } else {
-                            List {
-                                ForEach(sections) { section in
-                                    if isGrouped {
-                                        Section {
-                                            ForEach(section.songs, content: row)
-                                        } header: {
-                                            Text(section.title)
-                                        }
-                                        #if os(iOS)
-                                        .sectionIndexLabel(section.indexLabel)
-                                        #endif
-                                    } else {
-                                        Section {
-                                            ForEach(section.songs, content: row)
-                                        }
-                                    }
-                                }
-                            }
-                            .listStyle(.plain)
-                            #if os(iOS)
-                            .listSectionSpacing(0)
-                            .listSectionIndexVisibility(showsIndex ? .visible : .hidden)
-                            #endif
-                            .animation(.snappy, value: order)
-                            .animation(.snappy, value: isGrouped)
-                            .animation(.snappy, value: filter)
                         }
                     }
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        if isSelecting {
-                            selectionBar
-                        }
-                    }
+                    .animation(.snappy, value: order)
+                    .animation(.snappy, value: isGrouped)
+                    .animation(.snappy, value: filter)
                 }
             }
             // Beside the card, the stack's own opaque background (and the
@@ -216,6 +219,11 @@ struct SavedSongsView: View {
                             }
                         }
                     }
+                    #if os(iOS)
+                    ToolbarItemGroup(placement: .bottomBar) { selectionActions }
+                    #else
+                    ToolbarItemGroup(placement: .automatic) { selectionActions }
+                    #endif
                 } else {
                     // Hidden rather than disabled: a greyed glyph beside Add read
                     // as a second, broken add button.
@@ -291,7 +299,7 @@ struct SavedSongsView: View {
                                     }
                                 }
                             } label: {
-                                Image(systemName: "ellipsis.circle")
+                                Image(systemName: "ellipsis")
                                     .foregroundStyle(Color.accentColor)
                             }
                             .accessibilityLabel("More")
@@ -449,41 +457,33 @@ struct SavedSongsView: View {
         }
     }
 
-    private var selectionBar: some View {
-        let selected = filteredSongs.filter { selectedIDs.contains($0.persistentModelID) }
-        return HStack(spacing: 12) {
-            Button {
-                assigning = SongSelectionBatch(songs: selected)
-            } label: {
-                Label("Lists\u{2026}", systemImage: "folder.badge.plus")
-            }
-            .disabled(selected.isEmpty)
+    private var selectedSongs: [SavedSong] {
+        filteredSongs.filter { selectedIDs.contains($0.persistentModelID) }
+    }
 
-            Spacer()
+    @ViewBuilder
+    private var selectionActions: some View {
+        let selected = selectedSongs
+        Button("Add to Lists\u{2026}") {
+            assigning = SongSelectionBatch(songs: selected)
+        }
+        .disabled(selected.isEmpty)
 
-            if let list = activeSingleList {
-                Button {
-                    PracticeList.remove(selected, from: list, in: modelContext)
-                    endSelection()
-                } label: {
-                    Label("Remove", systemImage: "minus.circle")
-                }
-                .disabled(selected.isEmpty)
-            }
+        Spacer()
 
-            Button(role: .destructive) {
-                for song in selected { delete(song) }
+        if let list = activeSingleList {
+            Button("Remove") {
+                PracticeList.remove(selected, from: list, in: modelContext)
                 endSelection()
-            } label: {
-                Label("Delete", systemImage: "trash")
             }
             .disabled(selected.isEmpty)
         }
-        .font(.subheadline.weight(.medium))
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(.bar)
-        .overlay(alignment: .top) { Divider() }
+
+        Button("Delete", role: .destructive) {
+            for song in selected { delete(song) }
+            endSelection()
+        }
+        .disabled(selected.isEmpty)
     }
 
     private func endSelection() {
@@ -492,32 +492,23 @@ struct SavedSongsView: View {
     }
 
     private func row(_ song: SavedSong) -> some View {
-        let isSelected = selectedIDs.contains(song.persistentModelID)
-        return HStack(spacing: 12) {
-            if isSelecting {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isSelected ? Color.accentText : Color.secondary)
-            }
-            SavedSongRow(
-                song: song,
-                isLoading: loadingID == song.songID,
-                isCurrent: isLoaded(song),
-                isPlaying: controller.isPlaying
-            )
-        }
+        SavedSongRow(
+            song: song,
+            isLoading: loadingID == song.songID,
+            isCurrent: isLoaded(song),
+            isPlaying: controller.isPlaying
+        )
+        // Concrete colours for both levels: a selected row turns `.primary`
+        // and `.secondary` white for a highlight these clear rows don't
+        // draw, which left the title invisible. The checkmark says it's
+        // selected.
+        .foregroundStyle(Color.label, Color.secondaryLabel)
         .contentShape(Rectangle())
-        .onTapGesture {
-            if isSelecting {
-                if isSelected {
-                    selectedIDs.remove(song.persistentModelID)
-                } else {
-                    selectedIDs.insert(song.persistentModelID)
-                }
-            } else {
-                practice(song)
-            }
-        }
-        .contextMenu { if !isSelecting { menu(for: song) } }
+        .onTapGesture { practice(song) }
+        .contextMenu { menu(for: song) }
+        // Selecting, taps fall through to the List so its own checkmarks
+        // and two-finger drag pick the rows.
+        .allowsHitTesting(!isSelecting)
         .accessibilityAction { practice(song) }
         .accessibilityAction(named: "Change Speed") { editing = song }
         .accessibilityAction(named: "Add Marker") { openEditor(song) }
@@ -526,18 +517,18 @@ struct SavedSongsView: View {
         .listRowBackground(Color.clear)
         .listSectionSeparator(.hidden, edges: .top)
         .swipeActions(edge: .trailing) {
-            if !isSelecting {
-                if let list = activeSingleList {
-                    Button {
-                        PracticeList.remove([song], from: list, in: modelContext)
-                    } label: {
-                        Label("Remove", systemImage: "minus.circle")
-                    }
-                    .tint(.orange)
-                } else {
-                    Button(role: .destructive) { delete(song) } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
+            if let list = activeSingleList {
+                // Grey, not orange: orange beside coral reads as the accent,
+                // and removing from a list loses nothing.
+                Button {
+                    PracticeList.remove([song], from: list, in: modelContext)
+                } label: {
+                    Label("Remove", systemImage: "minus.circle")
+                }
+                .tint(.gray)
+            } else {
+                Button(role: .destructive) { delete(song) } label: {
+                    Label("Delete", systemImage: "trash")
                 }
             }
         }

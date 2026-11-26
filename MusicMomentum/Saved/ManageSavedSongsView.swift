@@ -91,6 +91,8 @@ struct ManageSavedSongsView: View {
     @State private var speedEditingSong: SavedSong?
     @State private var listPopoverSong: SavedSong?
     @State private var lookupError: String?
+    /// Matched by eye to the Library rows' default insets.
+    private static let listRowPadding = EdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10)
 
     private var activeList: PracticeList? {
         guard case let .list(id) = sidebarItem else { return nil }
@@ -228,7 +230,12 @@ struct ManageSavedSongsView: View {
 
             Section("Lists") {
                 ForEach(lists) { list in
+                    // The row's insets sat outside the drop target, so the
+                    // drop highlight only came on with the pointer over the
+                    // label. The insets move inside the row's content instead.
                     sidebarRow(list.name, icon: "folder", count: list.songCount)
+                        .padding(Self.listRowPadding)
+                        .contentShape(.rect)
                         .tag(SidebarItem.list(list.listID))
                         .contextMenu {
                             Button { addingSongsToList = list } label: {
@@ -243,8 +250,9 @@ struct ManageSavedSongsView: View {
                             }
                         }
                         .dropDestination(for: String.self) { items, _ in
-                            _ = assignDraggedIDs(items, to: list)
+                            assignDraggedIDs(items, to: list)
                         }
+                        .listRowInsets(EdgeInsets())
                 }
                 .onMove { source, destination in
                     var reordered = lists
