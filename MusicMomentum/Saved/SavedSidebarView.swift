@@ -406,12 +406,9 @@ struct SavedSidebarView: View {
         return Button {
             withAnimation(.snappy) { collapsed.toggle(folder.id) }
         } label: {
+            // The name starts where Songs' letter headings do, with the
+            // chevron trailing as on iOS; leading, it pushed the name in.
             HStack(spacing: 6) {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .bold))
-                    .rotationEffect(.degrees(isOpen ? 90 : 0))
-                    .opacity(isSearching ? 0 : 1)
-                    .frame(width: 10)
                 Text(folder.title)
                     .font(.system(size: 11, weight: .semibold))
                     .lineLimit(1)
@@ -420,10 +417,15 @@ struct SavedSidebarView: View {
                     .font(.system(size: 11))
                     .monospacedDigit()
                     .foregroundStyle(.tertiary)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .rotationEffect(.degrees(isOpen ? 90 : 0))
+                    .opacity(isSearching ? 0 : 1)
+                    .frame(width: 10)
             }
             .foregroundStyle(.secondary)
-            .padding(.leading, 10)
-            .padding(.trailing, 14)
+            .padding(.leading, 12)
+            .padding(.trailing, 10)
             .padding(.vertical, 3)
             .contentShape(.rect)
         }
@@ -448,7 +450,7 @@ struct SavedSidebarView: View {
             .buttonStyle(.plain)
             .font(.system(size: 12))
             .foregroundStyle(.tertiary)
-            .listRowInsets(EdgeInsets(top: 4, leading: 34, bottom: 6, trailing: 8))
+            .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 6, trailing: 8))
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
     }
