@@ -8,12 +8,13 @@ import AppKit
 
 /// Keeps the main window's text fields from holding on to the keyboard, so
 /// the Playback menu's single keys work, and gives them those keys while
-/// they're being edited.
+/// they're being edited, without the box AppKit draws behind one in a list.
 @MainActor
 enum TextFieldFocus {
     private static var monitors: [Any] = []
     /// Windows already opened, whose focus is now the user's to keep.
     private static var settled: Set<ObjectIdentifier> = []
+    private static var responderObservations: [ObjectIdentifier: NSKeyValueObservation] = [:]
 
     private static let characters: Set<String> = [" ", "a", "l", "m", "s", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
     /// ←, →, ↓, ↑.
@@ -64,10 +65,40 @@ enum TextFieldFocus {
         // sheet's search keeps it, since typing is why the sheet is up.
         NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { note in
             guard let window = note.object as? NSWindow else { return }
-            MainActor.assumeIsolated { unfocusOnOpening(window) }
+            MainActor.assumeIsolated {
+                unfocusOnOpening(window)
+                clearListFieldBackgrounds(in: window)
+            }
         }
         // The window that called this may already be key.
-        if let window = NSApp.keyWindow { unfocusOnOpening(window) }
+        if let window = NSApp.keyWindow {
+            unfocusOnOpening(window)
+            clearListFieldBackgrounds(in: window)
+        }
+    }
+
+    /// AppKit turns the field editor's background on, in the system's text
+    /// background colour, for a field in a table, which is what a SwiftUI
+    /// `List` is; so the sidebar's pill search showed a dark box while typing.
+    /// It's set again each time editing starts, so it's cleared each time.
+    private static func clearListFieldBackgrounds(in window: NSWindow) {
+        let id = ObjectIdentifier(window)
+        guard responderObservations[id] == nil else { return }
+        responderObservations[id] = window.observe(\.firstResponder) { window, _ in
+            MainActor.assumeIsolated {
+                clearListFieldBackground(window.firstResponder)
+                // After the cell has finished setting the editor up.
+                DispatchQueue.main.async { clearListFieldBackground(window.firstResponder) }
+            }
+        }
+    }
+
+    private static func clearListFieldBackground(_ responder: NSResponder?) {
+        guard let editor = responder as? NSTextView, editor.isFieldEditor,
+              let field = editor.delegate as? NSView,
+              field.enclosingScrollView?.documentView is NSTableView
+        else { return }
+        editor.drawsBackground = false
     }
 
     private static func unfocusOnOpening(_ window: NSWindow) {
