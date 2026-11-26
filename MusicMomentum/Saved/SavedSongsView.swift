@@ -634,13 +634,16 @@ struct SavedSongsView: View {
             withAnimation(.snappy) { collapsed.toggle(folder.id) }
         } label: {
             // Flush with the artwork's edge: centred in the artwork's column,
-            // the icon read as indented.
-            HStack(spacing: 8) {
+            // the icon read as indented. Beside the card, where a
+            // headline-sized folder looked lost, it's nearly the artwork's
+            // width, so the name starts where the song titles do.
+            HStack(spacing: isBesidePractice ? 12 : 8) {
                 Image(systemName: folder.list == nil ? "tray" : "folder")
-                    .font(.headline)
+                    .font(isBesidePractice ? .system(size: 34, weight: .light) : .headline)
                     .foregroundStyle(Color.secondaryLabel)
+                    .frame(width: isBesidePractice ? 48 : nil, alignment: .leading)
                 Text(folder.title)
-                    .font(.headline)
+                    .font(isBesidePractice ? .title3.weight(.semibold) : .headline)
                     .foregroundStyle(Color.label)
                     .lineLimit(1)
                 Spacer(minLength: 8)
