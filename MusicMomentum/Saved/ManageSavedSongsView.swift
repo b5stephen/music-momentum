@@ -91,6 +91,7 @@ struct ManageSavedSongsView: View {
     @State private var speedEditingSong: SavedSong?
     @State private var listPopoverSong: SavedSong?
     @State private var lookupError: String?
+    @State private var loadingID: String?
     /// Matched by eye to the Library rows' default insets.
     private static let listRowPadding = EdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10)
 
@@ -427,7 +428,7 @@ struct ManageSavedSongsView: View {
 
     private func songCell(_ song: SavedSong) -> some View {
         HStack(spacing: 10) {
-            SavedSongArtwork(song: song, side: 32)
+            SavedSongArtwork(song: song, side: 32, isLoading: loadingID == song.songID)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 5) {
                     Text(song.title)
@@ -721,7 +722,10 @@ struct ManageSavedSongsView: View {
     }
 
     private func openInPractice(_ song: SavedSong) {
+        loadingID = song.songID
         Task {
+            // A newer pick's row owns the spinner by now.
+            defer { if loadingID == song.songID { loadingID = nil } }
             guard await controller.requestAuthorizationIfNeeded() else {
                 lookupError = "Allow Apple Music access in System Settings to practice this song."
                 return
