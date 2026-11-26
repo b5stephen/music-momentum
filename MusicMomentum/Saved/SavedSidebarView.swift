@@ -30,7 +30,6 @@ struct SavedSidebarView: View {
     private var lists: [PracticeList]
     @AppStorage("savedSongOrder") private var order: SongOrder = .title
     @AppStorage("savedListFilter") private var filterStorage = ""
-    @AppStorage("savedMultiFilter") private var multiSelect = false
 
     @State private var filter: ListFilter = .all
     @State private var hasLoadedFilter = false
@@ -83,13 +82,6 @@ struct SavedSidebarView: View {
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
 
-                    if filter.isActive {
-                        activeFilterRow
-                            .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 6, trailing: 8))
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
-                    }
-
                     if songs.isEmpty {
                         filteredEmptyView
                             .listRowSeparator(.hidden)
@@ -120,7 +112,9 @@ struct SavedSidebarView: View {
         .onAppear {
             if !hasLoadedFilter {
                 hasLoadedFilter = true
-                if let restored = ListFilter(rawStorage: filterStorage) {
+                // A combination saved before the sidebar went to one list
+                // at a time widens to All rather than showing an unnamed mix.
+                if let restored = ListFilter(rawStorage: filterStorage), restored.selectedListIDs.count <= 1 {
                     filter = restored.reconciled(with: lists)
                 }
             }
@@ -216,61 +210,11 @@ struct SavedSidebarView: View {
         .overlay { Capsule().strokeBorder(Color(nsColor: .labelColor).opacity(0.07), lineWidth: 1) }
     }
 
-    private var activeFilterRow: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 6) {
-                if filter == .unfiled {
-                    filterChip("Unfiled") { filter = .all }
-                } else {
-                    let selected = lists.filter { filter.contains(listID: $0.listID) }
-                    ForEach(selected) { list in
-                        filterChip(list.name) {
-                            filter = filter.toggling(listID: list.listID, multiSelect: true)
-                        }
-                    }
-                    if selected.count > 1 {
-                        Button(filter.matchMode == .all ? "All" : "Any") {
-                            filter = filter.withMatchMode(filter.matchMode == .all ? .any : .all)
-                        }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(.primary.opacity(0.07), in: .capsule)
-                        .help("Switch between matching all or any selected list")
-                    }
-                }
-            }
-        }
-        .scrollIndicators(.hidden)
-    }
-
-    private func filterChip(_ title: String, onRemove: @escaping () -> Void) -> some View {
-        Button(action: onRemove) {
-            HStack(spacing: 4) {
-                Text(title)
-                    .font(.system(size: 11, weight: .medium))
-                    .lineLimit(1)
-                Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .bold))
-                    .opacity(0.75)
-            }
-            .foregroundStyle(Color.accentText)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.accentColor.opacity(0.16), in: .capsule)
-            .overlay { Capsule().strokeBorder(Color.accentColor.opacity(0.32), lineWidth: 1) }
-        }
-        .buttonStyle(.plain)
-        .help("Remove filter: \(title)")
-    }
-
+    /// The header's title is the scope, so the sidebar needs no chip row
+    /// repeating it; combining lists is left to the Manage window.
     private var scopeTitle: String {
         if let list = activeSingleList { return list.name }
         if filter == .unfiled { return "Unfiled" }
-        let count = filter.selectedListIDs.count
-        if count > 1 { return "\(count) Lists" }
         return lists.isEmpty ? "Saved" : "All Songs"
     }
 
@@ -295,23 +239,9 @@ struct SavedSidebarView: View {
                     Divider()
                     ForEach(lists) { list in
                         Button {
-                            filter = filter.toggling(listID: list.listID, multiSelect: multiSelect)
+                            filter = filter.toggling(listID: list.listID, multiSelect: false)
                         } label: {
                             scopeItemLabel("\(list.name) (\(list.songCount))", selected: filter.contains(listID: list.listID))
-                        }
-                    }
-
-                    Divider()
-                    Toggle("Combine Filters", isOn: $multiSelect)
-
-                    if filter.selectedListIDs.count > 1 {
-                        Picker("Match Mode", selection: Binding(
-                            get: { filter.matchMode },
-                            set: { filter = filter.withMatchMode($0) }
-                        )) {
-                            ForEach(ListFilter.MatchMode.allCases) { mode in
-                                Text(mode.title).tag(mode)
-                            }
                         }
                     }
                 }
