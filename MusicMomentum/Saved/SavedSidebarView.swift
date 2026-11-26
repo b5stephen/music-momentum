@@ -106,20 +106,23 @@ struct SavedSidebarView: View {
                             .listRowBackground(Color.clear)
                     }
                     if showsFolders {
+                        // The header is the section's first row, not its
+                        // header: the Mac's List rules off every section
+                        // header edge to edge, which showed between closed
+                        // folders and no separator modifier hid.
                         ForEach(folders) { folder in
                             Section {
+                                folderHeader(folder)
+                                    .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 2, trailing: 8))
+                                    .listRowSeparator(.hidden)
+                                    .listRowBackground(Color.clear)
                                 if isExpanded(folder) {
                                     ForEach(folder.songs) { row($0, in: folder) }
                                     if folder.songs.isEmpty, let list = folder.list {
                                         emptyFolderRow(list)
                                     }
                                 }
-                            } header: {
-                                folderHeader(folder)
                             }
-                            // A collapsed folder has no rows to hide them on,
-                            // so the List drew a rule between closed folders.
-                            .listSectionSeparator(.hidden)
                         }
                     } else {
                         ForEach(sections) { section in
