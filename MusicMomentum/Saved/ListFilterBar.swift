@@ -108,15 +108,18 @@ struct ListFilterBar: View {
 }
 
 private extension View {
-    /// Beside the card the chips are glass, as Practice's pills are, so they
-    /// take on the cover's glow; a system fill there read as disabled.
+    /// Beside the card an idle chip is a translucent fill, so the cover's
+    /// glow shows through it. Glass there drew a frosted band across the
+    /// whole strip, since the edge fade's mask makes it sample the strip's
+    /// full frame.
     @ViewBuilder
     func chipSurface(isSelected: Bool, isBesidePractice: Bool) -> some View {
-        if isBesidePractice {
-            glassEffect(
-                isSelected ? Glass.regular.tint(Color.accentColor.opacity(0.3)).interactive() : Glass.regular.interactive(),
-                in: .capsule
-            )
+        if isBesidePractice, !isSelected {
+            background {
+                Capsule()
+                    .fill(.primary.opacity(0.06))
+                    .overlay { Capsule().strokeBorder(.primary.opacity(0.1), lineWidth: 1) }
+            }
         } else if isSelected {
             background {
                 Capsule()
