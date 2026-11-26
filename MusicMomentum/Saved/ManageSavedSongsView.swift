@@ -224,7 +224,7 @@ struct ManageSavedSongsView: View {
             Section("Library") {
                 sidebarRow("All Songs", icon: "bookmark", count: allSongs.count)
                     .tag(SidebarItem.all)
-                sidebarRow("Unfiled", icon: "tray", count: unfiledCount)
+                sidebarRow("Not in a List", icon: "tray", count: unfiledCount)
                     .tag(SidebarItem.unfiled)
                 sidebarRow("Recently Practiced", icon: "clock", count: practicedCount)
                     .tag(SidebarItem.practiced)
@@ -661,7 +661,7 @@ struct ManageSavedSongsView: View {
     private var detailTitle: String {
         switch sidebarItem ?? .all {
         case .all: "All Saved Songs"
-        case .unfiled: "Unfiled Songs"
+        case .unfiled: "Not in a List"
         case .practiced: "Recently Practiced"
         case let .list(id): lists.first { $0.listID == id }?.name ?? "Saved Songs"
         }

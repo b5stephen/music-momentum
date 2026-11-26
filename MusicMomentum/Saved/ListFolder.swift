@@ -51,7 +51,7 @@ struct ListFolder: Identifiable {
     }
 
     /// The folders the user closed, per device. Stored as the closed ones so
-    /// a new list starts open.
+    /// a new list starts open. The views hold it in state and write it back.
     struct Collapsed: RawRepresentable {
         var ids: Set<String>
 
@@ -62,6 +62,16 @@ struct ListFolder: Identifiable {
         }
 
         var rawValue: String { ids.sorted().joined(separator: "\n") }
+
+        nonisolated static let storageKey = "savedCollapsedFolders"
+
+        static var stored: Collapsed {
+            Collapsed(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? Collapsed()
+        }
+
+        func store() {
+            UserDefaults.standard.set(rawValue, forKey: Self.storageKey)
+        }
 
         mutating func toggle(_ id: String) {
             if ids.contains(id) { ids.remove(id) } else { ids.insert(id) }

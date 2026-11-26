@@ -45,7 +45,7 @@ struct ListFilterBar: View {
                 }
 
                 if unfiledCount > 0 || filter == .unfiled {
-                    chip(title: "Unfiled", count: unfiledCount, isSelected: filter == .unfiled) {
+                    chip(title: "Not in a List", count: unfiledCount, isSelected: filter == .unfiled) {
                         filter = filter == .unfiled ? .all : .unfiled
                     }
                 }

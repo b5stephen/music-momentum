@@ -31,7 +31,8 @@ struct SavedSidebarView: View {
     @AppStorage("savedSongOrder") private var order: SongOrder = .title
     @AppStorage("savedListFilter") private var filterStorage = ""
     @AppStorage(SavedLayout.storageKey) private var layout: SavedLayout = .songs
-    @AppStorage("savedCollapsedFolders") private var collapsed = ListFolder.Collapsed()
+    /// State, not `@AppStorage`, so the toggle's animation reaches the List.
+    @State private var collapsed = ListFolder.Collapsed.stored
 
     @State private var filter: ListFilter = .all
     @State private var hasLoadedFilter = false
@@ -135,6 +136,7 @@ struct SavedSidebarView: View {
                     }
                 }
                 .animation(.snappy, value: layout)
+                .animation(.snappy, value: collapsed.ids)
                 .animation(.snappy, value: order)
                 .animation(.snappy, value: isGrouped)
                 .animation(.snappy, value: filter)
@@ -160,6 +162,7 @@ struct SavedSidebarView: View {
         }
         .onChange(of: searchTerm) { settleGrouping() }
         .onChange(of: layout) { settleGrouping() }
+        .onChange(of: collapsed.ids) { collapsed.store() }
         .onChange(of: lists) { _, updated in
             let reconciled = filter.reconciled(with: updated)
             if reconciled != filter { filter = reconciled }
@@ -249,7 +252,7 @@ struct SavedSidebarView: View {
     private var scopeTitle: String {
         if showsFolders { return "Lists" }
         if let list = activeSingleList { return list.name }
-        if filter == .unfiled { return "Unfiled" }
+        if filter == .unfiled { return "Not in a List" }
         return lists.isEmpty ? "Saved" : "All Songs"
     }
 
@@ -267,7 +270,7 @@ struct SavedSidebarView: View {
                         Button {
                             filter = .unfiled
                         } label: {
-                            scopeItemLabel("Unfiled (\(unfiledCount))", selected: filter == .unfiled)
+                            scopeItemLabel("Not in a List (\(unfiledCount))", selected: filter == .unfiled)
                         }
                     }
 

@@ -27,7 +27,9 @@ struct SavedSongsView: View {
     @AppStorage("savedSongOrder") private var order: SongOrder = .title
     @AppStorage("savedListFilter") private var filterStorage = ""
     @AppStorage(SavedLayout.storageKey) private var layout: SavedLayout = .songs
-    @AppStorage("savedCollapsedFolders") private var collapsed = ListFolder.Collapsed()
+    /// State rather than `@AppStorage`: a change to stored defaults reached
+    /// the List without the toggle's animation, so folders snapped shut.
+    @State private var collapsed = ListFolder.Collapsed.stored
 
     @Environment(\.scenePhase) private var scenePhase
     /// The song count grouping was last decided on. It's settled only when
@@ -225,6 +227,7 @@ struct SavedSongsView: View {
                     .animation(.snappy, value: isGrouped)
                     .animation(.snappy, value: filter)
                     .animation(.snappy, value: layout)
+                    .animation(.snappy, value: collapsed.ids)
                 }
             }
             // Beside the card, the stack's own opaque background (and the
@@ -452,6 +455,7 @@ struct SavedSongsView: View {
                 settleGrouping()
             }
             .onChange(of: searchTerm) { settleGrouping() }
+            .onChange(of: collapsed.ids) { collapsed.store() }
             .onChange(of: layout) {
                 selectedIDs.removeAll()
                 settleGrouping()
@@ -470,7 +474,7 @@ struct SavedSongsView: View {
         if isBesidePractice { return "" }
         if showsFolders { return "Saved" }
         if let list = activeSingleList { return list.name }
-        if filter == .unfiled { return "Unfiled" }
+        if filter == .unfiled { return "Not in a List" }
         return "Saved"
     }
 
@@ -629,11 +633,13 @@ struct SavedSongsView: View {
         return Button {
             withAnimation(.snappy) { collapsed.toggle(folder.id) }
         } label: {
-            HStack(spacing: 8) {
+            // The icon fills the artwork's column and the name starts where
+            // the song titles do, so a folder reads as a row of the list.
+            HStack(spacing: 12) {
                 Image(systemName: folder.list == nil ? "tray" : "folder")
-                    .font(.subheadline)
+                    .font(.title2)
                     .foregroundStyle(Color.secondaryLabel)
-                    .frame(width: 22)
+                    .frame(width: 48)
                 Text(folder.title)
                     .font(.headline)
                     .foregroundStyle(Color.label)
@@ -656,6 +662,7 @@ struct SavedSongsView: View {
         }
         .buttonStyle(.plain)
         .disabled(isSearching)
+        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: trailingInset))
         .contextMenu {
             if let list = folder.list {
                 Button { addingSongsToList = list } label: {
@@ -685,7 +692,7 @@ struct SavedSongsView: View {
                 .foregroundStyle(Color.secondaryLabel)
         }
         .buttonStyle(.plain)
-        .listRowInsets(EdgeInsets(top: 10, leading: 46, bottom: 10, trailing: trailingInset))
+        .listRowInsets(EdgeInsets(top: 10, leading: SavedSongRow.titleInset, bottom: 10, trailing: trailingInset))
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
         .selectionDisabled()
