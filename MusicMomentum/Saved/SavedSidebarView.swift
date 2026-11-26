@@ -30,6 +30,8 @@ struct SavedSidebarView: View {
     private var lists: [PracticeList]
     @AppStorage("savedSongOrder") private var order: SongOrder = .title
     @AppStorage("savedListFilter") private var filterStorage = ""
+    @AppStorage(SavedLayout.storageKey) private var layout: SavedLayout = .songs
+    @AppStorage("savedCollapsedFolders") private var collapsed = ListFolder.Collapsed()
 
     @State private var filter: ListFilter = .all
     @State private var hasLoadedFilter = false
@@ -44,8 +46,23 @@ struct SavedSidebarView: View {
     /// or filter changes, so a narrow result lists flat.
     @State private var settledCount: Int?
 
+    private var showsFolders: Bool { layout == .lists && !lists.isEmpty }
+
+    private var isSearching: Bool {
+        !searchTerm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// In Lists the folders do the filtering; the scope is kept for Songs.
     private var songs: [SavedSong] {
-        filter.apply(to: recentlyChanged, searchTerm: searchTerm)
+        (showsFolders ? ListFilter.all : filter).apply(to: recentlyChanged, searchTerm: searchTerm)
+    }
+
+    private var folders: [ListFolder] {
+        ListFolder.folders(lists: lists, songs: order.sorted(songs), isSearching: isSearching)
+    }
+
+    private func isExpanded(_ folder: ListFolder) -> Bool {
+        isSearching || !collapsed.ids.contains(folder.id)
     }
 
     private var unfiledCount: Int {
@@ -53,11 +70,11 @@ struct SavedSidebarView: View {
     }
 
     private var activeSingleList: PracticeList? {
-        guard let id = filter.singleListID else { return nil }
+        guard !showsFolders, let id = filter.singleListID else { return nil }
         return lists.first { $0.listID == id }
     }
 
-    private var isGrouped: Bool { SongSection.groups(songCount: settledCount ?? songs.count) }
+    private var isGrouped: Bool { !showsFolders && SongSection.groups(songCount: settledCount ?? songs.count) }
 
     private var sections: [SongSection] {
         isGrouped
@@ -87,21 +104,37 @@ struct SavedSidebarView: View {
                             .listRowSeparator(.hidden)
                             .listRowBackground(Color.clear)
                     }
-                    ForEach(sections) { section in
-                        Section {
-                            ForEach(section.songs) { song in
-                                row(song)
+                    if showsFolders {
+                        ForEach(folders) { folder in
+                            Section {
+                                if isExpanded(folder) {
+                                    ForEach(folder.songs) { row($0, in: folder) }
+                                    if folder.songs.isEmpty, let list = folder.list {
+                                        emptyFolderRow(list)
+                                    }
+                                }
+                            } header: {
+                                folderHeader(folder)
                             }
-                        } header: {
-                            if isGrouped {
-                                Text(section.title)
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(.tertiary)
-                                    .padding(.leading, 12)
+                        }
+                    } else {
+                        ForEach(sections) { section in
+                            Section {
+                                ForEach(section.songs) { song in
+                                    row(song)
+                                }
+                            } header: {
+                                if isGrouped {
+                                    Text(section.title)
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(.tertiary)
+                                        .padding(.leading, 12)
+                                }
                             }
                         }
                     }
                 }
+                .animation(.snappy, value: layout)
                 .animation(.snappy, value: order)
                 .animation(.snappy, value: isGrouped)
                 .animation(.snappy, value: filter)
@@ -126,6 +159,7 @@ struct SavedSidebarView: View {
             settleGrouping()
         }
         .onChange(of: searchTerm) { settleGrouping() }
+        .onChange(of: layout) { settleGrouping() }
         .onChange(of: lists) { _, updated in
             let reconciled = filter.reconciled(with: updated)
             if reconciled != filter { filter = reconciled }
@@ -134,7 +168,7 @@ struct SavedSidebarView: View {
         .onChange(of: scenePhase) { if scenePhase == .active { settleGrouping() } }
         .focusedSceneValue(\.newListAction, NewListAction { listPrompt = .create() })
         .listPrompts($listPrompt) { newList, hadInitialSongs in
-            if !hadInitialSongs {
+            if !hadInitialSongs, !showsFolders {
                 filter = .lists(ids: [newList.listID], match: filter.matchMode)
             }
         }
@@ -213,6 +247,7 @@ struct SavedSidebarView: View {
     /// The header's title is the scope, so the sidebar needs no chip row
     /// repeating it; combining lists is left to the Manage window.
     private var scopeTitle: String {
+        if showsFolders { return "Lists" }
         if let list = activeSingleList { return list.name }
         if filter == .unfiled { return "Unfiled" }
         return lists.isEmpty ? "Saved" : "All Songs"
@@ -221,32 +256,34 @@ struct SavedSidebarView: View {
     private var header: some View {
         HStack(spacing: 2) {
             Menu {
-                Button {
-                    filter = .all
-                } label: {
-                    scopeItemLabel("All Songs (\(recentlyChanged.count))", selected: filter == .all)
-                }
-
-                if unfiledCount > 0 || filter == .unfiled {
+                if !showsFolders {
                     Button {
-                        filter = .unfiled
+                        filter = .all
                     } label: {
-                        scopeItemLabel("Unfiled (\(unfiledCount))", selected: filter == .unfiled)
+                        scopeItemLabel("All Songs (\(recentlyChanged.count))", selected: filter == .all)
                     }
-                }
 
-                if !lists.isEmpty {
-                    Divider()
-                    ForEach(lists) { list in
+                    if unfiledCount > 0 || filter == .unfiled {
                         Button {
-                            filter = filter.toggling(listID: list.listID, multiSelect: false)
+                            filter = .unfiled
                         } label: {
-                            scopeItemLabel("\(list.name) (\(list.songCount))", selected: filter.contains(listID: list.listID))
+                            scopeItemLabel("Unfiled (\(unfiledCount))", selected: filter == .unfiled)
                         }
                     }
-                }
 
-                Divider()
+                    if !lists.isEmpty {
+                        Divider()
+                        ForEach(lists) { list in
+                            Button {
+                                filter = filter.toggling(listID: list.listID, multiSelect: false)
+                            } label: {
+                                scopeItemLabel("\(list.name) (\(list.songCount))", selected: filter.contains(listID: list.listID))
+                            }
+                        }
+                    }
+
+                    Divider()
+                }
                 Button { listPrompt = .create() } label: {
                     Label("New List\u{2026}", systemImage: "folder.badge.plus")
                 }
@@ -260,6 +297,15 @@ struct SavedSidebarView: View {
                     Button(role: .destructive) { listPrompt = .delete(list) } label: {
                         Label("Delete \u{201C}\(list.name)\u{201D}", systemImage: "trash")
                     }
+                }
+                if !lists.isEmpty {
+                    Divider()
+                    Picker("View As", selection: $layout) {
+                        ForEach(SavedLayout.allCases) { layout in
+                            Text(layout.title).tag(layout)
+                        }
+                    }
+                    .pickerStyle(.inline)
                 }
                 Divider()
                 Button {
@@ -283,7 +329,7 @@ struct SavedSidebarView: View {
             .buttonStyle(.plain)
             .menuIndicator(.hidden)
             .fixedSize()
-            .help("Filter by list")
+            .help(showsFolders ? "Lists" : "Filter by list")
 
             Spacer(minLength: 0)
 
@@ -344,25 +390,82 @@ struct SavedSidebarView: View {
         }
     }
 
+    // MARK: - Folders
+
+    private func folderHeader(_ folder: ListFolder) -> some View {
+        let isOpen = isExpanded(folder)
+        return Button {
+            withAnimation(.snappy) { collapsed.toggle(folder.id) }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .rotationEffect(.degrees(isOpen ? 90 : 0))
+                    .opacity(isSearching ? 0 : 1)
+                    .frame(width: 10)
+                Text(folder.title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Text("\(folder.songs.count)")
+                    .font(.system(size: 11))
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
+            }
+            .foregroundStyle(.secondary)
+            .padding(.leading, 10)
+            .padding(.trailing, 14)
+            .padding(.vertical, 3)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(isSearching)
+        .contextMenu {
+            if let list = folder.list {
+                Button("Add Songs\u{2026}") { addingSongsToList = list }
+                Button("Rename\u{2026}") { listPrompt = .rename(list) }
+                Divider()
+                Button("Delete List", role: .destructive) { listPrompt = .delete(list) }
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(folder.title), \(folder.songs.count) songs")
+        .accessibilityValue(isOpen ? "Expanded" : "Collapsed")
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private func emptyFolderRow(_ list: PracticeList) -> some View {
+        Button("Add Songs\u{2026}") { addingSongsToList = list }
+            .buttonStyle(.plain)
+            .font(.system(size: 12))
+            .foregroundStyle(.tertiary)
+            .listRowInsets(EdgeInsets(top: 4, leading: 34, bottom: 6, trailing: 8))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
+    }
+
     private func settleGrouping() {
         settledCount = songs.count
     }
 
-    private func row(_ song: SavedSong) -> some View {
-        SavedSidebarRow(
+    /// `folder` is set in Lists, where the row's list is the folder it's
+    /// under rather than the scope's.
+    private func row(_ song: SavedSong, in folder: ListFolder? = nil) -> some View {
+        let list = folder == nil ? activeSingleList : folder?.list
+        return SavedSidebarRow(
             song: song,
             isLoading: loadingID == song.songID,
             isLoaded: isLoaded(song),
             isPlaying: controller.isPlaying
         ) { practice(song) }
-        .contextMenu { contextMenu(for: song) }
+        .contextMenu { contextMenu(for: song, in: list) }
         .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
     }
 
     @ViewBuilder
-    private func contextMenu(for song: SavedSong) -> some View {
+    private func contextMenu(for song: SavedSong, in list: PracticeList?) -> some View {
         Button { practice(song) } label: { Label("Practice", systemImage: "play") }
         let markers = song.sortedMarkers
         if !markers.isEmpty {
@@ -377,7 +480,7 @@ struct SavedSidebarView: View {
         SavedListMenu(song: song, lists: lists) {
             listPrompt = .create(addingSongs: [song])
         }
-        if let list = activeSingleList {
+        if let list {
             Button {
                 PracticeList.remove([song], from: list, in: modelContext)
             } label: {

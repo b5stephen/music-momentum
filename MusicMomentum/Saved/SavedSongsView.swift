@@ -26,6 +26,8 @@ struct SavedSongsView: View {
     /// Per device rather than synced: it's how this screen is read, not data.
     @AppStorage("savedSongOrder") private var order: SongOrder = .title
     @AppStorage("savedListFilter") private var filterStorage = ""
+    @AppStorage(SavedLayout.storageKey) private var layout: SavedLayout = .songs
+    @AppStorage("savedCollapsedFolders") private var collapsed = ListFolder.Collapsed()
 
     @Environment(\.scenePhase) private var scenePhase
     /// The song count grouping was last decided on. It's settled only when
@@ -37,23 +39,52 @@ struct SavedSongsView: View {
     @State private var hasLoadedFilter = false
     @State private var searchTerm = ""
 
+    /// With no lists there's nothing to fold, so Lists reads as Songs.
+    private var showsFolders: Bool { layout == .lists && !lists.isEmpty }
+
+    private var isSearching: Bool {
+        !searchTerm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// The folders are the filter in Lists, so the chips' choice is set
+    /// aside rather than cleared, ready for Songs again.
     private var filteredSongs: [SavedSong] {
-        filter.apply(to: recentlyChanged, searchTerm: searchTerm)
+        (showsFolders ? ListFilter.all : filter).apply(to: recentlyChanged, searchTerm: searchTerm)
+    }
+
+    private var folders: [ListFolder] {
+        ListFolder.folders(lists: lists, songs: order.sorted(filteredSongs), isSearching: isSearching)
+    }
+
+    /// Searching opens every folder, so a match is never hidden in a closed one.
+    private func isExpanded(_ folder: ListFolder) -> Bool {
+        isSearching || !collapsed.ids.contains(folder.id)
     }
 
     private var unfiledCount: Int {
         recentlyChanged.filter(\.isUnfiled).count
     }
 
+    /// The rows on screen, so Select All leaves a closed folder's alone.
+    private var visibleRows: [ListFolder.Row] {
+        guard showsFolders else {
+            return filteredSongs.map { ListFolder.Row(folderID: "", song: $0.persistentModelID) }
+        }
+        return folders.filter(isExpanded).flatMap { folder in
+            folder.songs.map { ListFolder.Row(folderID: folder.id, song: $0.persistentModelID) }
+        }
+    }
+
     /// Against what's shown, not a count: a selection can outlive a search
     /// that hides some of it.
-    private var allFilteredSelected: Bool {
-        !filteredSongs.isEmpty && filteredSongs.allSatisfy { selectedIDs.contains($0.persistentModelID) }
+    private var allVisibleSelected: Bool {
+        let rows = visibleRows
+        return !rows.isEmpty && rows.allSatisfy(selectedIDs.contains)
     }
 
     /// Taps only select while selecting; otherwise a tap practises the song
     /// and the List mustn't keep a highlight for it.
-    private var selection: Binding<Set<PersistentIdentifier>> {
+    private var selection: Binding<Set<ListFolder.Row>> {
         Binding(
             get: { isSelecting ? selectedIDs : [] },
             set: { if isSelecting { selectedIDs = $0 } }
@@ -61,11 +92,11 @@ struct SavedSongsView: View {
     }
 
     private var activeSingleList: PracticeList? {
-        guard let id = filter.singleListID else { return nil }
+        guard !showsFolders, let id = filter.singleListID else { return nil }
         return lists.first { $0.listID == id }
     }
 
-    private var isGrouped: Bool { SongSection.groups(songCount: settledCount ?? filteredSongs.count) }
+    private var isGrouped: Bool { !showsFolders && SongSection.groups(songCount: settledCount ?? filteredSongs.count) }
     private var showsIndex: Bool { isGrouped && order != .practiced }
     /// Ungrouped, one section with no header, so the rows keep their identity
     /// and slide into sections rather than reloading.
@@ -85,7 +116,7 @@ struct SavedSongsView: View {
     @State private var lookupError: String?
     @State private var marking: Marking?
     @State private var isSelecting = false
-    @State private var selectedIDs = Set<PersistentIdentifier>()
+    @State private var selectedIDs = Set<ListFolder.Row>()
     @State private var listPrompt: ListPrompt?
     @State private var showingListManager = false
     @State private var addingSongsToList: PracticeList?
@@ -144,22 +175,37 @@ struct SavedSongsView: View {
                     // search field does; in a bar on the List, the bar's edge
                     // blur lay over the large title in a narrow window.
                     List(selection: selection) {
-                        if !lists.isEmpty {
-                            filterBar
-                        }
-                        ForEach(sections) { section in
-                            if isGrouped {
+                        if showsFolders {
+                            ForEach(folders) { folder in
                                 Section {
-                                    ForEach(section.songs, content: row)
+                                    if isExpanded(folder) {
+                                        ForEach(folder.songs) { row($0, in: folder) }
+                                        if folder.songs.isEmpty, let list = folder.list {
+                                            emptyFolderRow(list)
+                                        }
+                                    }
                                 } header: {
-                                    Text(section.title)
+                                    folderHeader(folder)
                                 }
-                                #if os(iOS)
-                                .sectionIndexLabel(section.indexLabel)
-                                #endif
-                            } else {
-                                Section {
-                                    ForEach(section.songs, content: row)
+                            }
+                        } else {
+                            if !lists.isEmpty {
+                                filterBar
+                            }
+                            ForEach(sections) { section in
+                                if isGrouped {
+                                    Section {
+                                        ForEach(section.songs) { row($0) }
+                                    } header: {
+                                        Text(section.title)
+                                    }
+                                    #if os(iOS)
+                                    .sectionIndexLabel(section.indexLabel)
+                                    #endif
+                                } else {
+                                    Section {
+                                        ForEach(section.songs) { row($0) }
+                                    }
                                 }
                             }
                         }
@@ -178,6 +224,7 @@ struct SavedSongsView: View {
                     .animation(.snappy, value: order)
                     .animation(.snappy, value: isGrouped)
                     .animation(.snappy, value: filter)
+                    .animation(.snappy, value: layout)
                 }
             }
             // Beside the card, the stack's own opaque background (and the
@@ -199,11 +246,11 @@ struct SavedSongsView: View {
                         Button("Done") { endSelection() }
                     }
                     ToolbarItem(placement: .primaryAction) {
-                        Button(allFilteredSelected ? "Deselect All" : "Select All") {
-                            if allFilteredSelected {
+                        Button(allVisibleSelected ? "Deselect All" : "Select All") {
+                            if allVisibleSelected {
                                 selectedIDs.removeAll()
                             } else {
-                                selectedIDs = Set(filteredSongs.map(\.persistentModelID))
+                                selectedIDs = Set(visibleRows)
                             }
                         }
                     }
@@ -285,6 +332,12 @@ struct SavedSongsView: View {
                                     } label: {
                                         Label("Manage Lists\u{2026}", systemImage: "list.bullet")
                                     }
+                                    Picker("View As", selection: $layout) {
+                                        ForEach(SavedLayout.allCases) { layout in
+                                            Label(layout.title, systemImage: layout.systemImage).tag(layout)
+                                        }
+                                    }
+                                    .pickerStyle(.inline)
                                 }
                             } label: {
                                 Image(systemName: "ellipsis")
@@ -327,7 +380,8 @@ struct SavedSongsView: View {
                 AssignListsSheet(songs: batch.songs)
             }
             .listPrompts($listPrompt) { newList, hadInitialSongs in
-                if !hadInitialSongs {
+                // In Lists the new folder shows itself.
+                if !hadInitialSongs, !showsFolders {
                     filter = .lists(ids: [newList.listID], match: filter.matchMode)
                 }
             }
@@ -398,6 +452,10 @@ struct SavedSongsView: View {
                 settleGrouping()
             }
             .onChange(of: searchTerm) { settleGrouping() }
+            .onChange(of: layout) {
+                selectedIDs.removeAll()
+                settleGrouping()
+            }
             .onChange(of: lists) { _, updated in
                 let reconciled = filter.reconciled(with: updated)
                 if reconciled != filter { filter = reconciled }
@@ -410,6 +468,7 @@ struct SavedSongsView: View {
 
     private var navigationTitle: String {
         if isBesidePractice { return "" }
+        if showsFolders { return "Saved" }
         if let list = activeSingleList { return list.name }
         if filter == .unfiled { return "Unfiled" }
         return "Saved"
@@ -463,7 +522,22 @@ struct SavedSongsView: View {
     }
 
     private var selectedSongs: [SavedSong] {
-        filteredSongs.filter { selectedIDs.contains($0.persistentModelID) }
+        let songIDs = Set(selectedIDs.map(\.song))
+        return filteredSongs.filter { songIDs.contains($0.persistentModelID) }
+    }
+
+    /// Each selected row leaves the list it's under: in Lists, a song ticked
+    /// in one folder stays in its others.
+    private var selectedRemovals: [(list: PracticeList, songs: [SavedSong])] {
+        if let list = activeSingleList { return [(list, selectedSongs)] }
+        guard showsFolders else { return [] }
+        return folders.compactMap { folder in
+            guard let list = folder.list else { return nil }
+            let songs = folder.songs.filter {
+                selectedIDs.contains(ListFolder.Row(folderID: folder.id, song: $0.persistentModelID))
+            }
+            return songs.isEmpty ? nil : (list, songs)
+        }
     }
 
     @ViewBuilder
@@ -476,12 +550,15 @@ struct SavedSongsView: View {
 
         Spacer()
 
-        if let list = activeSingleList {
+        if activeSingleList != nil || showsFolders {
+            let removals = selectedRemovals
             Button("Remove") {
-                PracticeList.remove(selected, from: list, in: modelContext)
+                for removal in removals {
+                    PracticeList.remove(removal.songs, from: removal.list, in: modelContext)
+                }
                 endSelection()
             }
-            .disabled(selected.isEmpty)
+            .disabled(removals.allSatisfy(\.songs.isEmpty))
         }
 
         Button("Delete", role: .destructive) {
@@ -496,8 +573,11 @@ struct SavedSongsView: View {
         selectedIDs.removeAll()
     }
 
-    private func row(_ song: SavedSong) -> some View {
-        SavedSongRow(
+    /// `folder` is set in Lists, where the row's list is the folder it's
+    /// under rather than the filter's.
+    private func row(_ song: SavedSong, in folder: ListFolder? = nil) -> some View {
+        let list = folder == nil ? activeSingleList : folder?.list
+        return SavedSongRow(
             song: song,
             isLoading: loadingID == song.songID,
             isCurrent: isLoaded(song),
@@ -510,7 +590,7 @@ struct SavedSongsView: View {
         .foregroundStyle(Color.label, Color.secondaryLabel)
         .contentShape(Rectangle())
         .onTapGesture { practice(song) }
-        .contextMenu { menu(for: song) }
+        .contextMenu { menu(for: song, in: list) }
         // Selecting, taps fall through to the List so its own checkmarks
         // and two-finger drag pick the rows.
         .allowsHitTesting(!isSelecting)
@@ -521,8 +601,9 @@ struct SavedSongsView: View {
         .alignmentGuide(.listRowSeparatorLeading) { _ in SavedSongRow.titleInset - 16 }
         .listRowBackground(Color.clear)
         .listSectionSeparator(.hidden, edges: .top)
+        .tag(ListFolder.Row(folderID: folder?.id ?? "", song: song.persistentModelID))
         .swipeActions(edge: .trailing) {
-            if let list = activeSingleList {
+            if let list {
                 // Grey, not orange: orange beside coral reads as the accent,
                 // and removing from a list loses nothing.
                 Button {
@@ -539,6 +620,77 @@ struct SavedSongsView: View {
         }
     }
 
+    // MARK: - Folders
+
+    /// A button the width of the row rather than a disclosure chevron alone,
+    /// so a folder opens from anywhere on its header.
+    private func folderHeader(_ folder: ListFolder) -> some View {
+        let isOpen = isExpanded(folder)
+        return Button {
+            withAnimation(.snappy) { collapsed.toggle(folder.id) }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: folder.list == nil ? "tray" : "folder")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.secondaryLabel)
+                    .frame(width: 22)
+                Text(folder.title)
+                    .font(.headline)
+                    .foregroundStyle(Color.label)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                Text("\(folder.songs.count)")
+                    .font(.subheadline)
+                    .monospacedDigit()
+                    .foregroundStyle(Color.secondaryLabel)
+                if !isSearching {
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Color.tertiaryLabel)
+                        .rotationEffect(.degrees(isOpen ? 90 : 0))
+                }
+            }
+            .textCase(nil)
+            .padding(.vertical, 6)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(isSearching)
+        .contextMenu {
+            if let list = folder.list {
+                Button { addingSongsToList = list } label: {
+                    Label("Add Songs\u{2026}", systemImage: "plus")
+                }
+                Button { listPrompt = .rename(list) } label: {
+                    Label("Rename\u{2026}", systemImage: "pencil")
+                }
+                Divider()
+                Button(role: .destructive) { listPrompt = .delete(list) } label: {
+                    Label("Delete List", systemImage: "trash")
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(folder.title), \(folder.songs.count) songs")
+        .accessibilityValue(isOpen ? "Expanded" : "Collapsed")
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private func emptyFolderRow(_ list: PracticeList) -> some View {
+        Button {
+            addingSongsToList = list
+        } label: {
+            Label("Add Songs\u{2026}", systemImage: "plus")
+                .font(.subheadline)
+                .foregroundStyle(Color.secondaryLabel)
+        }
+        .buttonStyle(.plain)
+        .listRowInsets(EdgeInsets(top: 10, leading: 46, bottom: 10, trailing: trailingInset))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .selectionDisabled()
+    }
+
     private func settleGrouping() {
         settledCount = filteredSongs.count
     }
@@ -546,7 +698,7 @@ struct SavedSongsView: View {
     /// Speed and markers live here rather than as chips on the row: a glass
     /// chip and a Mark button on every song outweighed the titles.
     @ViewBuilder
-    private func menu(for song: SavedSong) -> some View {
+    private func menu(for song: SavedSong, in list: PracticeList?) -> some View {
         Button { practice(song) } label: { Label("Practice", systemImage: "play") }
         let markers = song.sortedMarkers
         if !markers.isEmpty {
@@ -563,7 +715,7 @@ struct SavedSongsView: View {
         SavedListMenu(song: song, lists: lists) {
             listPrompt = .create(addingSongs: [song])
         }
-        if let list = activeSingleList {
+        if let list {
             Button {
                 PracticeList.remove([song], from: list, in: modelContext)
             } label: {
