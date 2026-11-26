@@ -138,10 +138,15 @@ struct SavedSongsView: View {
                         addSongButton
                     }
                 } else {
-                    // The List stays the root even when the filter empties it,
-                    // with the chips in a bar on it: wrapped in a stack, it
-                    // lost the large title.
+                    // The List stays the root even when the filter empties it:
+                    // wrapped in a stack, it lost the large title. The chips
+                    // are its first row, scrolling away as the Mac sidebar's
+                    // search field does; in a bar on the List, the bar's edge
+                    // blur lay over the large title in a narrow window.
                     List(selection: selection) {
+                        if !lists.isEmpty {
+                            filterBar
+                        }
                         ForEach(sections) { section in
                             if isGrouped {
                                 Section {
@@ -165,23 +170,6 @@ struct SavedSongsView: View {
                     .listSectionIndexVisibility(showsIndex ? .visible : .hidden)
                     .environment(\.editMode, .constant(isSelecting ? .active : .inactive))
                     #endif
-                    .safeAreaBar(edge: .top) {
-                        if !lists.isEmpty {
-                            ListFilterBar(
-                                filter: $filter,
-                                lists: lists,
-                                unfiledCount: unfiledCount,
-                                isBesidePractice: isBesidePractice,
-                                onNewList: { listPrompt = .create() },
-                                onRenameList: { listPrompt = .rename($0) },
-                                onAddSongsToList: { addingSongsToList = $0 },
-                                onDeleteList: { listPrompt = .delete($0) }
-                            )
-                            .padding(.leading, 16)
-                            .padding(.trailing, isBesidePractice ? 28 : 16)
-                            .padding(.vertical, 6)
-                        }
-                    }
                     .overlay {
                         if filteredSongs.isEmpty {
                             filteredEmptyState
@@ -455,6 +443,23 @@ struct SavedSongsView: View {
                     .buttonStyle(CallToActionButtonStyle())
             }
         }
+    }
+
+    private var filterBar: some View {
+        ListFilterBar(
+            filter: $filter,
+            lists: lists,
+            unfiledCount: unfiledCount,
+            isBesidePractice: isBesidePractice,
+            onNewList: { listPrompt = .create() },
+            onRenameList: { listPrompt = .rename($0) },
+            onAddSongsToList: { addingSongsToList = $0 },
+            onDeleteList: { listPrompt = .delete($0) }
+        )
+        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 8, trailing: isBesidePractice ? 28 : 16))
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
+        .selectionDisabled()
     }
 
     private var selectedSongs: [SavedSong] {
