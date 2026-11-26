@@ -37,6 +37,7 @@ final class MiniPlayerSwitch {
     func showMain(open: OpenWindowAction) {
         NSApp.activate()
         if let mainWindow {
+            if mainWindow.isMiniaturized { mainWindow.deminiaturize(nil) }
             mainWindow.makeKeyAndOrderFront(nil)
         } else {
             open(id: Self.mainID)

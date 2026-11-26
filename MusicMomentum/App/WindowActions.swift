@@ -20,4 +20,5 @@ extension FocusedValues {
     @Entry var windowActions: WindowActions?
     /// One of Saved's sheets is up on iOS, where Practice can't see it.
     @Entry var isSavedSheetOpen: Bool?
+    @Entry var newListAction: NewListAction?
 }
