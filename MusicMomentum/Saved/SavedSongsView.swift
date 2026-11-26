@@ -633,13 +633,12 @@ struct SavedSongsView: View {
         return Button {
             withAnimation(.snappy) { collapsed.toggle(folder.id) }
         } label: {
-            // The icon fills the artwork's column and the name starts where
-            // the song titles do, so a folder reads as a row of the list.
-            HStack(spacing: 12) {
+            // Flush with the artwork's edge: centred in the artwork's column,
+            // the icon read as indented.
+            HStack(spacing: 8) {
                 Image(systemName: folder.list == nil ? "tray" : "folder")
-                    .font(.title2)
+                    .font(.headline)
                     .foregroundStyle(Color.secondaryLabel)
-                    .frame(width: 48)
                 Text(folder.title)
                     .font(.headline)
                     .foregroundStyle(Color.label)

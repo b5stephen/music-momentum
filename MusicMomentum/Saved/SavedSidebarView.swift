@@ -117,6 +117,9 @@ struct SavedSidebarView: View {
                             } header: {
                                 folderHeader(folder)
                             }
+                            // A collapsed folder has no rows to hide them on,
+                            // so the List drew a rule between closed folders.
+                            .listSectionSeparator(.hidden)
                         }
                     } else {
                         ForEach(sections) { section in
