@@ -41,6 +41,7 @@ struct SavedSidebarView: View {
     @State private var lookupError: String?
     @State private var listPrompt: ListPrompt?
     @State private var addingSongsToList: PracticeList?
+    @State private var hoveredFolderID: String?
 
     @Environment(\.scenePhase) private var scenePhase
     /// Settled at the moments SavedSongsView settles it, and as the search
@@ -404,33 +405,66 @@ struct SavedSidebarView: View {
 
     // MARK: - Folders
 
+    /// The + shows only under the pointer, as Finder's and Mail's sidebar
+    /// headings show their controls: one per list in sight crowded the
+    /// sidebar. It sits beside the toggle rather than in its label, so a
+    /// click on it can't fold the list too.
     private func folderHeader(_ folder: ListFolder) -> some View {
         let isOpen = isExpanded(folder)
-        return Button {
-            withAnimation(.snappy) { collapsed.toggle(folder.id) }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .bold))
-                    .rotationEffect(.degrees(isOpen ? 90 : 0))
-                    .opacity(isSearching ? 0 : 1)
-                    .frame(width: 10)
-                Text(folder.title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                Text("\(folder.songs.count)")
-                    .font(.system(size: 11))
-                    .monospacedDigit()
-                    .foregroundStyle(.tertiary)
+        let toggle = { withAnimation(.snappy) { collapsed.toggle(folder.id) } }
+        return HStack(spacing: 4) {
+            Button(action: toggle) {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .rotationEffect(.degrees(isOpen ? 90 : 0))
+                        .opacity(isSearching ? 0 : 1)
+                        .frame(width: 10)
+                    Text(folder.title)
+                        .font(.system(size: 11, weight: .semibold))
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                }
+                .contentShape(.rect)
             }
-            .foregroundStyle(.secondary)
-            .padding(.trailing, 10)
-            .padding(.vertical, 3)
-            .contentShape(.rect)
+            .buttonStyle(.plain)
+            .disabled(isSearching)
+            // Always laid out and only faded in: added on hover, a + taller
+            // than the 11pt heading grew the row under the pointer.
+            if let list = folder.list {
+                let isShown = hoveredFolderID == folder.id
+                Button {
+                    addingSongsToList = list
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .semibold))
+                        .frame(width: 16)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .opacity(isShown ? 1 : 0)
+                .allowsHitTesting(isShown)
+                .help("Add Songs to \u{201C}\(list.name)\u{201D}")
+                .accessibilityHidden(true)
+            }
+            Text("\(folder.songs.count)")
+                .font(.system(size: 11))
+                .monospacedDigit()
+                .foregroundStyle(.tertiary)
+                .contentShape(.rect)
+                .onTapGesture { if !isSearching { toggle() } }
         }
-        .buttonStyle(.plain)
-        .disabled(isSearching)
+        .foregroundStyle(.secondary)
+        .padding(.trailing, 10)
+        .padding(.vertical, 3)
+        .contentShape(.rect)
+        .onHover { inside in
+            if inside {
+                hoveredFolderID = folder.id
+            } else if hoveredFolderID == folder.id {
+                hoveredFolderID = nil
+            }
+        }
         .contextMenu {
             if let list = folder.list {
                 Button("Add Songs\u{2026}") { addingSongsToList = list }
@@ -439,10 +473,16 @@ struct SavedSidebarView: View {
                 Button("Delete List", role: .destructive) { listPrompt = .delete(list) }
             }
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(folder.title), \(folder.songs.count) songs")
         .accessibilityValue(isOpen ? "Expanded" : "Collapsed")
-        .accessibilityAddTraits(.isHeader)
+        .accessibilityAddTraits([.isHeader, .isButton])
+        .accessibilityAction { if !isSearching { toggle() } }
+        .accessibilityActions {
+            if let list = folder.list {
+                Button("Add Songs") { addingSongsToList = list }
+            }
+        }
     }
 
     private func emptyFolderRow(_ list: PracticeList) -> some View {
