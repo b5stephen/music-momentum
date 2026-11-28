@@ -10,8 +10,6 @@ import SwiftUI
 
 /// Reorder, rename, create, or delete `PracticeList`s on iPhone and iPad.
 struct ListManagerSheet: View {
-    @Binding var filter: ListFilter
-
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor(\PracticeList.sortOrder), SortDescriptor(\PracticeList.createdAt)])
@@ -49,10 +47,7 @@ struct ListManagerSheet: View {
                                 Spacer()
                             }
                             .contentShape(.rect)
-                            .onTapGesture {
-                                filter = .lists(ids: [list.listID], match: filter.matchMode)
-                                dismiss()
-                            }
+                            .onTapGesture { prompt = .rename(list) }
                             .contextMenu {
                                 Button { prompt = .rename(list) } label: {
                                     Label("Rename\u{2026}", systemImage: "pencil")
@@ -62,17 +57,11 @@ struct ListManagerSheet: View {
                                     Label("Delete List", systemImage: "trash")
                                 }
                             }
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    prompt = .delete(list)
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                                Button {
-                                    prompt = .rename(list)
-                                } label: {
-                                    Label("Rename", systemImage: "pencil")
-                                }
+                        }
+                        // Edit mode has no swipe actions; its minus buttons land here.
+                        .onDelete { offsets in
+                            if let index = offsets.first {
+                                prompt = .delete(lists[index])
                             }
                         }
                         .onMove { source, destination in
@@ -120,11 +109,11 @@ struct ListManagerSheet: View {
     PracticeList.add([song], to: l1, in: context)
     _ = l2
 
-    return ListManagerSheet(filter: .constant(.all))
+    return ListManagerSheet()
         .modelContainer(container)
 }
 
 #Preview("Empty") {
-    ListManagerSheet(filter: .constant(.all))
+    ListManagerSheet()
         .modelContainer(try! AppSchema.inMemoryContainer())
 }

@@ -379,7 +379,7 @@ struct SavedSongsView: View {
                 }
             }
             .sheet(isPresented: $showingListManager) {
-                ListManagerSheet(filter: $filter)
+                ListManagerSheet()
             }
             .sheet(item: $addingSongsToList) { list in
                 AddSongsToListSheet(list: list)
