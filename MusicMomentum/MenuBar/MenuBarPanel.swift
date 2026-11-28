@@ -41,7 +41,7 @@ struct MenuBarPanel: View {
         }
         .padding(14)
         .frame(width: 300)
-        .modifier(ArtworkGround(palette: track?.palette, isPlaying: controller.isPlaying))
+        .modifier(ArtworkGround(palette: track?.palette ?? controller.resuming?.palette, isPlaying: controller.isPlaying))
     }
 
     // MARK: - Song
@@ -167,9 +167,13 @@ struct MenuBarPanel: View {
 
     private var emptyState: some View {
         VStack(spacing: 12) {
-            Text("No song loaded")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.secondary)
+            if let title = controller.resuming?.title {
+                ResumingLabel(title: title, artistName: controller.resuming?.artistName)
+            } else {
+                Text("No song loaded")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
             Button {
                 miniSwitch.showMain(open: openWindow)
             } label: {
@@ -192,7 +196,7 @@ struct MenuBarPanel: View {
 private let previewPalette = ArtworkPalette(cover: OKLCH(red: 0.18, green: 0.42, blue: 0.45))
 
 @MainActor
-private func panelPreview(loaded: Bool) -> some View {
+private func panelPreview(loaded: Bool, resuming: Bool = false) -> some View {
     let container = try! AppSchema.inMemoryContainer()
     let context = container.mainContext
     let song = SavedSong.save(
@@ -210,6 +214,12 @@ private func panelPreview(loaded: Bool) -> some View {
     controller.playbackRate = 0.75
     controller.toggleLoop()
     controller.loop(only: chorus)
+    if resuming {
+        controller.showResuming(.init(
+            songID: "1", title: "Harbour Lights", artistName: "Mara Ellis",
+            ground: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)).ground
+        ))
+    }
     return MenuBarPanel(
         controller: controller,
         track: loaded ? .init(id: "1", title: "Harbour Lights", artistName: "Mara Ellis", palette: previewPalette) : nil
@@ -225,5 +235,9 @@ private func panelPreview(loaded: Bool) -> some View {
 
 #Preview("Nothing loaded", traits: .fixedLayout(width: 360, height: 180)) {
     panelPreview(loaded: false)
+}
+
+#Preview("Restoring", traits: .fixedLayout(width: 360, height: 200)) {
+    panelPreview(loaded: false, resuming: true)
 }
 #endif

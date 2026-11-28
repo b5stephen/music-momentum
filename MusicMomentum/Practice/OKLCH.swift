@@ -8,7 +8,7 @@ import Foundation
 
 /// A colour as lightness, chroma and hue, where equal steps of lightness look
 /// equal whatever the hue, so a cover colour can be darkened without turning grey.
-nonisolated struct OKLCH: Equatable {
+nonisolated struct OKLCH: Equatable, Codable {
     /// 0 black to 1 white.
     var l: Double
     var c: Double

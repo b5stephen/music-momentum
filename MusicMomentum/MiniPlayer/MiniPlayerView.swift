@@ -33,6 +33,8 @@ struct MiniPlayerView: View {
         return savedSongs.first { $0.matches(songID: track.id, catalogID: track.catalogID) }
     }
 
+    private var groundPalette: ArtworkPalette? { track?.palette ?? controller.resuming?.palette }
+
     var body: some View {
         Group {
             if let track {
@@ -42,8 +44,8 @@ struct MiniPlayerView: View {
             }
         }
         .frame(width: Self.size.width, height: Self.size.height)
-        .modifier(ArtworkGround(palette: track?.palette, isPlaying: controller.isPlaying))
-        .background { if track?.palette == nil { Color.systemBackground } }
+        .modifier(ArtworkGround(palette: groundPalette, isPlaying: controller.isPlaying))
+        .background { if groundPalette == nil { Color.systemBackground } }
         .clipShape(.rect(cornerRadius: Self.radius))
         .overlay { RoundedRectangle(cornerRadius: Self.radius).strokeBorder(.primary.opacity(0.14), lineWidth: 1) }
         .background(WindowAccessor { window in
@@ -112,9 +114,13 @@ struct MiniPlayerView: View {
 
     private var empty: some View {
         HStack {
-            Text("No song loaded")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.secondary)
+            if let title = controller.resuming?.title {
+                ResumingLabel(title: title, artistName: controller.resuming?.artistName, alignment: .leading)
+            } else {
+                Text("No song loaded")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
             Spacer(minLength: 0)
             expandButton
         }
@@ -356,7 +362,7 @@ struct MiniPlayerView: View {
 private let previewPalette = ArtworkPalette(cover: OKLCH(red: 0.18, green: 0.42, blue: 0.45))
 
 @MainActor
-private func miniPreview(palette: ArtworkPalette? = previewPalette, loop: Bool = true, rate: Double = 0.75) -> some View {
+private func miniPreview(palette: ArtworkPalette? = previewPalette, loop: Bool = true, rate: Double = 0.75, resuming: Bool = false) -> some View {
     let container = try! AppSchema.inMemoryContainer()
     let context = container.mainContext
     let song = SavedSong.save(
@@ -376,9 +382,15 @@ private func miniPreview(palette: ArtworkPalette? = previewPalette, loop: Bool =
         controller.loop(only: chorus)
     }
     controller.seek(to: 80)
+    if resuming {
+        controller.showResuming(.init(
+            songID: "1", title: "Harbour Lights", artistName: "Mara Ellis",
+            ground: palette?.ground
+        ))
+    }
     return MiniPlayerView(
         controller: controller,
-        track: .init(id: "1", title: "Harbour Lights", artistName: "Mara Ellis", palette: palette)
+        track: resuming ? nil : .init(id: "1", title: "Harbour Lights", artistName: "Mara Ellis", palette: palette)
     )
     .padding(24)
     .environment(MiniPlayerSwitch())
@@ -395,5 +407,9 @@ private func miniPreview(palette: ArtworkPalette? = previewPalette, loop: Bool =
 
 #Preview("No palette", traits: .fixedLayout(width: 500, height: 168)) {
     miniPreview(palette: nil)
+}
+
+#Preview("Restoring", traits: .fixedLayout(width: 500, height: 168)) {
+    miniPreview(resuming: true)
 }
 #endif

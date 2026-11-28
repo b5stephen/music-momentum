@@ -136,6 +136,12 @@ struct PracticeView: View {
     /// cover), so the screen doesn't flash the system background between them.
     private var heldPalette: ArtworkPalette? { palette?.palette }
 
+    /// What the screen is painted in: the song's colours, or, while last
+    /// launch's song is on its way, the ones remembered from it.
+    private var groundPalette: ArtworkPalette? {
+        track?.palette ?? controller.resuming.flatMap { heldPalette ?? $0.palette }
+    }
+
     /// Tinted text: the cover's text colour, or the coral that stays legible on white.
     var textTint: Color { track?.palette?.foreground ?? .accentText }
 
@@ -183,8 +189,10 @@ struct PracticeView: View {
                             #endif
                         }
                         .animation(isDragged(to: proxy.size) ? .snappy : nil, value: layout.isCompact)
-                    } else if controller.isRestoringLastSong {
+                    } else if let resuming = controller.resuming {
                         RestoringState(
+                            title: resuming.title,
+                            artistName: resuming.artistName,
                             diameter: arrivalDiameter(proxy.size),
                             leadingWidth: arrivalLeadingWidth(proxy.size),
                             crease: arrivalCrease
@@ -212,7 +220,18 @@ struct PracticeView: View {
                 laidOutSize = size
             }
         }
-        .modifier(ArtworkGround(palette: track?.palette, isPlaying: controller.isPlaying, paintsBackdrop: paintsGround))
+        .modifier(ArtworkGround(palette: groundPalette, isPlaying: controller.isPlaying, paintsBackdrop: paintsGround))
+        // Held under the song's ID, so the song lands in the colours already
+        // showing rather than in MusicKit's single colour first.
+        .onChange(of: controller.resuming, initial: true) { _, resuming in
+            if let resuming {
+                if palette == nil, let remembered = resuming.palette {
+                    palette = (resuming.songID, remembered)
+                }
+            } else if controller.selectedSong == nil {
+                palette = nil
+            }
+        }
         .task(id: controller.selectedSong?.id) {
             guard let song = controller.selectedSong else { return }
             if palette?.songID != song.id.rawValue {
@@ -231,11 +250,12 @@ struct PracticeView: View {
                 if palette?.songID != song.id.rawValue { palette = (song.id.rawValue, nil) }
                 return
             }
+            LastLoadedSong.remember(sampled.ground, for: song.id.rawValue)
             withAnimation(.easeInOut(duration: 0.4)) {
                 palette = (song.id.rawValue, sampled)
             }
         }
-        .onChange(of: track?.palette, initial: true) { _, palette in
+        .onChange(of: groundPalette, initial: true) { _, palette in
             onPalette(palette)
         }
         .sheet(item: $picking) { picking in
@@ -1739,9 +1759,13 @@ private struct PanelGlass: ViewModifier {
     }
 }
 
-/// Last launch's song is on its way: the silhouette, with a spinner where the
-/// arrival copy goes, so a song landing looks the same as it does from the picker.
+/// Last launch's song is on its way: the silhouette, with the song's name
+/// where the arrival copy goes, on its remembered colours, so launch looks
+/// like the song arriving rather than an empty screen with a spinner.
 private struct RestoringState: View {
+    /// `nil` from a store kept before the name was remembered.
+    var title: String?
+    var artistName: String?
     var diameter: CGFloat
     var leadingWidth: CGFloat?
     var crease: ClosedRange<CGFloat>?
@@ -1749,21 +1773,21 @@ private struct RestoringState: View {
     var body: some View {
         if let leadingWidth {
             HStack(spacing: 0) {
-                DialSilhouette(diameter: diameter, systemImage: "music.note.list")
+                DialSilhouette(diameter: diameter, systemImage: "music.note")
                     .frame(width: leadingWidth)
-                spinner
+                caption
+                    .frame(maxWidth: 480)
                     .frame(maxWidth: .infinity)
             }
             .frame(maxWidth: 960, maxHeight: .infinity)
         } else if let crease {
-            // The spinner stands in for the arrival message, which sits above the crease.
             AroundCrease(crease: crease) {
                 VStack(spacing: 24) {
                     DialSilhouette(
                         diameter: min(diameter, crease.lowerBound - PracticeView.creaseMessageReserve),
-                        systemImage: "music.note.list"
+                        systemImage: "music.note"
                     )
-                    spinner
+                    caption
                 }
             } below: {
                 EmptyView()
@@ -1772,12 +1796,13 @@ private struct RestoringState: View {
             VStack(spacing: 0) {
                 Spacer(minLength: 16)
 
-                DialSilhouette(diameter: diameter, systemImage: "music.note.list")
+                DialSilhouette(diameter: diameter, systemImage: "music.note")
 
                 Spacer(minLength: 16)
                     .frame(maxHeight: 40)
 
-                spinner
+                caption
+                    .frame(maxWidth: 480)
 
                 Spacer(minLength: 16)
             }
@@ -1785,10 +1810,35 @@ private struct RestoringState: View {
         }
     }
 
-    private var spinner: some View {
-        ProgressView()
-            .controlSize(.large)
-            .accessibilityLabel("Loading your last song")
+    private var caption: some View {
+        VStack(spacing: 8) {
+            if let title {
+                Text(title)
+                    .font(.title2.weight(.semibold))
+                    .lineLimit(2)
+                if let artistName {
+                    Text(artistName)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Picking up where you left off")
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.top, 16)
+            } else {
+                ProgressView()
+                    .controlSize(.large)
+            }
+        }
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 40)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title.map { "Loading \($0)" } ?? "Loading your last song")
     }
 }
 
@@ -2112,9 +2162,28 @@ private func loadedPreview(
         .padding(.vertical, 16)
 }
 
-#Preview("Restoring") {
-    RestoringState(diameter: 260)
-        .padding(.vertical, 16)
+private func restoringPreview(cover: OKLCH?, remembersName: Bool = true) -> some View {
+    let controller = PlaybackController()
+    controller.showResuming(LastLoadedSong.Stored(
+        songID: "1",
+        title: remembersName ? "Little Wing" : nil,
+        artistName: remembersName ? "Jimi Hendrix" : nil,
+        ground: cover.map { ArtworkPalette(cover: $0).ground }
+    ))
+    return PracticeView(controller: controller)
+        .modelContainer(try! AppSchema.inMemoryContainer())
+}
+
+#Preview("Restoring", traits: .fixedLayout(width: 402, height: 780)) {
+    restoringPreview(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18))
+}
+
+#Preview("Restoring, iPad wide", traits: .fixedLayout(width: 880, height: 640)) {
+    restoringPreview(cover: OKLCH(red: 0.18, green: 0.42, blue: 0.45))
+}
+
+#Preview("Restoring, nothing remembered", traits: .fixedLayout(width: 402, height: 780)) {
+    restoringPreview(cover: nil, remembersName: false)
 }
 
 #Preview("No access") {

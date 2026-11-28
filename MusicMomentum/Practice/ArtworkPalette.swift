@@ -21,9 +21,12 @@ struct ArtworkPalette: Equatable {
     /// Light glass washes out on a bright ground, so controls there take a
     /// smoked fill instead.
     var isBright: Bool
+    /// What the colours were made from, kept so the next launch can open in them.
+    let ground: Ground
 
-    private init(ground: Ground) {
+    init(ground: Ground) {
         assert(ground.mesh.count == 9, "The mesh is 3×3")
+        self.ground = ground
         mesh = ground.mesh.map { Color(cgColor: $0.cgColor) }
         shadow = Color(cgColor: ground.shadow.cgColor)
         background = Color(cgColor: ground.glyph.cgColor)
@@ -71,7 +74,7 @@ struct ArtworkPalette: Equatable {
         var mesh: [OKLCH]
     }
 
-    nonisolated struct Ground: Equatable {
+    nonisolated struct Ground: Equatable, Codable {
         var mesh: [OKLCH]
         /// What the bottom of the screen darkens towards.
         var shadow: OKLCH

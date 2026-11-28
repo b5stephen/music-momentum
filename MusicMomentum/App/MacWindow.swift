@@ -197,7 +197,8 @@ private let previewTrack = PracticeView.Track(
 @MainActor
 private func previewWindow(
     track: PracticeView.Track?,
-    sidebarOver: Bool = false
+    sidebarOver: Bool = false,
+    resuming: LastLoadedSong.Stored? = nil
 ) -> some View {
     let container = try! AppSchema.inMemoryContainer()
     let context = container.mainContext
@@ -208,6 +209,7 @@ private func previewWindow(
     SavedSong.save(songID: "5", title: "Copper Wire", artistName: "Ada & the Static", artworkData: nil, speed: 0.65, in: context)
     let controller = PlaybackController()
     controller.playbackRate = 0.6
+    if let resuming { controller.showResuming(resuming) }
     return PreviewWindow(controller: controller, track: track, sidebarOver: sidebarOver)
         .environment(MiniPlayerSwitch())
         .modelContainer(container)
@@ -248,5 +250,12 @@ private struct PreviewWindow: View {
 
 #Preview("No song", traits: .fixedLayout(width: 1280, height: 820)) {
     previewWindow(track: nil)
+}
+
+#Preview("Restoring", traits: .fixedLayout(width: 1280, height: 820)) {
+    previewWindow(track: nil, resuming: .init(
+        songID: "4", title: "Night Ferry", artistName: "Low Tide Club",
+        ground: ArtworkPalette(cover: OKLCH(red: 0.18, green: 0.42, blue: 0.45)).ground
+    ))
 }
 #endif

@@ -22,9 +22,11 @@ final class PlaybackController {
     private var isLoadingSavedSpeed = false
 
     var selectedSong: Song?
-    /// True while last launch's song is being looked up, so the practice
-    /// screen can hold off showing "nothing loaded" for a song that's coming.
-    private(set) var isRestoringLastSong = false
+    /// Last launch's song while it's looked up, so the screens can show it
+    /// coming, in its colours, rather than "nothing loaded". Set before the
+    /// first frame: a window that opened grey or white and then turned to the
+    /// cover's colours read as a flash.
+    private(set) var resuming: LastLoadedSong.Stored?
     /// Mirrored: read straight off `player.state` (`Observable` since iOS
     /// 26.4), the marker sheet's button was left showing Pause after the song
     /// stopped. The status stream and the ticker both refresh it, so it still
@@ -45,6 +47,11 @@ final class PlaybackController {
     #if DEBUG
     /// The loaded `SampleSong`'s length, so it can be marked up.
     var sampleDuration: TimeInterval?
+
+    /// For previews of launch, which never finish restoring.
+    func showResuming(_ last: LastLoadedSong.Stored) {
+        resuming = last
+    }
     #endif
     /// Suspends the ticker so the thumb doesn't fight the playhead.
     var isScrubbing = false
@@ -96,7 +103,10 @@ final class PlaybackController {
         readPlaybackTime()
         startTicking()
         startObservingStatus()
-        Task { await restoreLastSong() }
+        if selectedSong == nil, authorizationStatus == .authorized, let last = LastLoadedSong.stored() {
+            resuming = last
+            Task { await restore(last) }
+        }
     }
 
     /// Resuming from the lock screen or Control Centre bypasses `play()`, and
@@ -127,12 +137,8 @@ final class PlaybackController {
     /// quiet: the user didn't ask for this song, so an empty screen is the
     /// whole answer. A song that's gone is forgotten; a lookup that merely
     /// failed keeps it for next time.
-    private func restoreLastSong() async {
-        guard selectedSong == nil, authorizationStatus == .authorized,
-              let last = LastLoadedSong.stored
-        else { return }
-        isRestoringLastSong = true
-        defer { isRestoringLastSong = false }
+    private func restore(_ last: LastLoadedSong.Stored) async {
+        defer { resuming = nil }
         let generation = beginLoad()
         do {
             let song = try await SongLookup.song(libraryID: last.songID, catalogID: last.catalogID)
