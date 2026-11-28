@@ -63,7 +63,7 @@ struct SavedSidebarView: View {
     }
 
     private func isExpanded(_ folder: ListFolder) -> Bool {
-        isSearching || !collapsed.ids.contains(folder.id)
+        isSearching || collapsed.isOpen(folder.id)
     }
 
     private var unfiledCount: Int {

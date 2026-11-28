@@ -60,7 +60,7 @@ struct SavedSongsView: View {
 
     /// Searching opens every folder, so a match is never hidden in a closed one.
     private func isExpanded(_ folder: ListFolder) -> Bool {
-        isSearching || !collapsed.ids.contains(folder.id)
+        isSearching || collapsed.isOpen(folder.id)
     }
 
     private var unfiledCount: Int {
@@ -654,7 +654,7 @@ struct SavedSongsView: View {
             // headline-sized folder looked lost, it's nearly the artwork's
             // width, so the name starts where the song titles do.
             HStack(spacing: isBesidePractice ? 12 : 8) {
-                Image(systemName: folder.list == nil ? "tray" : "folder")
+                Image(systemName: folder.isAll ? "music.note.list" : folder.list == nil ? "tray" : "folder")
                     .font(isBesidePractice ? .system(size: 34, weight: .light) : .headline)
                     .foregroundStyle(Color.secondaryLabel)
                     .frame(width: isBesidePractice ? 48 : nil, alignment: .leading)
