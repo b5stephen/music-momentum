@@ -340,12 +340,17 @@ struct SavedSongsView: View {
                                     } label: {
                                         Label("Manage Lists\u{2026}", systemImage: "list.bullet")
                                     }
-                                    Picker("View As", selection: $layout) {
-                                        ForEach(SavedLayout.allCases) { layout in
-                                            Label(layout.title, systemImage: layout.systemImage).tag(layout)
+                                    // An inline picker's own label never shows in
+                                    // an iOS menu; the section header is the one
+                                    // way to say what Songs and Lists choose.
+                                    Section("View As") {
+                                        Picker("View As", selection: $layout) {
+                                            ForEach(SavedLayout.allCases) { layout in
+                                                Label(layout.title, systemImage: layout.systemImage).tag(layout)
+                                            }
                                         }
+                                        .pickerStyle(.inline)
                                     }
-                                    .pickerStyle(.inline)
                                 }
                             } label: {
                                 Image(systemName: "ellipsis")
@@ -690,16 +695,28 @@ struct SavedSongsView: View {
         .accessibilityAddTraits(.isHeader)
     }
 
+    /// Laid out as a song row, a tile where the artwork goes, as Music's
+    /// Add Music is in an empty playlist. A grey label with a plus at the
+    /// titles' inset floated, belonging to neither the header nor a row.
     private func emptyFolderRow(_ list: PracticeList) -> some View {
         Button {
             addingSongsToList = list
         } label: {
-            Label("Add Songs\u{2026}", systemImage: "plus")
-                .font(.subheadline)
-                .foregroundStyle(Color.secondaryLabel)
+            HStack(spacing: 12) {
+                Image(systemName: "plus")
+                    .font(.title3.weight(.medium))
+                    .foregroundStyle(Color.accentText)
+                    .frame(width: 48, height: 48)
+                    .background(Color.accentColor.opacity(0.14), in: .rect(cornerRadius: 6))
+                Text("Add Songs\u{2026}")
+                    .font(.body)
+                    .foregroundStyle(Color.accentText)
+                Spacer(minLength: 0)
+            }
+            .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .listRowInsets(EdgeInsets(top: 10, leading: SavedSongRow.titleInset, bottom: 10, trailing: trailingInset))
+        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: trailingInset))
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
         .selectionDisabled()
@@ -1005,6 +1022,17 @@ private func previewContainer() -> ModelContainer {
     PracticeList.add([blackbird], to: acoustic, in: context)
     PracticeList.add([littleWing], to: blues, in: context)
     return container
+}
+
+/// Viewed as Lists, with a list that has no songs yet.
+#Preview("Lists") {
+    let defaults = UserDefaults(suiteName: "SavedSongsView.ListsPreview")!
+    defaults.set(SavedLayout.lists.rawValue, forKey: SavedLayout.storageKey)
+    let container = previewContainer()
+    PracticeList.create(name: "Friday Gig", in: container.mainContext)
+    return SavedSongsView(controller: PlaybackController()) {}
+        .defaultAppStorage(defaults)
+        .modelContainer(container)
 }
 
 #Preview("Empty") {
