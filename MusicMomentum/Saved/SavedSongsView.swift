@@ -243,6 +243,11 @@ struct SavedSongsView: View {
             .navigationBarTitleDisplayMode(isBesidePractice ? .inline : .automatic)
             #endif
             .conditionalSearchable(!recentlyChanged.isEmpty, text: $searchTerm)
+            // The selection bar shares the bottom edge with the tab bar,
+            // which drew over its ends; Photos and Mail hide it the same way.
+            #if os(iOS)
+            .toolbar(isSelecting ? .hidden : .automatic, for: .tabBar)
+            #endif
             .toolbar {
                 if isSelecting {
                     ToolbarItem(placement: .cancellationAction) {

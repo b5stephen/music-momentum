@@ -50,15 +50,12 @@ struct ListFilterBar: View {
                     }
                 }
 
+                // A `Menu` with a primary action rather than `.contextMenu`:
+                // the strip is a List row, and the row's cell takes over any
+                // context menu inside it, lifting every pill at once.
                 ForEach(lists) { list in
-                    chip(
-                        title: list.name,
-                        count: list.songCount,
-                        isSelected: filter.contains(listID: list.listID)
-                    ) {
-                        filter = filter.toggling(listID: list.listID, multiSelect: false)
-                    }
-                    .contextMenu {
+                    let isSelected = filter.contains(listID: list.listID)
+                    Menu {
                         Button { onAddSongsToList(list) } label: {
                             Label("Add Songs\u{2026}", systemImage: "plus.circle")
                         }
@@ -69,7 +66,13 @@ struct ListFilterBar: View {
                         Button(role: .destructive) { onDeleteList(list) } label: {
                             Label("Delete List", systemImage: "trash")
                         }
+                    } label: {
+                        chipLabel(title: list.name, count: list.songCount, isSelected: isSelected)
+                    } primaryAction: {
+                        filter = filter.toggling(listID: list.listID, multiSelect: false)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
 
                 Button(action: onNewList) {
@@ -101,23 +104,27 @@ struct ListFilterBar: View {
 
     private func chip(title: String, count: Int? = nil, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 5) {
-                Text(title)
-                    .font(.footnote.weight(.medium))
-                    .lineLimit(1)
-                if let count {
-                    Text("\(count)")
-                        .font(.caption2.monospacedDigit())
-                        .opacity(0.65)
-                }
-            }
-            .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentText) : AnyShapeStyle(.primary))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .chipSurface(isSelected: isSelected, isBesidePractice: isBesidePractice)
+            chipLabel(title: title, count: count, isSelected: isSelected)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private func chipLabel(title: String, count: Int?, isSelected: Bool) -> some View {
+        HStack(spacing: 5) {
+            Text(title)
+                .font(.footnote.weight(.medium))
+                .lineLimit(1)
+            if let count {
+                Text("\(count)")
+                    .font(.caption2.monospacedDigit())
+                    .opacity(0.65)
+            }
+        }
+        .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentText) : AnyShapeStyle(.primary))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .chipSurface(isSelected: isSelected, isBesidePractice: isBesidePractice)
     }
 }
 
