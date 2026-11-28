@@ -697,12 +697,11 @@ struct ManageSavedSongsView: View {
         return item.song.songID
     }
 
-    private func assignDraggedIDs(_ payloads: [String], to list: PracticeList) -> Bool {
+    private func assignDraggedIDs(_ payloads: [String], to list: PracticeList) {
         let ids = Set(payloads.flatMap { $0.split(separator: "\n").map(String.init) })
         let songs = allSongs.filter { ids.contains($0.songID) }
-        guard !songs.isEmpty else { return false }
+        guard !songs.isEmpty else { return }
         PracticeList.add(songs, to: list, in: modelContext)
-        return true
     }
 
     private func addSong() {
