@@ -44,12 +44,6 @@ struct ListFilterBar: View {
                     filter = .all
                 }
 
-                if unfiledCount > 0 || filter == .unfiled {
-                    chip(title: "Not in a List", count: unfiledCount, isSelected: filter == .unfiled) {
-                        filter = filter == .unfiled ? .all : .unfiled
-                    }
-                }
-
                 // A `Menu` with a primary action rather than `.contextMenu`:
                 // the strip is a List row, and the row's cell takes over any
                 // context menu inside it, lifting every pill at once.
@@ -73,6 +67,14 @@ struct ListFilterBar: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(isSelected ? .isSelected : [])
+                }
+
+                // After the lists: it comes and goes as songs are filed, and
+                // ahead of them it shifted every list pill when it did.
+                if unfiledCount > 0 || filter == .unfiled {
+                    chip(title: "Not in a List", count: unfiledCount, isSelected: filter == .unfiled) {
+                        filter = filter == .unfiled ? .all : .unfiled
+                    }
                 }
 
                 Button(action: onNewList) {
