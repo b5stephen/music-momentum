@@ -182,12 +182,14 @@ struct SavedSongsView: View {
                                 Section {
                                     if isExpanded(folder) {
                                         ForEach(folder.songs) { row($0, in: folder) }
-                                        if folder.songs.isEmpty, let list = folder.list {
-                                            emptyFolderRow(list)
-                                        }
                                     }
                                 } header: {
                                     folderHeader(folder)
+                                }
+                                // A section of its own: after song rows in the
+                                // folder's section, List crashed casting its cell.
+                                if isExpanded(folder), let list = folder.list, showsAddSongsRow {
+                                    Section { addSongsRow(list) }
                                 }
                             }
                         } else {
@@ -209,6 +211,10 @@ struct SavedSongsView: View {
                                         ForEach(section.songs) { row($0) }
                                     }
                                 }
+                            }
+                            // An empty list has its own empty state with the same button.
+                            if let list = activeSingleList, showsAddSongsRow, !filteredSongs.isEmpty {
+                                Section { addSongsRow(list) }
                             }
                         }
                     }
@@ -387,7 +393,7 @@ struct SavedSongsView: View {
                 ListManagerSheet()
             }
             .sheet(item: $addingSongsToList) { list in
-                AddSongsToListSheet(list: list)
+                AddSongsToListSheet(list: list, controller: controller)
             }
             .sheet(item: $assigning) { batch in
                 AssignListsSheet(songs: batch.songs)
@@ -695,28 +701,40 @@ struct SavedSongsView: View {
         .accessibilityAddTraits(.isHeader)
     }
 
-    /// Laid out as a song row, a tile where the artwork goes, as Music's
-    /// Add Music is in an empty playlist. A grey label with a plus at the
-    /// titles' inset floated, belonging to neither the header nor a row.
-    private func emptyFolderRow(_ list: PracticeList) -> some View {
-        Button {
+    /// Searching, it would read as a match; selecting, as a row to pick.
+    private var showsAddSongsRow: Bool { !isSearching && !isSelecting }
+
+    /// The last row of a list, in a folder or under its chip. Laid out as a
+    /// song row, a tile where the artwork goes, as Music's Add Music is in a
+    /// playlist. A grey label with a plus at the titles' inset floated,
+    /// belonging to neither the header nor a row.
+    /// An empty list's is its one thing to do: a coral tile where the
+    /// artwork goes. Under songs it's a bare plus and small grey text in a
+    /// shorter row, since a tile per list, coral or grey, read as one more
+    /// song and outweighed the titles.
+    private func addSongsRow(_ list: PracticeList) -> some View {
+        let isEmpty = list.songCount == 0
+        return Button {
             addingSongsToList = list
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: "plus")
-                    .font(.title3.weight(.medium))
-                    .foregroundStyle(Color.accentText)
-                    .frame(width: 48, height: 48)
-                    .background(Color.accentColor.opacity(0.14), in: .rect(cornerRadius: 6))
+                    .font(isEmpty ? .title3.weight(.medium) : .body)
+                    .foregroundStyle(isEmpty ? Color.accentText : Color.tertiaryLabel)
+                    .frame(width: 48, height: isEmpty ? 48 : nil)
+                    .background(
+                        isEmpty ? Color.accentColor.opacity(0.14) : .clear,
+                        in: .rect(cornerRadius: 6)
+                    )
                 Text("Add Songs\u{2026}")
-                    .font(.body)
-                    .foregroundStyle(Color.accentText)
+                    .font(isEmpty ? .body : .subheadline)
+                    .foregroundStyle(isEmpty ? Color.accentText : Color.secondaryLabel)
                 Spacer(minLength: 0)
             }
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: trailingInset))
+        .listRowInsets(EdgeInsets(top: isEmpty ? 10 : 6, leading: 16, bottom: isEmpty ? 10 : 6, trailing: trailingInset))
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
         .selectionDisabled()
@@ -1033,6 +1051,15 @@ private func previewContainer() -> ModelContainer {
     return SavedSongsView(controller: PlaybackController()) {}
         .defaultAppStorage(defaults)
         .modelContainer(container)
+}
+
+/// Lists beside the card, where rows run wide.
+#Preview("Lists beside the card", traits: .fixedLayout(width: 860, height: 700)) {
+    let defaults = UserDefaults(suiteName: "SavedSongsView.ListsPreview")!
+    defaults.set(SavedLayout.lists.rawValue, forKey: SavedLayout.storageKey)
+    return SavedSongsView(controller: PlaybackController(), isBesidePractice: true, previewCurrentID: "2") {}
+        .defaultAppStorage(defaults)
+        .modelContainer(previewContainer())
 }
 
 #Preview("Empty") {
