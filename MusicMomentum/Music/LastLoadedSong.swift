@@ -75,5 +75,5 @@ nonisolated enum LastLoadedSong {
 }
 
 extension LastLoadedSong.Stored {
-    @MainActor var palette: ArtworkPalette? { ground.map(ArtworkPalette.init(ground:)) }
+    @MainActor var palette: ArtworkPalette? { ground.map { ArtworkPalette(ground: $0) } }
 }

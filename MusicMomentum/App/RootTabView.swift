@@ -77,7 +77,7 @@ struct RootTabView: View {
         // the practice screen's text colour while it's showing. That colour is
         // always light, and the glass turns light over a bright cover, so the
         // bar is held dark; each tab gets the real scheme back.
-        .tint(tab == .practice ? practicePalette?.foreground : nil)
+        .tint(tab == .practice ? practicePalette?.tint : nil)
         .environment(\.colorScheme, tab == .practice && practicePalette != nil ? .dark : colorScheme)
     }
 

@@ -34,9 +34,9 @@ struct ArtworkGround: ViewModifier {
             // would rebuild the split view, and Practice's state with it, each
             // time a cover's colours arrive.
             content
-                .foregroundStyle(palette.map { AnyShapeStyle($0.foreground) } ?? AnyShapeStyle(.primary))
-                .tint(palette?.foreground)
-                .environment(\.groundForeground, palette?.foreground)
+                .foregroundStyle(palette?.tint.map { AnyShapeStyle($0) } ?? AnyShapeStyle(.primary))
+                .tint(palette?.tint)
+                .environment(\.groundForeground, palette?.tint)
                 .environment(\.colorScheme, palette == nil ? systemScheme : .dark)
                 .environment(\.systemColorScheme, systemScheme)
                 // Empty, the window turned see-through until a cover's
@@ -71,6 +71,17 @@ struct ArtworkGround: ViewModifier {
 
     @ViewBuilder
     private func tinted(_ content: Content, _ palette: ArtworkPalette) -> some View {
+        if palette.keepsCoral {
+            content
+                .environment(\.colorScheme, .dark)
+                .background { if paintsBackdrop { backdrop(palette) } }
+        } else {
+            coverTinted(content, palette)
+        }
+    }
+
+    @ViewBuilder
+    private func coverTinted(_ content: Content, _ palette: ArtworkPalette) -> some View {
         let tinted = content
             .foregroundStyle(palette.foreground)
             .tint(palette.foreground)

@@ -23,16 +23,42 @@ struct ArtworkPalette: Equatable {
     var isBright: Bool
     /// What the colours were made from, kept so the next launch can open in them.
     let ground: Ground
+    /// The house ground's: coral stays the tint, as it shows up there, and
+    /// only a cover's colours take over "on".
+    let keepsCoral: Bool
 
-    init(ground: Ground) {
+    /// What controls are tinted with: the cover's text colour, or `nil` to
+    /// leave coral.
+    var tint: Color? { keepsCoral ? nil : foreground }
+
+    init(ground: Ground, keepsCoral: Bool = false) {
         assert(ground.mesh.count == 9, "The mesh is 3×3")
         self.ground = ground
+        self.keepsCoral = keepsCoral
         mesh = ground.mesh.map { Color(cgColor: $0.cgColor) }
         shadow = Color(cgColor: ground.shadow.cgColor)
         background = Color(cgColor: ground.glyph.cgColor)
         foreground = Color(cgColor: ground.text.cgColor)
         isBright = ground.mesh[3...5].map(\.l).reduce(0, +) / 3 > 0.6
     }
+
+    /// What Practice is painted in with nothing loaded: the website's
+    /// near-black plum, a shade raised behind the knob, so the empty screen
+    /// is the loaded one without a cover rather than the system background.
+    static let house: ArtworkPalette = {
+        let ground = OKLCH(red: 0x0D / 255, green: 0x0A / 255, blue: 0x0F / 255)
+        let surface = OKLCH(red: 0x17 / 255, green: 0x12 / 255, blue: 0x1A / 255)
+        let raised = OKLCH(red: 0x23 / 255, green: 0x1B / 255, blue: 0x24 / 255)
+        return ArtworkPalette(
+            ground: Ground(
+                mesh: [ground, surface, ground, surface, raised, surface, ground, ground, ground],
+                shadow: ground,
+                glyph: raised,
+                text: OKLCH(red: 0xF6 / 255, green: 0xEF / 255, blue: 0xEA / 255)
+            ),
+            keepsCoral: true
+        )
+    }()
 
     init(cover: OKLCH) {
         self.init(ground: Self.ground(for: Regions(average: cover, mesh: Array(repeating: cover, count: 9))))

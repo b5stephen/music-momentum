@@ -153,6 +153,10 @@ final class PlaybackController {
             if generation == loadGeneration, errorMessage != nil {
                 selectedSong = nil
                 errorMessage = nil
+                // Or the empty screen's knob shows the failed song's speed.
+                isLoadingSavedSpeed = true
+                playbackRate = 1.0
+                isLoadingSavedSpeed = false
             }
         } catch {}
     }
@@ -292,9 +296,10 @@ final class PlaybackController {
     }
 
     private func queue(_ song: Song, generation: Int) async {
+        let wasEmpty = selectedSong == nil
         selectedSong = song
         LastLoadedSong.remember(song)
-        loadSavedSpeed(for: song)
+        loadSavedSpeed(for: song, keepingUnsavedRate: wasEmpty)
         errorMessage = nil
         rateWarning = nil
         playbackTime = 0
@@ -651,15 +656,15 @@ final class PlaybackController {
 
     // MARK: - Persistence
 
-    private func loadSavedSpeed(for song: Song) {
+    /// `keepingUnsavedRate` is for a song chosen from the empty screen, whose
+    /// knob can be turned first: an unsaved song starts at that speed rather
+    /// than throwing it away. A saved song's own speed always wins.
+    private func loadSavedSpeed(for song: Song, keepingUnsavedRate: Bool) {
         isLoadingSavedSpeed = true
         defer { isLoadingSavedSpeed = false }
 
-        guard let modelContext else {
-            playbackRate = 1.0
-            return
-        }
-        playbackRate = SavedSong.find(song: song, in: modelContext)?.speed ?? 1.0
+        let saved = modelContext.flatMap { SavedSong.find(song: song, in: $0) }
+        playbackRate = saved?.speed ?? (keepingUnsavedRate ? playbackRate : 1.0)
     }
 
     /// Only saved songs keep a practice date; playing an unsaved one leaves

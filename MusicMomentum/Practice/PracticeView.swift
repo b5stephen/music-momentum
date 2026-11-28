@@ -136,10 +136,14 @@ struct PracticeView: View {
     /// cover), so the screen doesn't flash the system background between them.
     private var heldPalette: ArtworkPalette? { palette?.palette }
 
-    /// What the screen is painted in: the song's colours, or, while last
-    /// launch's song is on its way, the ones remembered from it.
+    /// What the screen is painted in: the song's colours; while last
+    /// launch's song is on its way, the ones remembered from it; with nothing
+    /// loaded, the house ground. A song whose cover has no colours keeps the
+    /// system look.
     private var groundPalette: ArtworkPalette? {
-        track?.palette ?? controller.resuming.flatMap { heldPalette ?? $0.palette }
+        if let track { return track.palette }
+        if let resuming = controller.resuming { return heldPalette ?? resuming.palette ?? .house }
+        return .house
     }
 
     /// Tinted text: the cover's text colour, or the coral that stays legible on white.
@@ -1545,14 +1549,18 @@ struct PracticeView: View {
             diameter: arrivalDiameter(size),
             leadingWidth: arrivalLeadingWidth(size),
             crease: crease,
+            speed: $controller.playbackRate,
             systemImage: "music.note.list",
-            headline: "Nothing loaded yet",
-            detail: "Pick a song from Apple Music and slow it down to a speed you can actually play.",
+            headline: ArrivalState.welcomeHeadline,
+            detail: ArrivalState.welcomeDetail,
+            steps: ArrivalState.welcomeSteps,
             actionTitle: "Choose a Song",
             actionImage: "music.note.list",
-            footnote: savedIsBeside
-                ? "Or tap one of your saved songs."
-                : "Or open Saved to pick up where you left off."
+            footnote: savedSongs.isEmpty
+                ? "Uses your Apple Music subscription."
+                : savedIsBeside
+                    ? "Or pick one of your saved songs."
+                    : "Or open Saved to pick up where you left off."
         ) {
             pick(.change)
         }
@@ -1629,25 +1637,44 @@ struct PracticeView: View {
 /// The practice screen with no song: the dial's silhouette above the copy,
 /// the pair centred. Pinned to the top like the loaded wheel, it left the
 /// copy stranded at the bottom of a phone with a void between them.
+/// Practice with nothing loaded, on the house ground: what the app does, for
+/// someone who has just installed it, beside the real knob, which can be
+/// turned before a song is chosen and hands its speed to that song.
 private struct ArrivalState: View {
     var diameter: CGFloat
-    /// Set when wide: the silhouette's column, beside the copy.
+    /// Set when wide: the knob's column, beside the copy.
     var leadingWidth: CGFloat?
     /// A bent foldable's crease across the screen; see `AroundCrease`.
     var crease: ClosedRange<CGFloat>?
+    /// The live knob's speed; `nil` draws a silhouette with `systemImage`.
+    var speed: Binding<Double>?
     var systemImage: String
     var headline: String
     var detail: String
+    var steps: [Step] = []
     var actionTitle: String
     /// The picker's glyph on a button that opens it, as Saved's Add Song has.
     var actionImage: String?
     var footnote: String
     var action: () -> Void
 
+    struct Step: Hashable {
+        var systemImage: String
+        var text: String
+    }
+
+    static let welcomeHeadline = "Slow down any song"
+    static let welcomeDetail = "Then play along until you can play it at full speed."
+    static let welcomeSteps = [
+        Step(systemImage: "music.note.list", text: "Pick any song from Apple Music"),
+        Step(systemImage: "gauge.with.dots.needle.33percent", text: "Slow it to a speed you can play"),
+        Step(systemImage: "repeat", text: "Loop the part you're learning"),
+    ]
+
     var body: some View {
         if let leadingWidth {
             HStack(spacing: 0) {
-                DialSilhouette(diameter: diameter, systemImage: systemImage)
+                dial(diameter)
                     .frame(width: leadingWidth)
                 copy
                     .frame(maxWidth: 480)
@@ -1658,10 +1685,7 @@ private struct ArrivalState: View {
             // What's read above the crease, what's tapped below it, under the hand.
             AroundCrease(crease: crease) {
                 VStack(spacing: 24) {
-                    DialSilhouette(
-                        diameter: min(diameter, crease.lowerBound - PracticeView.creaseMessageReserve),
-                        systemImage: systemImage
-                    )
+                    dial(min(diameter, crease.lowerBound - PracticeView.creaseMessageReserve))
                     message
                         .frame(maxWidth: 480)
                 }
@@ -1673,7 +1697,7 @@ private struct ArrivalState: View {
             VStack(spacing: 0) {
                 Spacer(minLength: 16)
 
-                DialSilhouette(diameter: diameter, systemImage: systemImage)
+                dial(diameter)
 
                 Spacer(minLength: 16)
                     .frame(maxHeight: 40)
@@ -1688,6 +1712,15 @@ private struct ArrivalState: View {
         }
     }
 
+    @ViewBuilder
+    private func dial(_ diameter: CGFloat) -> some View {
+        if let speed {
+            SpeedWheelPicker(speed: speed, diameter: diameter)
+        } else {
+            DialSilhouette(diameter: diameter, systemImage: systemImage)
+        }
+    }
+
     private var copy: some View {
         VStack(spacing: 0) {
             message
@@ -1699,17 +1732,37 @@ private struct ArrivalState: View {
     private var message: some View {
         VStack(spacing: 8) {
             Text(headline)
-                .font(.title2.weight(.semibold))
+                .font(.title.weight(.bold))
             Text(detail)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
         .multilineTextAlignment(.center)
-        .padding(.horizontal, 40)
+        // A short phone squeezed the detail to one truncated line.
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, 32)
     }
 
     private var call: some View {
         VStack(spacing: 0) {
+            if !steps.isEmpty {
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(steps, id: \.self) { step in
+                        Label {
+                            Text(step.text)
+                        } icon: {
+                            Image(systemName: step.systemImage)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 22)
+                        }
+                    }
+                }
+                .font(.subheadline)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 32)
+                .padding(.bottom, 28)
+            }
+
             Button(action: action) {
                 if let actionImage {
                     Label(actionTitle, systemImage: actionImage)
@@ -2149,17 +2202,31 @@ private func loadedPreview(
     loadedPreview(palette: nil, ab: .looping)
 }
 
-#Preview("Nothing loaded") {
-    ArrivalState(
-        diameter: 260,
-        systemImage: "music.note.list",
-        headline: "Nothing loaded yet",
-        detail: "Pick a song from Apple Music and slow it down to a speed you can actually play.",
-        actionTitle: "Choose a Song",
-        actionImage: "music.note.list",
-        footnote: "Or open Saved to pick up where you left off."
-    ) {}
-        .padding(.vertical, 16)
+private func nothingLoadedPreview(saved: Bool = false) -> some View {
+    let container = try! AppSchema.inMemoryContainer()
+    if saved {
+        SavedSong.save(songID: "1", title: "Little Wing", artistName: "Jimi Hendrix", artworkData: nil, speed: 0.6, in: container.mainContext)
+    }
+    let controller = PlaybackController()
+    controller.playbackRate = 0.75
+    return PracticeView(controller: controller)
+        .modelContainer(container)
+}
+
+#Preview("Nothing loaded", traits: .fixedLayout(width: 402, height: 874)) {
+    nothingLoadedPreview()
+}
+
+#Preview("Nothing loaded, songs saved", traits: .fixedLayout(width: 402, height: 874)) {
+    nothingLoadedPreview(saved: true)
+}
+
+#Preview("Nothing loaded, iPhone SE", traits: .fixedLayout(width: 375, height: 667)) {
+    nothingLoadedPreview()
+}
+
+#Preview("Nothing loaded, iPad wide", traits: .fixedLayout(width: 1180, height: 820)) {
+    nothingLoadedPreview()
 }
 
 private func restoringPreview(cover: OKLCH?, remembersName: Bool = true) -> some View {
