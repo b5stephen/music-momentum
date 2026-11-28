@@ -2164,12 +2164,14 @@ private func loadedPreview(
 
 private func restoringPreview(cover: OKLCH?, remembersName: Bool = true) -> some View {
     let controller = PlaybackController()
+    #if DEBUG
     controller.showResuming(LastLoadedSong.Stored(
         songID: "1",
         title: remembersName ? "Little Wing" : nil,
         artistName: remembersName ? "Jimi Hendrix" : nil,
         ground: cover.map { ArtworkPalette(cover: $0).ground }
     ))
+    #endif
     return PracticeView(controller: controller)
         .modelContainer(try! AppSchema.inMemoryContainer())
 }

@@ -214,12 +214,14 @@ private func panelPreview(loaded: Bool, resuming: Bool = false) -> some View {
     controller.playbackRate = 0.75
     controller.toggleLoop()
     controller.loop(only: chorus)
+    #if DEBUG
     if resuming {
         controller.showResuming(.init(
             songID: "1", title: "Harbour Lights", artistName: "Mara Ellis",
             ground: ArtworkPalette(cover: OKLCH(red: 0.53, green: 0.19, blue: 0.18)).ground
         ))
     }
+    #endif
     return MenuBarPanel(
         controller: controller,
         track: loaded ? .init(id: "1", title: "Harbour Lights", artistName: "Mara Ellis", palette: previewPalette) : nil

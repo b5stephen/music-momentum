@@ -382,12 +382,14 @@ private func miniPreview(palette: ArtworkPalette? = previewPalette, loop: Bool =
         controller.loop(only: chorus)
     }
     controller.seek(to: 80)
+    #if DEBUG
     if resuming {
         controller.showResuming(.init(
             songID: "1", title: "Harbour Lights", artistName: "Mara Ellis",
             ground: palette?.ground
         ))
     }
+    #endif
     return MiniPlayerView(
         controller: controller,
         track: resuming ? nil : .init(id: "1", title: "Harbour Lights", artistName: "Mara Ellis", palette: palette)

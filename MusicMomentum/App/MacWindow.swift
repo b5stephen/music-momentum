@@ -209,7 +209,9 @@ private func previewWindow(
     SavedSong.save(songID: "5", title: "Copper Wire", artistName: "Ada & the Static", artworkData: nil, speed: 0.65, in: context)
     let controller = PlaybackController()
     controller.playbackRate = 0.6
+    #if DEBUG
     if let resuming { controller.showResuming(resuming) }
+    #endif
     return PreviewWindow(controller: controller, track: track, sidebarOver: sidebarOver)
         .environment(MiniPlayerSwitch())
         .modelContainer(container)
