@@ -862,73 +862,30 @@ struct PracticeView: View {
     /// glass so it doesn't tower over the pills; the touch area stays 44pt.
     /// On its own line it's the save prompt's size, so the two read as a pair.
     private static let markGlassSide: CGFloat = 36
-    private static let markCapsuleHeight: CGFloat = 40
+    fileprivate static let markCapsuleHeight: CGFloat = 40
 
-    /// Filled like Loop once A is set: "B" while it waits for the end, "A·B"
-    /// once there's a loop. In the transport it's an outlined capsule, since
-    /// glass there would outweigh the bare glyphs; beside Mark it's Mark's
-    /// glass, so the two read as a pair.
     private func abButton(_ layout: PracticeLayout) -> some View {
-        let isSet = controller.ab != nil
-        let isWaitingForB = if case .started = controller.ab { true } else { false }
-        let title = Text(isWaitingForB ? "B" : "A\u{00B7}B")
-        let foreground = isSet ? AnyShapeStyle(onAccent) : AnyShapeStyle(.primary)
-        return Button {
-            controller.pressAB()
-        } label: {
-            if layout.isCompact {
-                title
-                    .font(.system(size: 14, weight: .heavy))
-                    .tracking(0.3)
-                    .foregroundStyle(foreground)
-                    .padding(.horizontal, 8)
-                    .frame(minWidth: 44, minHeight: 30)
-                    .background {
-                        if isSet {
-                            Capsule().fill(.tint)
-                        } else {
-                            Capsule().strokeBorder(.primary.opacity(0.6), lineWidth: 1.5)
-                        }
-                    }
-                    .fixedSize()
-                    .frame(width: 56, height: 44)
-                    .contentShape(.rect)
-            } else {
-                title
-                    .font(.subheadline.weight(.heavy))
-                    .tracking(0.3)
-                    .foregroundStyle(foreground)
-                    .padding(.horizontal, 14)
-                    .frame(minWidth: 56)
-                    .frame(height: Self.markCapsuleHeight)
-                    .background { if isSet { Capsule().fill(.tint) } }
-                    .modifier(ButtonGlass())
-                    .fixedSize()
-                    .frame(minHeight: 44)
-                    .contentShape(.rect)
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(controller.duration == nil)
-        .accessibilityLabel(abLabel)
-        // Nothing to offer before A: a press is all A·B does then. Discard
-        // is only here, since another press starts a new loop instead.
-        .contextMenu {
-            if hasLoopToSave {
-                Button { editABTimes() } label: { Label("Edit Times\u{2026}", systemImage: "slider.horizontal.3") }
-                Button { saveABLoop() } label: { Label("Save Loop", systemImage: "bookmark") }
-            }
-            if controller.ab != nil {
-                Button(role: .destructive) { controller.discardAB() } label: { Label("Discard", systemImage: "trash") }
-            }
-        }
+        ABButton(
+            controller: controller,
+            layout: layout,
+            onAccent: onAccent,
+            groundForeground: track?.palette?.foreground,
+            accessibilityLabel: abLabel,
+            editTimes: editABTimes,
+            saveLoop: saveABLoop
+        )
+        .equatable()
     }
 
     var abLabel: String {
         switch controller.ab {
         case nil: "Start an A–B loop here"
         case .started: "Set loop end here"
+        #if os(iOS)
+        case .closed: "Clear the A–B loop"
+        #else
         case .closed: "Start a new A–B loop here"
+        #endif
         }
     }
 
@@ -1896,6 +1853,106 @@ private struct DialSilhouette: View {
         }
         .frame(width: diameter, height: diameter)
         .accessibilityHidden(true)
+    }
+}
+
+/// Filled like Loop once A is set: "B" while it waits for the end, "A·B"
+/// once there's a loop. A press with a loop there clears it, where the Mac's
+/// starts a new A: Discard alone in the context menu left no visible way to
+/// get rid of one. In the transport it's an outlined capsule, since glass
+/// there would outweigh the bare glyphs; beside Mark it's Mark's glass, so the
+/// two read as a pair.
+///
+/// Its own view, compared without its closures, so the playhead's ticks don't
+/// rebuild it: a context menu rebuilt while open dropped the tap on Discard,
+/// which then took a second press or a pause.
+private struct ABButton: View, Equatable {
+    let controller: PlaybackController
+    let layout: PracticeLayout
+    let onAccent: Color
+    /// The cover's text colour, which `ArtworkGround` sets as the foreground
+    /// and can't be read back from the environment.
+    let groundForeground: Color?
+    let accessibilityLabel: String
+    let editTimes: () -> Void
+    let saveLoop: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.smokedFill) private var smokedFill
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.controller === rhs.controller
+            && lhs.layout == rhs.layout
+            && lhs.onAccent == rhs.onAccent
+            && lhs.groundForeground == rhs.groundForeground
+            && lhs.accessibilityLabel == rhs.accessibilityLabel
+    }
+
+    var body: some View {
+        let isSet = controller.ab != nil
+        let isWaitingForB = if case .started = controller.ab { true } else { false }
+        let title = Text(isWaitingForB ? "B" : "A\u{00B7}B")
+        let foreground = isSet ? AnyShapeStyle(onAccent) : AnyShapeStyle(.primary)
+        Button {
+            if controller.ab?.range != nil {
+                controller.discardAB()
+            } else {
+                controller.pressAB()
+            }
+        } label: {
+            if layout.isCompact {
+                title
+                    .font(.system(size: 14, weight: .heavy))
+                    .tracking(0.3)
+                    .foregroundStyle(foreground)
+                    .padding(.horizontal, 8)
+                    .frame(minWidth: 44, minHeight: 30)
+                    .background {
+                        if isSet {
+                            Capsule().fill(.tint)
+                        } else {
+                            Capsule().strokeBorder(.primary.opacity(0.6), lineWidth: 1.5)
+                        }
+                    }
+                    .fixedSize()
+                    .frame(width: 56, height: 44)
+                    .contentShape(.rect)
+            } else {
+                title
+                    .font(.subheadline.weight(.heavy))
+                    .tracking(0.3)
+                    .foregroundStyle(foreground)
+                    .padding(.horizontal, 14)
+                    .frame(minWidth: 56)
+                    .frame(height: PracticeView.markCapsuleHeight)
+                    .background { if isSet { Capsule().fill(.tint) } }
+                    .modifier(ButtonGlass())
+                    .fixedSize()
+                    .frame(minHeight: 44)
+                    .contentShape(.rect)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(controller.duration == nil)
+        .accessibilityLabel(accessibilityLabel)
+        // The cover's look, put back inside the reset below.
+        .foregroundStyle(groundForeground.map { AnyShapeStyle($0) } ?? AnyShapeStyle(Color.primary))
+        .environment(\.colorScheme, colorScheme)
+        .environment(\.smokedFill, smokedFill)
+        // Nothing to offer before A: a press is all A·B does then. Discard
+        // is here for a lone A, which a press would close instead.
+        .contextMenu {
+            if controller.ab?.range != nil {
+                Button { editTimes() } label: { Label("Edit Times\u{2026}", systemImage: "slider.horizontal.3") }
+                Button { saveLoop() } label: { Label("Save Loop", systemImage: "bookmark") }
+            }
+            if controller.ab != nil {
+                Button(role: .destructive) { controller.discardAB() } label: { Label("Discard", systemImage: "trash") }
+            }
+        }
+        // The menu's icons are drawn in the environment here, not the menu's
+        // own: inside the ground they came out in the cover's light text on
+        // a light menu, with a pale bin beside a red Discard.
+        .outsideArtworkGround()
     }
 }
 

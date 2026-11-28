@@ -430,7 +430,8 @@ final class PlaybackController {
 
     /// First press sets A, the second sets B and loops at once. A third
     /// starts again from a new A, replacing the unsaved loop: throwing it
-    /// away alone was too easy by accident, so that's Discard's job. Both
+    /// away alone was too easy by accident, so that's Discard's job (the
+    /// iPhone and iPad button calls `discardAB` itself instead). Both
     /// ends land a reaction's width before the playhead, as Mark does.
     func pressAB() {
         switch ab {
