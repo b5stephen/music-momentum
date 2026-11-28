@@ -34,60 +34,124 @@ struct AddSongsToListSheet: View {
         }
     }
 
+    private var memberIDs: Set<PersistentIdentifier> {
+        Set(list.songs.map(\.persistentModelID))
+    }
+
     var body: some View {
+        #if os(macOS)
+        // Laid out like `SongPickerView`'s Mac dialog: a sheet's toolbar would
+        // put the title in a band under the search field and let the list
+        // scroll under the buttons.
+        VStack(spacing: 0) {
+            header
+            Divider()
+            songList
+            buttons
+        }
+        .frame(minWidth: 460, idealWidth: 520, minHeight: 520, idealHeight: 600)
+        // The sidebar's sheet would otherwise take the window ground's dark
+        // scheme and the cover's light text.
+        .outsideArtworkGround()
+        .sheet(isPresented: $showingPicker) {
+            SongPickerView(title: "Add Song to Saved", confirmTitle: "Add") { song in
+                pickFromAppleMusic(song)
+            }
+        }
+        .onAppear(perform: seed)
+        #else
         NavigationStack {
-            Group {
-                if allSongs.isEmpty, controller == nil {
-                    ContentUnavailableView("No saved songs yet", systemImage: "bookmark")
-                } else {
-                    ScrollViewReader { proxy in
-                        List {
-                            if let controller, searchTerm.isEmpty {
-                                appleMusicRow(controller)
-                            }
-                            ForEach(filteredSongs) { songRow($0) }
+            songList
+                .navigationTitle("Add Songs to \u{201C}\(list.name)\u{201D}")
+                .navigationBarTitleDisplayMode(.inline)
+                .searchable(text: $searchTerm, prompt: "Search saved songs")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(role: .close) { dismiss() }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button {
+                            applyMembership()
+                            dismiss()
+                        } label: {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(Color.accentColor)
                         }
-                        .listStyle(.plain)
-                        .onChange(of: scrollTarget) { _, target in
-                            guard let target else { return }
-                            withAnimation { proxy.scrollTo(target, anchor: .center) }
-                            scrollTarget = nil
-                        }
+                        .accessibilityLabel("Save")
                     }
                 }
-            }
-            .navigationTitle("Songs in \(list.name)")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .searchable(text: $searchTerm, prompt: "Search saved songs")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(role: .close) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        applyMembership()
-                        dismiss()
-                    } label: {
-                        Image(systemName: "checkmark")
-                            .foregroundStyle(Color.accentColor)
+                .sheet(isPresented: $showingPicker) {
+                    SongPickerView(title: "Add Song to Saved", confirmTitle: "Add") { song in
+                        pickFromAppleMusic(song)
                     }
-                    .accessibilityLabel("Save")
                 }
-            }
-            .sheet(isPresented: $showingPicker) {
-                SongPickerView(title: "Add Song to Saved", confirmTitle: "Add") { song in
-                    pickFromAppleMusic(song)
+                .onAppear(perform: seed)
+        }
+        #endif
+    }
+
+    @ViewBuilder
+    private var songList: some View {
+        if allSongs.isEmpty, controller == nil {
+            ContentUnavailableView("No saved songs yet", systemImage: "bookmark")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollViewReader { proxy in
+                List {
+                    if let controller, searchTerm.isEmpty {
+                        appleMusicRow(controller)
+                    }
+                    ForEach(filteredSongs) { songRow($0) }
                 }
-            }
-            .onAppear {
-                guard !seeded else { return }
-                seeded = true
-                selectedIDs = Set(list.songs.map(\.persistentModelID))
+                .listStyle(.plain)
+                .onChange(of: scrollTarget) { _, target in
+                    guard let target else { return }
+                    withAnimation { proxy.scrollTo(target, anchor: .center) }
+                    scrollTarget = nil
+                }
             }
         }
     }
+
+    private func seed() {
+        guard !seeded else { return }
+        seeded = true
+        selectedIDs = memberIDs
+    }
+
+    #if os(macOS)
+    private var header: some View {
+        VStack(spacing: 10) {
+            Text("Add Songs to \u{201C}\(list.name)\u{201D}")
+                .font(.headline)
+            SearchField(text: $searchTerm, prompt: "Search saved songs")
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 14)
+        .padding(.bottom, 10)
+    }
+
+    /// Greyed until a tick changes, like the picker's Add until a song is
+    /// chosen. "Save" once it would also take songs out.
+    private var buttons: some View {
+        let members = memberIDs
+        let removes = !members.subtracting(selectedIDs).isEmpty
+        return HStack(spacing: 8) {
+            Spacer()
+            Button("Cancel", role: .cancel) { dismiss() }
+                .keyboardShortcut(.cancelAction)
+            Button(removes ? "Save" : "Add") {
+                applyMembership()
+                dismiss()
+            }
+            .keyboardShortcut(.defaultAction)
+            .disabled(selectedIDs == members)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .overlay(alignment: .top) { Divider() }
+    }
+    #endif
 
     private func songRow(_ song: SavedSong) -> some View {
         let isSelected = selectedIDs.contains(song.persistentModelID)
@@ -169,5 +233,12 @@ struct AddSongsToListSheet: View {
     PracticeList.add([s1], to: list, in: context)
 
     return AddSongsToListSheet(list: list, controller: PlaybackController())
+        .modelContainer(container)
+}
+
+#Preview("No saved songs") {
+    let container = try! AppSchema.inMemoryContainer()
+    let list = PracticeList.create(name: "Level 1", in: container.mainContext)
+    return AddSongsToListSheet(list: list)
         .modelContainer(container)
 }

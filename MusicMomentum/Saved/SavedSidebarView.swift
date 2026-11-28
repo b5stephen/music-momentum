@@ -187,7 +187,6 @@ struct SavedSidebarView: View {
         }
         .sheet(item: $addingSongsToList) { list in
             AddSongsToListSheet(list: list)
-                .frame(minWidth: 400, minHeight: 440)
         }
         .alert(
             "Couldn't open that song",

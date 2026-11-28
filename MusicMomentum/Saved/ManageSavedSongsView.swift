@@ -168,7 +168,6 @@ struct ManageSavedSongsView: View {
             .sheet(isPresented: $showingSongPicker) { songPickerSheet }
             .sheet(item: $addingSongsToList) { list in
                 AddSongsToListSheet(list: list)
-                    .frame(minWidth: 420, minHeight: 460)
             }
             .sheet(item: $assigning) { batch in
                 AssignListsSheet(songs: batch.songs)
