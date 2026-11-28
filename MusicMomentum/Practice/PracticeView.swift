@@ -869,7 +869,6 @@ struct PracticeView: View {
             controller: controller,
             layout: layout,
             onAccent: onAccent,
-            groundForeground: track?.palette?.foreground,
             accessibilityLabel: abLabel,
             editTimes: editABTimes,
             saveLoop: saveABLoop
@@ -1870,20 +1869,15 @@ private struct ABButton: View, Equatable {
     let controller: PlaybackController
     let layout: PracticeLayout
     let onAccent: Color
-    /// The cover's text colour, which `ArtworkGround` sets as the foreground
-    /// and can't be read back from the environment.
-    let groundForeground: Color?
     let accessibilityLabel: String
     let editTimes: () -> Void
     let saveLoop: () -> Void
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.smokedFill) private var smokedFill
+    @Environment(\.artworkGroundLook) private var groundLook
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.controller === rhs.controller
             && lhs.layout == rhs.layout
             && lhs.onAccent == rhs.onAccent
-            && lhs.groundForeground == rhs.groundForeground
             && lhs.accessibilityLabel == rhs.accessibilityLabel
     }
 
@@ -1934,10 +1928,7 @@ private struct ABButton: View, Equatable {
         .buttonStyle(.plain)
         .disabled(controller.duration == nil)
         .accessibilityLabel(accessibilityLabel)
-        // The cover's look, put back inside the reset below.
-        .foregroundStyle(groundForeground.map { AnyShapeStyle($0) } ?? AnyShapeStyle(Color.primary))
-        .environment(\.colorScheme, colorScheme)
-        .environment(\.smokedFill, smokedFill)
+        .insideArtworkGround(groundLook)
         // Nothing to offer before A: a press is all A·B does then. Discard
         // is here for a lone A, which a press would close instead.
         .contextMenu {
@@ -1949,9 +1940,6 @@ private struct ABButton: View, Equatable {
                 Button(role: .destructive) { controller.discardAB() } label: { Label("Discard", systemImage: "trash") }
             }
         }
-        // The menu's icons are drawn in the environment here, not the menu's
-        // own: inside the ground they came out in the cover's light text on
-        // a light menu, with a pale bin beside a red Discard.
         .outsideArtworkGround()
     }
 }

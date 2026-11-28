@@ -36,6 +36,7 @@ struct ArtworkGround: ViewModifier {
             content
                 .foregroundStyle(palette.map { AnyShapeStyle($0.foreground) } ?? AnyShapeStyle(.primary))
                 .tint(palette?.foreground)
+                .environment(\.groundForeground, palette?.foreground)
                 .environment(\.colorScheme, palette == nil ? systemScheme : .dark)
                 .environment(\.systemColorScheme, systemScheme)
                 // Empty, the window turned see-through until a cover's
@@ -73,6 +74,7 @@ struct ArtworkGround: ViewModifier {
         let tinted = content
             .foregroundStyle(palette.foreground)
             .tint(palette.foreground)
+            .environment(\.groundForeground, palette.foreground)
             .backgroundStyle(palette.background)
             .environment(\.onAccent, palette.background)
             .environment(\.smokedFill, palette.isBright ? palette.shadow.opacity(0.24) : nil)
@@ -122,14 +124,46 @@ extension EnvironmentValues {
     /// The scheme from outside the ground, which forces dark over a cover.
     /// `nil` where no ground has overridden it.
     @Entry var systemColorScheme: ColorScheme?
+    /// The cover's text colour, which the ground sets as the foreground style,
+    /// where that can't be read back.
+    @Entry var groundForeground: Color?
+
+    /// What `outsideArtworkGround()` takes away, for `insideArtworkGround(_:)`
+    /// to put back.
+    var artworkGroundLook: ArtworkGroundLook {
+        ArtworkGroundLook(foreground: groundForeground, colorScheme: colorScheme, onAccent: onAccent, smokedFill: smokedFill)
+    }
+}
+
+struct ArtworkGroundLook {
+    var foreground: Color?
+    var colorScheme: ColorScheme
+    var onAccent: Color
+    var smokedFill: Color?
 }
 
 extension View {
     /// For a sheet presented from inside the ground. The sheet's window is
     /// drawn in the system's appearance, so the cover's dark scheme and light
     /// text left pale text on a white sheet in light mode.
+    ///
+    /// Menus need it too, put on the view that holds `.contextMenu` or the
+    /// `Menu`, with `insideArtworkGround(_:)` on the label: a menu draws its
+    /// icons in the environment where it's declared, so inside the ground
+    /// they came out in the cover's light text on a light menu, with a pale
+    /// bin beside a red Delete.
     func outsideArtworkGround() -> some View {
         modifier(OutsideArtworkGround())
+    }
+
+    /// The ground's look, read from `\.artworkGroundLook` inside it, put back
+    /// under an `outsideArtworkGround()`.
+    func insideArtworkGround(_ look: ArtworkGroundLook) -> some View {
+        foregroundStyle(look.foreground.map { AnyShapeStyle($0) } ?? AnyShapeStyle(Color.primary))
+            .environment(\.groundForeground, look.foreground)
+            .environment(\.colorScheme, look.colorScheme)
+            .environment(\.onAccent, look.onAccent)
+            .environment(\.smokedFill, look.smokedFill)
     }
 }
 
@@ -143,6 +177,7 @@ private struct OutsideArtworkGround: ViewModifier {
             // against the inherited one and stays the cover's light text.
             .foregroundStyle(Color.primary)
             .tint(nil as Color?)
+            .environment(\.groundForeground, nil)
             .environment(\.colorScheme, systemColorScheme ?? colorScheme)
             .environment(\.onAccent, .onAccent)
             .environment(\.smokedFill, nil)

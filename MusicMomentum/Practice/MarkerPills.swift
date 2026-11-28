@@ -35,6 +35,7 @@ struct MarkerPills: View {
     @Environment(\.smokedFill) private var smokedFill
     @Environment(\.inGlassPanel) private var inGlassPanel
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.artworkGroundLook) private var groundLook
 
     private enum PillState {
         case idle, joinable, looping
@@ -104,10 +105,11 @@ struct MarkerPills: View {
             Menu {
                 menuItems(marker)
             } label: {
-                pillLabel(marker)
+                pillLabel(marker).insideArtworkGround(groundLook)
             } primaryAction: {
                 onTap(marker)
             }
+            .outsideArtworkGround()
         } else {
             Button { onTap(marker) } label: { pillLabel(marker) }
         }
